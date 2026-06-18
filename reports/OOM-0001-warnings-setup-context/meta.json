@@ -1,0 +1,31 @@
+{
+  "id": "OOM-0001",
+  "slug": "warnings-setup-context",
+  "title": "Py_DECREF(NULL) in setup_context/do_warn (_warnings.c) when emitting a warning under MemoryError",
+  "description": "`_warnings.c`: NULL `filename` Py_DECREF in warnings setup/teardown under OOM (unchecked `PyUnicode_FromString(\"<sys>\")`)",
+  "crash_kind": "segv",
+  "sites": ["Python/_warnings.c do_warn:1139", "Python/_warnings.c setup_context:1087"],
+  "signature": {
+    "site_frame": "do_warn@Python/_warnings.c:1139",
+    "top_frames": ["do_warn@Python/_warnings.c:1139", "warnings_warn_impl@Python/_warnings.c:1184", "warnings_warn@Python/clinic/_warnings.c.h:161"]
+  },
+  "vehicles": [
+    "python-4/_pyio-segmentation_fault",
+    "python-4/asyncio_streams-segmentation_fault",
+    "python-4/asyncio_threads-segmentation_fault",
+    "python-4/asyncio_threads-segmentation_fault-2",
+    "python-4/genericpath-segmentation_fault",
+    "python-4/urllib_parse-segmentation_fault",
+    "python-4/importlib__bootstrap_external-segmentation_fault",
+    "python-4/multiprocessing_resource_tracker-segmentation_fault"
+  ],
+  "matrix": {"ft_debug_asan": "segv", "ft_release": "segv", "jit": "segv", "upstream": "segv"},
+  "repro_start": 0,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Build-agnostic. token: do_warn:1139 = Py_DECREF(filename); setup_context:1087 = handle_error Py_DECREF(*filename). Same root: unchecked PyUnicode_FromString(\"<sys>\") in the f==NULL branch."
+}

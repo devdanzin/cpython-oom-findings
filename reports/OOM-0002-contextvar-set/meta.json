@@ -1,0 +1,24 @@
+{
+  "id": "OOM-0002",
+  "slug": "contextvar-set",
+  "title": "Py_DECREF(NULL) in PyContextVar_Set (Python/context.c) when token_new() fails under MemoryError",
+  "description": "`Python/context.c`: unchecked `token_new()` NULL -> `Py_DECREF(tok)` on the `contextvar_set()` failure path under OOM",
+  "crash_kind": "segv",
+  "sites": ["Python/context.c PyContextVar_Set:367"],
+  "signature": {
+    "site_frame": "PyContextVar_Set@Python/context.c:367",
+    "top_frames": ["PyContextVar_Set@Python/context.c:367"]
+  },
+  "vehicles": [
+    "_py_warnings-segmentation_fault"
+  ],
+  "matrix": {"ft_debug_asan": "segv", "ft_release": "segv", "jit": "segv", "upstream": "segv"},
+  "repro_start": 2,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Build-agnostic (NOT free-threading-specific). The _py_warnings vehicle only reaches it when context_aware_warnings is on (FT default); the C bug reproduces via direct contextvars.ContextVar.set() on GIL builds too."
+}

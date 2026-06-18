@@ -1,0 +1,7 @@
+# Authoritative gdb backtrace (3.16_ft_debug_asan, commit 15d7406)
+# Faulting object: tok == NULL (op=0x0)
+Program received signal SIGSEGV, Segmentation fault.
+#0  _Py_atomic_load_uint32_relaxed (obj=0xc) at ./Include/cpython/pyatomic_gcc.h:367
+#1  Py_DECREF (lineno=367, op=0x0, filename=...) at ./Include/refcount.h:345
+#2  PyContextVar_Set (ovar=..., val=...) at Python/context.c:367
+#3  _PyEval_EvalFrameDefault (tstate=..., frame=..., throwflag=...) at Python/generated_cases.c.h:4453

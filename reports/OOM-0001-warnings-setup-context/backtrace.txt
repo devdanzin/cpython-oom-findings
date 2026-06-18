@@ -1,0 +1,11 @@
+# Authoritative gdb backtrace (3.16_ft_debug_asan, commit 15d7406)
+# Faulting object: filename == NULL (op=0x0)
+Program received signal SIGSEGV, Segmentation fault.
+#0  _Py_atomic_load_uint32_relaxed (obj=...) at ./Include/cpython/pyatomic_gcc.h:367
+#1  Py_DECREF (lineno=..., op=0x0, filename=...) at ./Include/refcount.h:345
+#2  do_warn (message=..., category=..., stack_level=..., source=..., skip_file_prefixes=...) at Python/_warnings.c:1139
+#3  warnings_warn_impl (module=..., message=..., category=..., stacklevel=..., source=..., skip_file_prefixes=...) at Python/_warnings.c:1184
+#4  warnings_warn (module=..., args=..., nargs=..., kwnames=...) at Python/clinic/_warnings.c.h:161
+#5  cfunction_vectorcall_FASTCALL_KEYWORDS (func=..., args=..., nargsf=..., kwnames=...) at Objects/methodobject.c:465
+# Sibling vehicle (multiprocessing_resource_tracker) faults one frame deeper:
+#   #2 setup_context (...) at Python/_warnings.c:1087  (handle_error: Py_DECREF(*filename))
