@@ -1,0 +1,50 @@
+# Authoritative capture (3.16_ft_debug_asan, commit 15d7406)
+# FATAL (debug-only invariant), not a clean SIGSEGV stop. Reproduced by running
+# the vehicle source.py under the FT debug+ASan build.
+
+## Fatal message + faulthandler Python stack (from the run, representative vehicle)
+Fatal Python error: _Py_Dealloc: Deallocator of type 'Context' cleared the current exception
+Python runtime state: initialized
+
+Stack (most recent call first):
+  File ".../Lib/importlib/metadata/__init__.py", line 1081 in distributions
+  File ".../Lib/importlib/metadata/__init__.py", line 1123 in entry_points
+  File ".../source.py", line 400 in oom_call
+  File ".../source.py", line 447 in <module>
+
+Extension modules: _testcapi (total: 1)
+
+## C path to the fatal error (gdb, break on _Py_FatalErrorFormat)
+# Shows: a frame is being unwound under a pending MemoryError; clearing its
+# locals decrefs a cell that holds the Context; the Context dealloc clears the
+# pending exception, tripping the gh-89373 _Py_Dealloc invariant (Py_DEBUG only).
+Breakpoint 1, _Py_FatalErrorFormat (func=..., format=...) at Python/pylifecycle.c:3771
+#0  _Py_FatalErrorFormat                       Python/pylifecycle.c:3771
+#1  _Py_Dealloc (op=...)                        Objects/object.c:3338   <- err: "...cleared the current exception", tp_name == "Context"
+#2  Py_DECREF                                   Include/refcount.h:359
+#3  Py_XDECREF                                  Include/refcount.h:520
+#4  cell_dealloc (self=...)                     Objects/cellobject.c:81  <- Py_XDECREF(op->ob_ref) -> ob_ref is the Context
+#5  _Py_Dealloc (op=...)                        Objects/object.c:3319
+#6  Py_DECREF                                   Include/refcount.h:359
+#7  PyStackRef_XCLOSE (ref=...)                 Include/internal/pycore_stackref.h:726
+#8  _PyFrame_ClearLocals (frame=...)            Python/frame.c:101
+#9  _PyFrame_ClearExceptCode (frame=...)        Python/frame.c:126
+#10 clear_thread_frame (tstate=..., frame=...)  Python/ceval.c:1954
+#11 _PyEval_EvalFrameDefault                    Python/generated_cases.c.h:13908
+#12 _PyEval_EvalFrame                           Include/internal/pycore_ceval.h:122
+#13 _PyEval_Vector                              Python/ceval.c:2141
+
+## Exception-state evidence
+# At _Py_Dealloc frame #1: old_exc = 0x7bffb6128090 (the pending MemoryError),
+# tstate->current_exception = 0x0 after the Context tp_dealloc ran -> "cleared".
+# The dealloc body (Python/context.c context_tp_dealloc, L535-546) runs
+# PyObject_ClearWeakRefs() + context_tp_clear() (Py_CLEAR(ctx_prev), Py_CLEAR(ctx_vars));
+# the HAMT/value teardown clears the in-flight exception and the dealloc never
+# saves/restores it (no PyErr_GetRaisedException/SetRaisedException anywhere in context.c).
+
+## Build matrix
+# ft_debug_asan (Py_DEBUG=1): FATAL "Context cleared the current exception" (rc 134).
+# jit           (Py_DEBUG=1): FATAL, identical message + identical Python stack (rc 134).
+# ft_release    (Py_DEBUG=0): invariant compiled out; vehicle hits other downstream OOM
+#                             crash (SIGSEGV in importlib/_itertools _get_values) -> n/a for this signature.
+# upstream      (Py_DEBUG=0): same, n/a for this signature.

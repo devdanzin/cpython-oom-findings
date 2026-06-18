@@ -48,8 +48,10 @@ def main():
                "comment with the issue/PR, and the Status column will be updated. Reports are "
                "deduped by crash signature; one row = one underlying bug (vehicles listed in "
                "the report).\n")
-    out.append(f"_{len(metas)} unique bug(s). Generated {datetime.date.today().isoformat()}. "
-               "Drafted with Claude Code; reproducers machine-generated._\n")
+    out.append(f"_{len(metas)} unique bug(s). Generated {datetime.date.today().isoformat()}._\n")
+    out.append("_Found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode "
+               "(fusil originally by Victor Stinner). Reports drafted by Claude Code; "
+               "reproducers machine-generated._\n")
     out.append("Status legend: `draft` (not yet filed) · `report` (gist published) · "
                "`#N` (issue open) · **FIXED** `commit` · `dup:OOM-####` · `false alarm`.\n")
 

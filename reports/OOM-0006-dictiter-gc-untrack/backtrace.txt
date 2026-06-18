@@ -1,0 +1,19 @@
+Program received signal SIGABRT, Aborted.
+#0  __pthread_kill_implementation (threadid=..., signo=..., no_tid=...) at ./nptl/pthread_kill.c:44
+#1  __pthread_kill_internal (threadid=..., signo=...) at ./nptl/pthread_kill.c:89
+#2  __GI___pthread_kill (threadid=..., signo=...) at ./nptl/pthread_kill.c:100
+#3  0x00007ffff7c45b7e in __GI_raise (sig=...) at ../sysdeps/posix/raise.c:26
+#4  0x00007ffff7c288ec in __GI_abort () at ./stdlib/abort.c:77
+#5  0x00005555560a1494 in fatal_error_exit (status=...) at Python/pylifecycle.c:3517
+#6  0x00005555560a1160 in fatal_error (fd=..., header=..., prefix=..., msg=..., status=...) at Python/pylifecycle.c:3742
+#7  0x000055555609ca40 in _Py_FatalErrorFunc (func=..., msg=...) at Python/pylifecycle.c:3765
+#8  0x000055555580641b in _PyObject_AssertFailed (obj=..., expr=..., msg=..., file=..., line=..., function=...) at Objects/object.c:3278
+#9  0x0000555555be418d in _PyObject_GC_UNTRACK (lineno=..., op=..., filename=...) at ./Include/internal/pycore_gc.h:254
+#10 dictiter_dealloc (self=...) at Objects/dictobject.c:5532
+#11 0x0000555555c34cd2 in _Py_Dealloc (op=...) at Objects/object.c:3319
+#12 0x0000555555bf99e8 in Py_DECREF (lineno=..., op=..., filename=...) at ./Include/refcount.h:359
+#13 dictiter_new (dict=..., itertype=...) at Objects/dictobject.c:5516
+#14 0x0000555555a7923d in PyObject_GetIter (o=...) at Objects/abstract.c:2825
+#15 0x0000555555ec162d in _PyEval_GetIter (iterable=..., index_or_null=..., yield_from=...) at Python/ceval.c:1142
+#16 0x0000555555edce1f in _PyEval_EvalFrameDefault (tstate=..., frame=..., throwflag=...) at Python/generated_cases.c.h:6950
+#17 0x0000555555ebd9b4 in _PyEval_EvalFrame (tstate=..., frame=..., throwflag=...) at ./Include/internal/pycore_ceval.h:122

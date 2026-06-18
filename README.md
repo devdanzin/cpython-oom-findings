@@ -53,6 +53,6 @@ vs non-ASan rc 139) live in the triage memory / `scripts/triage_matrix.sh`.
 
 ## Credit
 
-Crashes found by fusil's OOM mode; triage and reports drafted with Claude Code,
-reproducers machine-generated. _(Fill in tool/author credit + AI disclaimer text to
-match the umbrella issue before publishing.)_
+Crashes found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode
+(fusil originally by Victor Stinner). Triage and reports drafted with Claude Code;
+reproducers machine-generated. Each report carries an `_AI Disclaimer:_` line.

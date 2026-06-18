@@ -1,0 +1,34 @@
+# OOM-0004: corrupted per-thread object freelist under MemoryError (free-threaded build)
+# Two surfaces of one defect.
+
+# ---------------------------------------------------------------------------
+# (A) Recorded ABORT surface (faulthandler, original tarfile vehicle stdout).
+#     DEBUG-ONLY assert; reached from GC pending-call handling.
+# ---------------------------------------------------------------------------
+python: Objects/object.c:909: void clear_freelist(struct _Py_freelist *, int, freefunc): Assertion `freelist->size == 0 || freelist->size == -1' failed.
+Fatal Python error: Aborted
+
+Stack (most recent call first):  # Python level, from faulthandler
+  File ".../Lib/argparse.py", line 909 in __str__
+  File ".../Lib/argparse.py", line 2159 in _parse_known_args2
+  File ".../Lib/tarfile.py", line 3096 in main
+# C level (from faulthandler C stack): abort <- assert in clear_freelist
+#   <- _PyObject_ClearFreeLists <- GC <- _Py_HandlePending <- _PyEval_EvalFrameDefault
+
+# ---------------------------------------------------------------------------
+# (B) Authoritative gdb backtrace, SEGV surface (3.16_ft_debug_asan, commit 15d7406).
+#     Reproduced deterministically by repro.py at start=4. Byte-identical to the
+#     captured /tmp/OOM-0004.bt from re-running the tarfile vehicle.
+#     Faulting object: dangling ob_item = 0xcdcdcdcdcdcdcdc5 (debug freed-fill).
+# ---------------------------------------------------------------------------
+Program received signal SIGSEGV, Segmentation fault.
+#0  _PyMem_DebugCheckAddress (func=..., api=..., p=0xcdcdcdcdcdcdcdc5) at Objects/obmalloc.c:3344
+#1  _PyMem_DebugRawFree (ctx=..., p=0xcdcdcdcdcdcdcdc5) at Objects/obmalloc.c:3166
+#2  _PyMem_DebugFree (ctx=..., ptr=...) at Objects/obmalloc.c:3316
+#3  free_list_items (items=..., use_qsbr=false) at Objects/listobject.c:68
+#4  list_dealloc (self=...) at Objects/listobject.c:569
+#5  _Py_Dealloc (op=...) at Objects/object.c:3319
+#6  Py_DECREF (op=...) at ./Include/refcount.h:359
+#7  PyList_New (size=3) at Objects/listobject.c:262
+#8  _PyList_FromStackRefStealOnSuccess (src=..., n=3) at Objects/listobject.c:3298
+#9  _PyEval_EvalFrameDefault (...) at Python/generated_cases.c.h:1576

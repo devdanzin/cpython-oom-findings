@@ -16,8 +16,10 @@ import sys, re, json, hashlib
 GENERIC = re.compile(r"""^(
     _Py_atomic_\w+ | Py_X?DECREF | Py_X?INCREF | Py_X?NewRef | _Py_Dealloc |
     _Py_NegativeRefcount | _PyObject_AssertFailed | _Py_FatalErrorFunc |
-    fatal_error\w* | abort | __GI_abort | __GI_raise | raise | gsignal |
+    fatal_error\w* | abort | raise | gsignal | __GI_\w+ |
     __pthread_kill\w* | pthread_kill | __interceptor_\w+ | _Py_DumpStack |
+    _PyMem_Debug\w* | faulthandler\w* | address_in_range | __libc_message\w* |
+    malloc_printerr | _int_\w+ | _PyObject_GC_UN?TRACK\w* | tcache_\w+ |
     _PyEval_EvalFrame\w* | _PyEval_Vector | PyEval_EvalCode | run_eval_code_obj |
     run_mod | pyrun_\w+ | _PyRun_\w+ | pymain_\w+ | Py_RunMain | Py_BytesMain |
     _start | __libc_start\w* | _PyObject_(Vectorcall|MakeTpCall|Call)\w* |

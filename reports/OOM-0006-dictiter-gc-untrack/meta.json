@@ -1,0 +1,26 @@
+{
+  "id": "OOM-0006",
+  "slug": "dictiter-gc-untrack",
+  "title": "_PyObject_GC_UNTRACK assert in dictiter_dealloc (Objects/dictobject.c) when dictiter_new() decref's an untracked item-iterator under MemoryError",
+  "description": "`Objects/dictobject.c`: `dictiter_new()` Py_DECREF's a not-yet-GC-tracked `dict_itemiterator` when `_PyTuple_FromPairSteal(di_result)` fails under OOM; `dictiter_dealloc` then `_PyObject_GC_UNTRACK`s an untracked object",
+  "crash_kind": "abort",
+  "sites": ["Objects/dictobject.c dictiter_dealloc:5532", "Objects/dictobject.c dictiter_new:5516"],
+  "signature": {
+    "site_frame": "dictiter_dealloc@Objects/dictobject.c:5532",
+    "top_frames": ["dictiter_dealloc@Objects/dictobject.c:5532", "dictiter_new@Objects/dictobject.c:5516", "PyObject_GetIter@Objects/abstract.c:2825"]
+  },
+  "vehicles": [
+    "python-4/asyncio_runners-assertion",
+    "python-4/re-assertion-sigabrt",
+    "python-4/zipapp-segmentation_fault"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort", "upstream": "segv"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Assertion bug: fires only on assertion-enabled builds (ft_debug_asan abort, jit abort). ft_release=n/a (NDEBUG strips assert; no segv on that run). upstream (release+ASan) segv in _Py_Dealloc -- same root, NDEBUG corrupts GC list instead of asserting; this is why the zipapp vehicle was labeled 'segfault' yet trips the identical dictiter assert on the debug build (verified). Only item iterators affected (dict_itemiterator) -- only kind whose di_result needs an alloc between PyObject_GC_New and _PyObject_GC_TRACK. Minimization PARTIAL: stdlib-only iter(d.items()) sweep does not reproduce (warm pymalloc pool + size-2 tuple freelist bypass the hooked allocator); fresh-pool churn trips a different OOM assert first (_Py_NegativeRefcount in PyStackRef_XCLOSE). dedupe.py = NEW (abort top-frame is pthread_kill; real site dictiter_dealloc:5532)."
+}

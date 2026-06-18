@@ -1,0 +1,30 @@
+{
+  "id": "OOM-0007",
+  "slug": "context-dealloc-clears-exc",
+  "title": "Context tp_dealloc clears the pending exception under OOM (Fatal _Py_Dealloc invariant) — Python/context.c",
+  "description": "`Python/context.c` `context_tp_dealloc` runs `PyObject_ClearWeakRefs` + `context_tp_clear` (HAMT/value decrefs) without saving/restoring `tstate->current_exception`; under OOM a Context is freed with a MemoryError in flight, the teardown clears it, and the gh-89373 `_Py_Dealloc` debug invariant fatals.",
+  "crash_kind": "fatal",
+  "sites": ["Python/context.c context_tp_dealloc:535-546", "Python/context.c context_tp_clear:518-524"],
+  "signature": {
+    "site_frame": "context_tp_dealloc@Python/context.c:543",
+    "top_frames": [
+      "_Py_Dealloc@Objects/object.c:3338",
+      "cell_dealloc@Objects/cellobject.c:81",
+      "_PyFrame_ClearLocals@Python/frame.c:101",
+      "clear_thread_frame@Python/ceval.c:1954"
+    ]
+  },
+  "vehicles": [
+    "python-4/importlib_metadata-fatal_python_error",
+    "python-4/importlib_metadata_diagnose-fatal_python_error"
+  ],
+  "matrix": {"ft_debug_asan": "fatal", "ft_release": "n/a", "jit": "fatal", "upstream": "n/a"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Fatal message: \"_Py_Dealloc: Deallocator of type 'Context' cleared the current exception\". Debug-only signature: the _Py_Dealloc invariant is #ifdef Py_DEBUG, so it fatals on ft_debug_asan and jit (both Py_DEBUG=1) with identical message; on release builds (ft_release, upstream, Py_DEBUG=0) the check is compiled out and the same vehicle surfaces an unrelated downstream OOM segfault (importlib/_itertools _get_values) -> matrix n/a for this signature. Both vehicles show the identical fatal; vehicle 1 stack = entry_points->distributions, vehicle 2 = diagnose.run->inspect. Distinct from OOM-0002 (PyContextVar_Set Py_DECREF(NULL) segfault in cv.set). Minimization: PARTIAL -- vehicle-confirmed, no minimal stdlib trigger isolated (needs exact OOM timing with a raw pending exception at the Context's last decref). Fix direction: bracket context_tp_dealloc body with PyErr_GetRaisedException/PyErr_SetRaisedException (no exception save/restore exists anywhere in context.c)."
+}

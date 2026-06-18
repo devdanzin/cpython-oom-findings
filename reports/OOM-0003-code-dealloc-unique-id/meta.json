@@ -1,0 +1,27 @@
+{
+  "id": "OOM-0003",
+  "slug": "code-dealloc-unique-id",
+  "title": "abort on assert(co->_co_unique_id == _Py_INVALID_UNIQUE_ID) in code_dealloc (Objects/codeobject.c) when init_code() fails under MemoryError",
+  "description": "`Objects/codeobject.c`: `_co_unique_id` is left uninitialized when `init_code()` fails under OOM (it is only assigned after success in `_PyCode_New`), so `code_dealloc`'s free-threaded assert fires on garbage and aborts",
+  "crash_kind": "abort",
+  "sites": ["Objects/codeobject.c code_dealloc:2440", "Objects/codeobject.c _PyCode_New:747"],
+  "signature": {
+    "site_frame": "code_dealloc@Objects/codeobject.c:2440",
+    "top_frames": ["code_dealloc@Objects/codeobject.c:2440", "_Py_Dealloc@Objects/object.c:3319", "Py_DECREF@Include/refcount.h:359", "_PyCode_New@Objects/codeobject.c:747"]
+  },
+  "vehicles": [
+    "python-4/random-assertion",
+    "python-4/_osx_support-assertion",
+    "python-4/tabnanny-assertion-sigabrt",
+    "python-4/xmlrpc_client-assertion"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "n/a", "upstream": "n/a"},
+  "repro_start": 9,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Free-threading-specific (_co_unique_id + assert gated on Py_GIL_DISABLED). assert-based abort: fires only on the FT debug build (release defines NDEBUG), so ft_release/jit/upstream are n/a. init_code (codeobject.c:511) never sets _co_unique_id; _PyCode_New assigns it at L752 only after init_code succeeds, so when init_code's _PyCodeArray_New (tlbc, L570) fails under OOM the Py_DECREF(co) at L747 deallocs with garbage _co_unique_id. Fix: initialize co->_co_unique_id = _Py_INVALID_UNIQUE_ID before any code_dealloc-reachable path. Repro drives _PyCode_New via marshal.loads; original vehicles reach it via importlib _compile_bytecode during stdlib import under OOM."
+}

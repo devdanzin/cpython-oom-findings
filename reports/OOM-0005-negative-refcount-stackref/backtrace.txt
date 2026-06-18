@@ -1,0 +1,38 @@
+# Authoritative gdb backtrace (3.16_ft_debug_asan, commit 15d7406)
+# vehicle: python-4/multiprocessing_spawn-assertion-sigabrt/source.py
+# Assertion: ./Include/internal/pycore_stackref.h:726: _Py_NegativeRefcount:
+#            "object has negative ref count"  (over-decref'd object: a MemoryError instance)
+# Identical top frames seen on concurrent_futures_process, xml_dom_minidom,
+# _pyrepl_main, importlib_resources, zoneinfo__tzpath, profiling_sampling__sync_coordinator.
+Program received signal SIGABRT, Aborted.
+#0  __pthread_kill_implementation () at ./nptl/pthread_kill.c:44
+#1  __pthread_kill_internal () at ./nptl/pthread_kill.c:89
+#2  __GI___pthread_kill () at ./nptl/pthread_kill.c:100
+#3  __GI_raise (sig=...) at ../sysdeps/posix/raise.c:26
+#4  __GI_abort () at ./stdlib/abort.c:77
+#5  fatal_error_exit (status=...) at Python/pylifecycle.c:3517
+#6  fatal_error (...) at Python/pylifecycle.c:3742
+#7  _Py_FatalErrorFunc (func=..., msg=...) at Python/pylifecycle.c:3765
+#8  _PyObject_AssertFailed (obj=..., expr=..., msg=..., file=..., line=..., function=...) at Objects/object.c:3278
+#9  _Py_NegativeRefcount (filename=..., lineno=..., op=...) at Objects/object.c:275
+#10 Py_DECREF (op=...) at ./Include/refcount.h:354
+#11 PyStackRef_XCLOSE (ref=...) at ./Include/internal/pycore_stackref.h:726   <- closes a stale/already-dead stackref
+#12 _PyFrame_ClearLocals (frame=...) at Python/frame.c:101
+#13 _PyFrame_ClearExceptCode (frame=...) at Python/frame.c:126
+#14 clear_thread_frame (tstate=..., frame=...) at Python/ceval.c:1954
+#15 _PyEval_EvalFrameDefault (...) at Python/generated_cases.c.h:13908   <- LABEL(exit_unwind): tearing down a dying frame
+#16 _PyEval_EvalFrame (...) at ./Include/internal/pycore_ceval.h:122
+#17 _PyEval_Vector (...) at Python/ceval.c:2141
+#18 PyEval_EvalCode (co=..., globals=..., locals=...) at Python/ceval.c:679
+#19 run_eval_code_obj (...) at Python/pythonrun.c:1369
+...
+#29 Py_BytesMain (argc=..., argv=...) at Modules/main.c:850
+
+# (gdb) frame 12 ; the dying frame's value stack still holds a _PyStackRef to an
+# object whose refcount is already 0, so PyStackRef_XCLOSE -> Py_DECREF drives it
+# below zero.  From the fatal dump: "object type name: MemoryError".
+
+# Release builds (assert compiled out) instead corrupt the heap: the underflowed
+# refcount frees a live object and a later access faults. concurrent_futures_process
+# segfaults 5/5 on both ft_release and upstream (rc=139), faulting later via a
+# use-after-free downstream of the same StackRef close path.

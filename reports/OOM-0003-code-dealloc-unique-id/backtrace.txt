@@ -1,0 +1,21 @@
+# Authoritative gdb backtrace (3.16_ft_debug_asan, commit 15d7406)
+# Abort: assert(co->_co_unique_id == _Py_INVALID_UNIQUE_ID) in code_dealloc.
+# co->_co_unique_id holds uninitialized garbage: init_code() failed before
+# _PyCode_New() reached the line that assigns the unique id.
+Program received signal SIGABRT, Aborted.
+#0  __pthread_kill_implementation (threadid=..., signo=..., no_tid=...) at ./nptl/pthread_kill.c:44
+#1  __pthread_kill_internal (threadid=..., signo=...) at ./nptl/pthread_kill.c:89
+#2  __GI___pthread_kill (threadid=..., signo=...) at ./nptl/pthread_kill.c:100
+#3  __GI_raise (sig=...) at ../sysdeps/posix/raise.c:26
+#4  __GI_abort () at ./stdlib/abort.c:77
+#5  __libc_message_impl (...) at ../sysdeps/posix/libc_fatal.c:138
+#6  __libc_message_wrapper (...) at ../include/stdio.h:203
+#7  __assert_fail (assertion=..., file=..., line=..., function=...) at ./assert/assert.c:37
+#8  code_dealloc (self=...) at Objects/codeobject.c:2440   <- assert co->_co_unique_id == _Py_INVALID_UNIQUE_ID
+#9  _Py_Dealloc (op=...) at Objects/object.c:3319
+#10 Py_DECREF (lineno=..., op=..., filename=...) at ./Include/refcount.h:359
+#11 _PyCode_New (con=...) at Objects/codeobject.c:747      <- Py_DECREF(co) after init_code(co, con) < 0
+#12 r_object (p=...) at Python/marshal.c:1676              <- minimal repro path (marshal.loads)
+#13 r_object (p=...) at Python/marshal.c:1426
+# Original fuzzer vehicle reaches _PyCode_New the same way, via
+# importlib._bootstrap_external._compile_bytecode -> marshal during an import under OOM.

@@ -1,0 +1,26 @@
+{
+  "id": "OOM-0004",
+  "slug": "clear-freelist",
+  "title": "Corrupted per-thread object freelist under MemoryError: assert(freelist->size==0||-1) in clear_freelist (Objects/object.c:909), surfacing as use-after-free in free_list_items/PyList_New (free-threaded build)",
+  "description": "`Objects/object.c`: per-PyThreadState object freelist `size` desyncs from its chain under OOM. GC's clear_freelist asserts `size==0||-1` (debug abort); the sibling surface is PyList_New popping a corrupted `lists` node with a dangling ob_item that free_list_items then frees (use-after-free SEGV). Root: PyList_New (listobject.c:248) pops a freelist list before the fallible list_allocate_array, and on OOM Py_DECREF(op) pushes it back, churning the freelist accounting.",
+  "crash_kind": "abort",
+  "sites": ["Objects/object.c clear_freelist:909", "Objects/listobject.c free_list_items:68", "Objects/listobject.c PyList_New:262"],
+  "signature": {
+    "site_frame": "clear_freelist@Objects/object.c:909",
+    "top_frames": ["clear_freelist@Objects/object.c:909", "_PyObject_ClearFreeLists@Objects/object.c:935", "free_list_items@Objects/listobject.c:68", "list_dealloc@Objects/listobject.c:569", "PyList_New@Objects/listobject.c:262"]
+  },
+  "vehicles": [
+    "python-4/tarfile-assertion",
+    "python-4/_pyrepl__threading_handler-assertion",
+    "python-4/profiling_sampling__format_utils-assertion"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "n/a", "upstream": "n/a"},
+  "repro_start": 4,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Free-threading-only abort surface (clear_freelist assert + per-PyThreadState freelists are Py_GIL_DISABLED). The DEBUG-only assert is the recorded vehicle signature; the reduced repro deterministically (start=4) hits the build-agnostic sibling SEGV (PyList_New -> free_list_items use-after-free of a 0xcd-filled freed array), which also crashes ft_release/jit/upstream. Matrix kept abort/n-a per brief (assert fires only on debug); underlying corruption is NOT debug-only. All 3 vehicles recorded the identical Objects/object.c:909 assertion; re-running them now non-deterministically yields the sibling SEGV. Distinct from the codeobject.c:2440 _co_unique_id assert the same vehicles can also hit (separate FT unique-id-pool invariant)."
+}

@@ -1,0 +1,31 @@
+{
+  "id": "OOM-0005",
+  "slug": "negative-refcount-stackref",
+  "title": "Negative refcount (PyStackRef_XCLOSE/Py_DECREF) in _PyFrame_ClearLocals (Python/frame.c) tearing down a frame during exception unwinding under MemoryError",
+  "description": "Eval-loop exit_unwind clears a frame's operand stack via _PyFrame_ClearLocals; under OOM an opcode error path left a stale/already-dead _PyStackRef on the value stack, so PyStackRef_XCLOSE->Py_DECREF underflows the object's refcount (debug: negative-refcount abort; release: use-after-free segv). Over-decref'd object is a MemoryError.",
+  "crash_kind": "abort",
+  "sites": ["Include/internal/pycore_stackref.h:726 PyStackRef_XCLOSE", "Python/frame.c:101 _PyFrame_ClearLocals", "Objects/object.c:275 _Py_NegativeRefcount"],
+  "signature": {
+    "site_frame": "PyStackRef_XCLOSE@./Include/internal/pycore_stackref.h:726",
+    "top_frames": ["PyStackRef_XCLOSE@./Include/internal/pycore_stackref.h:726", "_PyFrame_ClearLocals@Python/frame.c:101", "_PyFrame_ClearExceptCode@Python/frame.c:126", "clear_thread_frame@Python/ceval.c:1954"]
+  },
+  "vehicles": [
+    "python-4/multiprocessing_spawn-assertion-sigabrt",
+    "python-4/concurrent_futures_process-segmentation_fault",
+    "python-4/xml_dom_minidom-assertion-sigabrt",
+    "python-4/_pyrepl_main-assertion-sigabrt",
+    "python-4/importlib_resources-assertion",
+    "python-4/zoneinfo__tzpath-assertion",
+    "python-4/profiling_sampling__sync_coordinator-assertion-sigabrt",
+    "python-4/profiling_sampling__css_utils-assertion"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "segv", "jit": "abort", "upstream": "segv"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Largest group; does NOT split -- 8 vehicles share top frames #11-#15 (PyStackRef_XCLOSE@stackref.h:726 -> _PyFrame_ClearLocals@frame.c:101 -> _PyFrame_ClearExceptCode -> clear_thread_frame -> _PyEval_EvalFrameDefault@generated_cases.c.h:13908 exit_unwind). concurrent_futures_process labeled 'segfault' is CONFIRMED here: abort on ft_debug_asan, segv 5/5 on ft_release+upstream (release = assert compiled out -> use-after-free). jit aborts at a SIBLING assert in the same path (generated_cases.c.h:13817 _PyErr_Occurred). Minimization PARTIAL: clean stdlib reduction hits a different sibling assert (code_dealloc, Objects/codeobject.c:2440 _co_unique_id) -- candidate for a separate id. repro.py = trimmed vehicle (full module setup + 2 oom_calls), reproduces 3/3 on ft_debug_asan. dedupe.py = NEW."
+}
