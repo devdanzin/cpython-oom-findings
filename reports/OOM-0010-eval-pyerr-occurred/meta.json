@@ -1,0 +1,36 @@
+{
+  "id": "OOM-0010",
+  "slug": "eval-pyerr-occurred",
+  "title": "abort on assert(_PyErr_Occurred(tstate)) at LABEL(error) in _PyEval_EvalFrameDefault (Python/generated_cases.c.h) when a C-extension constructor returns an error without an exception set under MemoryError",
+  "description": "The eval loop's `error` label asserts a live exception (`assert(_PyErr_Occurred(tstate))`; NDEBUG raises SystemError \"error return without exception set\" instead). Under OOM the CALL of `_remote_debugging.RemoteUnwinder(...)` in `profiling.sampling.sample._new_unwinder` returns an error to the eval loop with no exception set, so the debug assert fires and aborts. The signature is generic: any callee returning an error-without-exception under OOM trips it (see notes for the 13-vehicle split).",
+  "crash_kind": "abort",
+  "sites": ["Python/generated_cases.c.h _PyEval_EvalFrameDefault LABEL(error):13106", "Lib/profiling/sampling/sample.py _new_unwinder:102", "Modules/_remote_debugging/module.c _remote_debugging_RemoteUnwinder___init___impl"],
+  "signature": {
+    "site_frame": "_PyEval_EvalFrameDefault@Python/generated_cases.c.h:13106",
+    "top_frames": ["_PyEval_EvalFrameDefault@Python/generated_cases.c.h:13106", "_PyEval_Vector@Python/ceval.c:2141", "call_method@Objects/typeobject.c:3100", "slot_tp_init@Objects/typeobject.c:11174"]
+  },
+  "vehicles": [
+    "python-4/profiling_sampling_sample-assertion-sigabrt",
+    "python-5/profiling_sampling_sample-assertion-sigabrt",
+    "python-5/profiling_sampling_cli-assertion",
+    "python-7/profiling_sampling_cli-assertion-sigabrt",
+    "python-5/multiprocessing_spawn-assertion",
+    "python-5/multiprocessing_spawn-assertion-sigabrt-2",
+    "python-7/multiprocessing_spawn-sigabrt-assertion",
+    "python-7/multiprocessing_spawn-sigabrt-assertion-2",
+    "python-7/multiprocessing_util-sigabrt-assertion",
+    "python-5/mimetypes-assertion-2",
+    "python-5/mimetypes-assertion-3",
+    "python-7/json-assertion-sigabrt",
+    "python-7/builtins-assertion"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "n/a", "upstream": "n/a"},
+  "repro_start": 5,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "assert-based abort: fires only on the FT debug build (release/JIT/upstream define NDEBUG, where LABEL(error) instead synthesizes SystemError; in practice the same OOM surfaces a clean MemoryError and the process exits rc 1 -- it does NOT segfault), so ft_release/jit/upstream are n/a. Representative root cause: the CALL of _remote_debugging.RemoteUnwinder(...) at sample.py:102 (via SampleProfiler.__init__ -> _new_unwinder) returns an error to the eval loop without a live exception under OOM. gdb on the crashing run shows neither the Argument-Clinic wrapper nor _remote_debugging_RemoteUnwinder___init___impl is entered -> the failure is in the type-call/object-creation path before tp_init; Objects/typeobject.c:type_call documents that it 'can clear (directly or indirectly)' the caller's exception. Fix: ensure every OOM error path of the offending constructor(s) leaves PyErr_Occurred() true (PyErr_NoMemory) and never clears a pending MemoryError; keep the eval-loop assert (it correctly flags the contract violation). SIGNATURE-CLUSTER SPLIT: this signature (generic eval-loop error-without-exception) is shared by 13 vehicles spanning distinct callees -- RemoteUnwinder (profiling_sampling_sample x2, the representative), profiling _sort_to_mode (profiling_sampling_cli x2), subprocess._args_from_interpreter_flags (multiprocessing_spawn/util x5), mimetypes._default_mime_types (x2), json.load (x1), builtins (x1). All listed as vehicles because they match the signature, but each callee's OOM error path is a separate fix; only the RemoteUnwinder path is root-caused here. Minimized stdlib-only repro deterministic at start=5: profiling.sampling.sample.dump_stack(-5)."
+}

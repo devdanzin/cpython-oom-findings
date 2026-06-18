@@ -1,0 +1,25 @@
+{
+  "id": "OOM-0022",
+  "slug": "checkslotresult",
+  "title": "fatal _Py_CheckSlotResult 'Slot __delitem__ of type dict succeeded with an exception set' in reload_singlephase_extension (Python/import.c) when _modules_by_index_set fails under MemoryError",
+  "description": "`Python/import.c`: in `reload_singlephase_extension`, when `_modules_by_index_set()` (L2010) fails under OOM (its `PyList_New`/`PyList_Append` raises `MemoryError`), the cleanup `PyMapping_DelItem(modules, info->name)` (L2011) deletes from `sys.modules` with the `MemoryError` still pending; the dict `__delitem__` slot *succeeds*, so the debug `assert(_Py_CheckSlotResult(...))` in `PyObject_DelItem` (`Objects/abstract.c:280`) fires the fatal 'slot succeeded with an exception set' invariant and aborts",
+  "crash_kind": "fatal",
+  "sites": ["Objects/call.c _Py_CheckSlotResult:80", "Objects/abstract.c PyObject_DelItem:280", "Python/import.c reload_singlephase_extension:2011"],
+  "signature": {
+    "site_frame": "_Py_CheckSlotResult@Objects/call.c:80",
+    "top_frames": ["_Py_CheckSlotResult@Objects/call.c:80", "PyObject_DelItem@Objects/abstract.c:280", "reload_singlephase_extension@Python/import.c:2011", "import_find_extension@Python/import.c:2043", "_imp_create_dynamic_impl@Python/import.c:5468"]
+  },
+  "vehicles": [
+    "python-7/pdb-fatal_python_error",
+    "python-7/site-sigabrt-fatal_python_error"
+  ],
+  "matrix": {"ft_debug_asan": "fatal", "ft_release": "n/a", "jit": "fatal", "upstream": "n/a"},
+  "repro_start": 237,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Fatal _Py_CheckSlotResult invariant: 'Slot __delitem__ of type dict succeeded with an exception set'. Triggered when reload_singlephase_extension (import.c) re-imports a single-phase legacy C extension (readline in both vehicles) under OOM: _modules_by_index_set (L2010) raises MemoryError via PyList_New/PyList_Append, then the cleanup PyMapping_DelItem (L2011) deletes the name from sys.modules with the exception still set; the dict delete succeeds, so the debug assert(_Py_CheckSlotResult(o,'__delitem__',res>=0)) at abstract.c:280 aborts. Debug-only: the check sits inside assert(), compiled out under NDEBUG. Matrix on the vehicle source.py: ft_debug_asan -> abort (rc134, authoritative); jit (Py_DEBUG=1, GIL) -> same _Py_CheckSlotResult abort (rc134); ft_release (NDEBUG) -> clean (rc0, stale MemoryError harmless here); upstream (NDEBUG) -> a SEPARATE OOM segfault elsewhere (faulthandler stack at pdb._pyrepl_available -> import-lock _find_and_load), not this site, recorded n/a. Fix: save/restore the pending exception around the cleanup delete (PyErr_GetRaisedException/PyErr_SetRaisedException) so the dict __delitem__ slot does not run with a stale exception. Minimization PARTIAL/vehicle-based: isolated reload loops reach reload_singlephase_extension (import.c:2010) but the modules_by_index list is already large enough that _modules_by_index_set does not allocate, so the failing alloc must land there via accumulated interpreter state; repro.py exercises the path (pdb.set_trace -> readline) but the deterministic abort comes from the fuzzer vehicle source.py (start ~= 237 in the f2 pdb.set_trace sweep). dedupe.py: NEW."
+}

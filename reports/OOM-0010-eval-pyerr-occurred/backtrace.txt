@@ -1,0 +1,41 @@
+# Authoritative backtrace — free-threaded debug+ASan build
+# (~/projects/3.16_ft_debug_asan_cpython/python)
+#
+# Repro: profiling.sampling.sample.dump_stack(-5) under _testcapi.set_nomemory(5, 0)
+# Assertion message (stdout / faulthandler):
+#
+#   python: Python/generated_cases.c.h:13817:
+#     PyObject *_PyEval_EvalFrameDefault(PyThreadState *, _PyInterpreterFrame *, int):
+#     Assertion `_PyErr_Occurred(tstate)' failed.
+#   Fatal Python error: Aborted
+#
+#   Current thread's Python stack (most recent call first):
+#     File ".../Lib/profiling/sampling/sample.py", line 102 in _new_unwinder
+#     File ".../Lib/profiling/sampling/sample.py", line 87  in __init__
+#     File ".../Lib/profiling/sampling/sample.py", line 547 in dump_stack
+#
+# NOTE: line 13817 here is this debug build's generated_cases.c.h; the catalog
+# signature line is 13106 (the build that produced the fuzzer stdout). Both are
+# the SAME construct: the eval loop's `error` LABEL, whose debug-only branch is
+#     assert(_PyErr_Occurred(tstate));
+# (the NDEBUG branch instead raises SystemError: "error return without exception set").
+
+Program received signal SIGABRT, Aborted.
+#7  __assert_fail                  ./assert/assert.c:37
+#8  _PyEval_EvalFrameDefault       Python/generated_cases.c.h:13817   <- LABEL(error): assert(_PyErr_Occurred(tstate))
+#9  _PyEval_EvalFrame              ./Include/internal/pycore_ceval.h:122
+#10 _PyEval_Vector                 Python/ceval.c:2141                 (running _new_unwinder, sample.py:102)
+#11 _PyObject_VectorcallDictTstate Objects/call.c:146
+#12 _PyObject_Call_Prepend         Objects/call.c:504
+#13 call_method                    Objects/typeobject.c:3100
+#14 slot_tp_init                   Objects/typeobject.c:11174          (SampleProfiler.__init__, Python)
+#15 type_call                      Objects/typeobject.c:2484           (SampleProfiler(...) )
+
+# The faulting frame (#8/#10) is the Python frame of profiling.sampling.sample._new_unwinder
+# executing the CALL to _remote_debugging.RemoteUnwinder(...) at sample.py:102. That C-level
+# constructor returns an error to the eval loop under OOM WITHOUT leaving a live exception, so
+# the eval loop jumps to LABEL(error) with _PyErr_Occurred(tstate) false and the assert aborts.
+#
+# Confirmed via breakpoints on the crashing run: neither the Argument-Clinic wrapper
+# (_remote_debugging_RemoteUnwinder___init__) nor its impl (_remote_debugging_RemoteUnwinder___init___impl)
+# is entered — the failure happens in the type call / object-creation path before tp_init runs.

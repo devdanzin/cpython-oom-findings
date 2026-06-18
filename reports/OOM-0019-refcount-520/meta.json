@@ -1,0 +1,26 @@
+{
+  "id": "OOM-0019",
+  "slug": "refcount-520",
+  "title": "abort on _Py_NegativeRefcount at Include/refcount.h:520 (double-free of error_line in _PyPegen_raise_error_known_location) when Py_BuildValue fails under MemoryError",
+  "description": "`Parser/pegen_errors.c`: `_PyPegen_raise_error_known_location` passes `error_line` to `Py_BuildValue` via the reference-stealing `N` format (L346). `Py_BuildValue` consumes the `N` arg even on failure, but the `error:` path still runs `Py_XDECREF(error_line)` (L363) -- a double-free. On `Py_REF_DEBUG` builds the second decref drives the refcount negative and aborts at `Include/refcount.h:520`.",
+  "crash_kind": "abort",
+  "sites": ["Parser/pegen_errors.c _PyPegen_raise_error_known_location:363", "Include/refcount.h Py_XDECREF:520", "Parser/pegen_errors.c _PyPegen_raise_error_known_location:346"],
+  "signature": {
+    "site_frame": "_PyPegen_raise_error_known_location@Parser/pegen_errors.c:363",
+    "top_frames": ["_Py_NegativeRefcount@Objects/object.c:275", "Py_DECREF@Include/refcount.h:354", "Py_XDECREF@Include/refcount.h:520", "_PyPegen_raise_error_known_location@Parser/pegen_errors.c:363", "RAISE_ERROR_KNOWN_LOCATION@Parser/pegen.h:196", "_Pypegen_set_syntax_error@Parser/pegen_errors.c:404"]
+  },
+  "vehicles": [
+    "python-7/pyclbr-assertion-sigabrt",
+    "python-7/pyclbr-assertion-sigabrt-2",
+    "python-7/multiprocessing_forkserver-sigabrt-assertion"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort", "upstream": "n/a"},
+  "repro_start": 54,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Double-free, not an uninitialized field. error_line is handed to Py_BuildValue(\"(OnnNnn)\", ..., error_line, ...) at pegen_errors.c:346 with the reference-stealing 'N' format; Py_BuildValue consumes the 'N' arg even when it fails (do_mktuple/do_ignore in Python/modsupport.c, see comment at modsupport.c:263). Under OOM PyTuple_New(6) (or an earlier conversion) fails, dropping error_line's only ref; Py_BuildValue returns NULL, the function does `goto error`, and Py_XDECREF(error_line) at L363 decrefs the freed object a second time. The _Py_NegativeRefcount check is gated on Py_REF_DEBUG, so it aborts on both debug builds (ft_debug_asan and jit) at start=54, same site; release builds (ft_release/upstream) compile the check out (n/a) but the double-free is real -- a full set_nomemory sweep segfaulted on upstream. Freed str slab is reused for the pre-allocated MemoryError instance under OOM, hence 'object type name: MemoryError' / 'is freed'. Fix: set error_line=NULL right after the Py_BuildValue call (or use the non-stealing 'O' format). Three vehicles reach the parser error path: two via ast.parse (pyclbr._create_tree), one via multiprocessing.forkserver._handle_preload. Distinct from OOM-0003 (code_dealloc uninitialized _co_unique_id assert)."
+}

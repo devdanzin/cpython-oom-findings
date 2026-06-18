@@ -1,0 +1,37 @@
+Crash: Fatal Python error: _Py_Dealloc: Deallocator of type '_StoreAction' cleared the current exception
+Build: 3.16_ft_debug_asan_cpython (FT debug + ASan, Py_DEBUG=1), commit 15d7406
+Vehicle: ~/crashers/python-5/http_server-fatal_python_error/source.py
+Repro:   OOM sweep over http.server._main([])  (builds an argparse parser)
+
+--- faulthandler Python stack (from stdout) ---
+Fatal Python error: _Py_Dealloc: Deallocator of type '_StoreAction' cleared the current exception
+Python runtime state: initialized
+
+Stack (most recent call first):
+  File ".../Lib/http/server.py", line 1091 in _main      <- parser.add_argument(...) cascade
+  File ".../source.py", line 400 in oom_call
+  File ".../source.py", line 428 in <module>
+
+--- gdb backtrace (bt 15), abort path ---
+#4  __GI_abort () at ./stdlib/abort.c:77
+#5  fatal_error_exit (status=...) at Python/pylifecycle.c:3517
+#6  fatal_error (...) at Python/pylifecycle.c:3742
+#7  _Py_FatalErrorFormat (...) at Python/pylifecycle.c:3795
+#8  _Py_Dealloc (op=...) at Objects/object.c:3338      <- gh-89373 invariant: tstate->current_exception == NULL after dealloc
+#9  Py_DECREF (...) at ./Include/refcount.h:359
+#10 PyStackRef_XCLOSE (ref=...) at ./Include/internal/pycore_stackref.h:726
+#11 _PyFrame_ClearLocals (frame=...) at Python/frame.c:101     <- frame unwinding under pending MemoryError
+#12 _PyFrame_ClearExceptCode (frame=...) at Python/frame.c:126
+#13 clear_thread_frame (tstate=..., frame=...) at Python/ceval.c:1954
+#14 _PyEval_EvalFrameDefault (...) at Python/generated_cases.c.h:13908
+
+Notes:
+- op (frame 8) is a pure-Python stdlib instance (_StoreAction here; also
+  UnknownHandler / ProxyHandler / LogRecord across the family). None define
+  __del__, so tp_dealloc == subtype_dealloc (Objects/typeobject.c:2719) and
+  tp_finalize is NULL -> the exception-preserving finalize path is skipped.
+- The object is the last reference dropped while a MemoryError is in flight
+  (frame _PyFrame_ClearLocals during unwinding). subtype_dealloc clears slots
+  (typeobject.c:2840) and decrefs the instance __dict__ (typeobject.c:2854)
+  with no PyErr_GetRaisedException/SetRaisedException bracket; that teardown
+  clears tstate->current_exception, tripping the _Py_Dealloc invariant.

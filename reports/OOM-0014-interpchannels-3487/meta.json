@@ -1,0 +1,29 @@
+{
+  "id": "OOM-0014",
+  "slug": "interpchannels-3487",
+  "title": "abort/segfault in channelsmod__channel_id (Modules/_interpchannelsmodule.c) when _get_current_module() returns NULL under MemoryError",
+  "description": "`Modules/_interpchannelsmodule.c`: `channelsmod__channel_id` (`_interpchannels._channel_id`) calls `get_module_from_owned_type` -> `_get_current_module`, which can return `NULL` under OOM, then does `assert(mod == self)` and `Py_DECREF(mod)` without a NULL check. Debug builds abort on the assert; release builds segfault on `Py_DECREF(NULL)`.",
+  "crash_kind": "abort",
+  "sites": ["Modules/_interpchannelsmodule.c channelsmod__channel_id:3487", "Modules/_interpchannelsmodule.c channelsmod__channel_id:3488", "Modules/_interpchannelsmodule.c _get_current_module:151"],
+  "signature": {
+    "site_frame": "channelsmod__channel_id@Modules/_interpchannelsmodule.c:3487",
+    "top_frames": ["channelsmod__channel_id@Modules/_interpchannelsmodule.c:3487", "cfunction_call@Objects/methodobject.c:564", "_PyObject_Call@Objects/call.c:361", "_PyEval_EvalFrameDefault@Python/generated_cases.c.h:2831"]
+  },
+  "vehicles": [
+    "python-5/_interpchannels-assertion-sigabrt-2",
+    "python-5/_interpchannels-assertion-sigabrt",
+    "python-5/_interpchannels-sigabrt-assertion",
+    "python-5/_interpchannels-assertion",
+    "python-7/_interpchannels-assertion",
+    "python-7/_interpchannels-sigabrt-assertion"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "segfault", "jit": "abort", "upstream": "segfault"},
+  "repro_start": 0,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Build-agnostic NULL-pointer defect (not free-threading-specific). channelsmod__channel_id (L3478) does `PyObject *mod = get_module_from_owned_type(cls); assert(mod == self); Py_DECREF(mod);` at L3486-3488 with no NULL check. get_module_from_owned_type (L165) is a shim over _get_current_module (L149), whose first step PyUnicode_FromString(MODULE_NAME_STR) (L151) fails under OOM and returns NULL with an exception set. Debug builds (ft_debug_asan, jit) abort on assert(mod == self) at L3487; ft_release (NDEBUG) segfaults on Py_DECREF(NULL) at L3488 (confirmed in gdb); upstream segfaults a bit earlier inside PyImport_GetModule reached from _get_current_module L155 (same frame/site, alloc-timing-shifted). Deterministic at start=0 since the first allocation is inside _get_current_module. Fix: check `if (mod == NULL) return NULL;` before the assert/Py_DECREF (or use the infallible PyType_GetModule(cls) per the XXX at L169). The sibling shim get_module_from_type (L176) has the same latent hazard. Six vehicles across python-5 and python-7 all hit _interpchannelsmodule.c:3487."
+}

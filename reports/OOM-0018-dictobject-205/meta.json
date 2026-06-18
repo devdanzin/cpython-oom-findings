@@ -1,0 +1,26 @@
+{
+  "id": "OOM-0018",
+  "slug": "dictobject-205",
+  "title": "abort on assert(_Py_IsOwnedByCurrentThread(mp) || IS_DICT_SHARED(mp)) in set_keys (Objects/dictobject.c:205) from PyObject_ClearManagedDict's OOM-recovery branch",
+  "description": "`Objects/dictobject.c`: when `detach_dict_from_object()` fails under OOM, `PyObject_ClearManagedDict`'s recovery branch calls `set_keys(dict, Py_EMPTY_KEYS)` (L7896) without first marking the dict shared. If the managed-dict object is owned by one thread but freed on another (biased refcounting), `set_keys`'s free-threaded ownership assert fires and aborts.",
+  "crash_kind": "abort",
+  "sites": ["Objects/dictobject.c set_keys:205", "Objects/dictobject.c PyObject_ClearManagedDict:7896"],
+  "signature": {
+    "site_frame": "set_keys@Objects/dictobject.c:205",
+    "top_frames": ["set_keys@Objects/dictobject.c:205", "PyObject_ClearManagedDict@Objects/dictobject.c:7896", "subtype_dealloc@Objects/typeobject.c:2847", "_Py_Dealloc@Objects/object.c:3319"]
+  },
+  "vehicles": [
+    "python-5/wsgiref_util-assertion",
+    "python-7/pickletools-assertion-sigabrt",
+    "python-7/sched-assertion-sigabrt"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "n/a", "upstream": "n/a"},
+  "repro_start": 8,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Free-threading-specific: set_keys's ownership assert and the _Py_IsOwnedByCurrentThread/IS_DICT_SHARED machinery only exist under Py_GIL_DISABLED (non-FT set_keys at L270 is a bare ma_keys store). assert-based abort: fires only on the FT debug build (release defines NDEBUG), so ft_release/jit/upstream are n/a. Root cause: PyObject_ClearManagedDict (L7865) clears an object whose materialized dict still points at inline values via detach_dict_from_object (L7885); under OOM copy_values (L7848) fails and the recovery branch (L7888) rewrites ma_keys with set_keys(dict, Py_EMPTY_KEYS) at L7896 WITHOUT calling ensure_shared_on_resize, unlike dictresize/clear/update. When the object is owned by thread A but its last decref happens on thread B (biased refcounting via _Py_brc_queue_object / _Py_HandlePending), the dealloc and this set_keys run on a non-owning thread on a non-shared dict and the assert fails. Fix: call ensure_shared_on_resize(dict) (or SET_DICT_SHARED(dict)) just before set_keys at L7896; this also corrects the IS_DICT_SHARED(dict) flag passed to dictkeys_decref at L7898 (QSBR delay). Recovery branch added in commit 6c450f44c283 (Dino Viehland, Feb 2025). On FT release the assert is compiled out but the wrong shared flag remains a latent memory-safety hazard for concurrent lock-free readers. Crash is racy: requires a managed-dict object owned by one thread, freed on another, while copy_values fails under OOM; the same window also yields sibling aborts (mimalloc realloc in the BRC merge; _Py_Dealloc 'cleared the current exception'), so minimization is partial (~1/20 runs hit dictobject.c:205). repro_start is the dominant single-start abort value; the shipped reproducer sweeps start 1..300. Authoritative backtrace caught under gdb after several attempts. Three vehicles (wsgiref_util, pickletools, sched) all build a MagicMock() under an OOM sweep with fuzzer threads."
+}

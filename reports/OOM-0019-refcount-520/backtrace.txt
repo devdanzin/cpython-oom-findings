@@ -1,0 +1,36 @@
+# Authoritative gdb backtrace (3.16_ft_debug_asan, commit 15d7406)
+# Abort: _Py_NegativeRefcount at Include/refcount.h:520 (Py_XDECREF) ->
+#   "object has negative ref count" / "<object ... is freed>".
+# The over-decref'd object is error_line in _PyPegen_raise_error_known_location:
+# its reference was already consumed by the 'N' format in Py_BuildValue
+# (pegen_errors.c:346), then the error: path decrefs it again (pegen_errors.c:363).
+# The freed slab is reused for the pre-allocated MemoryError instance under OOM,
+# hence "object type name: MemoryError".
+
+./Include/refcount.h:520: _Py_NegativeRefcount: Assertion failed: object has negative ref count
+<object at 0x7bffb7acd980 is freed>
+Fatal Python error: _PyObject_AssertFailed: _PyObject_AssertFailed
+object type name: MemoryError
+
+Program received signal SIGABRT, Aborted.
+#0  __pthread_kill_implementation        ./nptl/pthread_kill.c:44
+#3  __GI_raise                           ../sysdeps/posix/raise.c:26
+#4  __GI_abort                           ./stdlib/abort.c:77
+#5  fatal_error_exit                     Python/pylifecycle.c:3517
+#6  fatal_error                          Python/pylifecycle.c:3742
+#7  _Py_FatalErrorFunc                   Python/pylifecycle.c:3765
+#8  _PyObject_AssertFailed               Objects/object.c:3278
+#9  _Py_NegativeRefcount                 Objects/object.c:275
+#10 Py_DECREF                            ./Include/refcount.h:354
+#11 Py_XDECREF                           ./Include/refcount.h:520   <- decref of already-freed error_line
+#12 _PyPegen_raise_error_known_location  Parser/pegen_errors.c:363  <- error: Py_XDECREF(error_line) (2nd decref)
+#13 RAISE_ERROR_KNOWN_LOCATION           Parser/pegen.h:196
+#14 _Pypegen_set_syntax_error            Parser/pegen_errors.c:404
+#15 _PyPegen_run_parser                  Parser/pegen.c:960
+# ... -> ast.parse / compile of invalid syntax under set_nomemory.
+#
+# Minimal reproducer (start=54) produces frames #8-#14 identically.
+# The reference to error_line is consumed at pegen_errors.c:346 by the 'N'
+# conversion in Py_BuildValue("(OnnNnn)", ..., error_line, ...); when that
+# Py_BuildValue fails under OOM it still consumes the 'N' arg (do_mktuple/
+# do_ignore in Python/modsupport.c), and the error: path then decrefs it again.

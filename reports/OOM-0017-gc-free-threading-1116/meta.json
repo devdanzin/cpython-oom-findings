@@ -1,0 +1,26 @@
+{
+  "id": "OOM-0017",
+  "slug": "gc-free-threading-1116",
+  "title": "abort on assert(gc_get_refs(op) >= 0) \"refcount is too small\" in validate_gc_objects (Python/gc_free_threading.c:1116) during finalization GC after an OOM sweep over socket.recv_fds corrupts the deferred refcount of the array.array type",
+  "description": "Under a dense OOM sweep, `socket.recv_fds` repeatedly fails `array.array(\"i\")` construction; the interaction between the deferred reference `tp_alloc` takes on the `array.array` type and the unconditional `Py_DECREF(tp)` in `array_dealloc` (`arraymodule.c:848`) leaves the **type** object's refcount smaller than the live references to it. At shutdown, the free-threaded cyclic GC's `update_refs`/`visit_decref` tally drives `gc_refs` below zero and the debug assertion `gc_get_refs(op) >= 0` in `validate_gc_objects` aborts.",
+  "crash_kind": "abort",
+  "sites": ["Python/gc_free_threading.c validate_gc_objects:1116", "Modules/arraymodule.c array_dealloc:848", "Modules/arraymodule.c newarrayobject:784"],
+  "signature": {
+    "site_frame": "validate_gc_objects@Python/gc_free_threading.c:1116",
+    "top_frames": ["validate_gc_objects@Python/gc_free_threading.c:1115", "_mi_heap_area_visit_blocks@Objects/mimalloc/heap.c:569", "gc_visit_heaps_lock_held@Python/gc_free_threading.c:390", "deduce_unreachable_heap@Python/gc_free_threading.c:1452", "gc_collect_main@Python/gc_free_threading.c:2257", "PyGC_Collect@Python/gc_free_threading.c:2559", "_Py_Finalize@Python/pylifecycle.c:2487"]
+  },
+  "vehicles": [
+    "python-5/socket-sigabrt-assertion",
+    "python-7/socket-assertion-sigabrt",
+    "python-7/socket-sigabrt-assertion"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort (Python/gc.c:96 gc_decref)", "upstream": "n/a"},
+  "repro_start": "sweep 0..999 (cumulative; crash surfaces at finalization GC, not a single start)",
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Refcount-balance bug, build-agnostic; only debug GC invariants catch it. The corrupted object is the array.array TYPE (object type name: type, repr <class 'array.array'>), reported ob_refcnt 1152921504606847026 = 0x1000000000000032 = _Py_REF_DEFERRED base + small merged-shared, drifted ~-4 below healthy baseline. Surfaced via socket.recv_fds/send_fds which do `import array; array.array(\"i\")` then recvmsg/sendmsg under OOM; newarrayobject (arraymodule.c:770/782) succeeds tp_alloc (deferred ref on type) then fails PyMem_NEW -> Py_DECREF(op) -> array_dealloc -> Py_DECREF(tp) at L848. Crash is at _Py_Finalize -> PyGC_Collect -> gc_collect_main -> deduce_unreachable_heap -> validate_gc_objects; faulthandler Python stack is empty on the representative (runtime state: finalizing). jit (debug GIL) build aborts at Python/gc.c:96 gc_decref 'gc_get_refs(g) > 0' on the SAME underlying bug; ft_release and upstream compile assertions out (NDEBUG) and exit cleanly (n/a). Minimization PARTIAL: alignment-sensitive, so repro keeps the fuzzer boilerplate (fixes allocation baseline) + one recv_fds OOM sweep; a standalone `import array`/`array.array(\"i\")` sweep does not reproduce. Reduced repro.py deterministic at rc=134 on ft_debug_asan. dedupe.py: NEW (no match to OOM-0001..0007)."
+}

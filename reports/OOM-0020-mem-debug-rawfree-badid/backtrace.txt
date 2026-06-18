@@ -1,0 +1,39 @@
+Fatal Python error: _PyMem_DebugRawFree: bad ID: Allocated using API ' ', verified using API 'r'
+Python runtime state: initialized
+
+Build: ~/projects/3.16_ft_debug_asan_cpython/python (free-threaded debug+ASan), commit 15d7406
+Repro: source.py from python-5/concurrent_interpreters-segfault-2 (concurrent.interpreters.create under set_nomemory)
+
+Python stack (faulthandler):
+  File ".../Lib/concurrent/interpreters/__init__.py", line 65 in create   ->  _interpreters.create(reqrefs=True)
+  File ".../source.py", line 400 in oom_call
+  File ".../source.py", line 424 in <module>
+
+C backtrace (gdb, bt 15):
+#0  __pthread_kill_implementation              ./nptl/pthread_kill.c:44
+#1  __pthread_kill_internal                    ./nptl/pthread_kill.c:89
+#2  __GI___pthread_kill                        ./nptl/pthread_kill.c:100
+#3  __GI_raise                                 ../sysdeps/posix/raise.c:26
+#4  __GI_abort                                 ./stdlib/abort.c:77
+#5  fatal_error_exit                           Python/pylifecycle.c:3517
+#6  fatal_error                                Python/pylifecycle.c:3742
+#7  _Py_FatalErrorFormat                       Python/pylifecycle.c:3795
+#8  _PyMem_DebugCheckAddress                   Objects/obmalloc.c:3347   <- "bad ID: Allocated using API ' ', verified using API 'r'"
+#9  _PyMem_DebugRawFree                        Objects/obmalloc.c:3166
+#10 free_threadstate                           Python/pystate.c:1527     <- PyMem_RawFree(tstate) on the embedded _initial_thread
+#11 new_threadstate                            Python/pystate.c:1668     <- cleanup after _Py_qsbr_reserve()/_Py_ReserveTLBCIndex() fail
+#12 new_interpreter                            Python/pylifecycle.c:2728 <- _PyThreadState_New(interp, _PyThreadState_WHENCE_INIT)
+#13 _PyXI_NewInterpreter                       Python/crossinterp.c:3269
+#14 _interpreters_create_impl                  ./Modules/_interpretersmodule.c:878
+
+(gdb) frame 10
+(gdb) print tstate                          -> 0x7bffb41487e0      (the embedded _initial_thread block)
+(gdb) print &interp->_initial_thread        -> 0x387a0             (== &((PyInterpreterState*)NULL)->_initial_thread; field offset only)
+(gdb) print tstate == &interp->_initial_thread  -> 0  (FALSE -> takes the PyMem_RawFree(tstate) else-branch)
+(gdb) print tstate->base.interp             -> 0x0   (NULL: _initial_thread.base.interp was never set by init_interpreter)
+
+Minimal stdlib-only reproducer (same site), free-threaded debug+ASan build, deterministic at start=30:
+#10 free_threadstate    Python/pystate.c:1527
+#11 new_threadstate     Python/pystate.c:1668
+#12 new_interpreter     Python/pylifecycle.c:2728
+#13 _PyXI_NewInterpreter Python/crossinterp.c:3269

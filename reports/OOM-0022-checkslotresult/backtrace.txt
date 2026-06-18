@@ -1,0 +1,37 @@
+Fatal Python error: _Py_CheckSlotResult: Slot __delitem__ of type dict succeeded with an exception set
+Python runtime state: initialized
+object refcount : 1
+object type name: MemoryError
+object repr     : <lost sys.stderr>
+
+faulthandler Python stack (most recent call first):
+  File "<frozen importlib._bootstrap>", line 543 in _call_with_frames_removed
+  File "<frozen importlib._bootstrap_external>", line 1025 in create_module
+  File "<frozen importlib._bootstrap>", line 838 in module_from_spec
+  File "<frozen importlib._bootstrap>", line 895 in _load_unlocked
+  File "<frozen importlib._bootstrap>", line 1299 in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 1340 in _find_and_load
+  File ".../Lib/pdb.py", line 516 in __init__       # imports readline (single-phase C ext)
+  File ".../Lib/pdb.py", line 2897 in set_trace
+  File ".../source.py", line 409 in oom_call
+  File ".../source.py", line 447 in <module>
+
+Build: 3.16_ft_debug_asan_cpython (Py_DEBUG=1, Py_GIL_DISABLED=1), commit 15d7406
+ASAN_OPTIONS=detect_leaks=0:abort_on_error=0
+
+gdb backtrace (most recent call first):
+#5  fatal_error_exit                 Python/pylifecycle.c:3517
+#6  fatal_error                      Python/pylifecycle.c:3742
+#7  _Py_FatalErrorFormat             Python/pylifecycle.c:3795
+#8  _Py_CheckSlotResult              Objects/call.c:80      <- "Slot __delitem__ ... succeeded with an exception set"
+#9  PyObject_DelItem                 Objects/abstract.c:280 <- assert(_Py_CheckSlotResult(o,"__delitem__",res>=0))
+#10 reload_singlephase_extension     Python/import.c:2011   <- PyMapping_DelItem(modules, info->name) (cleanup)
+#11 import_find_extension            Python/import.c:2043
+#12 _imp_create_dynamic_impl         Python/import.c:5468
+#13 _imp_create_dynamic              Python/clinic/import.c.h:489
+#14 cfunction_vectorcall_FASTCALL    Objects/methodobject.c:449
+
+Note: the faulting object is the live `sys.modules` dict; the delete itself
+SUCCEEDS (res==0). The "fault" is a pre-existing MemoryError left pending when
+reload_singlephase_extension enters its cleanup branch after
+_modules_by_index_set() (import.c:2010) fails under OOM.

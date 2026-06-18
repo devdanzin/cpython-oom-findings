@@ -1,0 +1,33 @@
+# gdb backtrace, free-threaded debug+ASan build (commit 15d7406)
+# command:
+#   ASAN_OPTIONS=detect_leaks=0:abort_on_error=0 gdb -q -batch \
+#     -ex 'set pagination off' -ex 'set print frame-arguments none' \
+#     -ex 'set debuginfod enabled off' -ex run -ex 'bt 15' \
+#     --args .../python <crash>/source.py
+#
+# faulthandler Python stack (from stdout):
+#   File ".../Lib/concurrent/interpreters/_queues.py", line 76 in create
+#   File ".../source.py", line 400 in oom_call
+#   File ".../source.py", line 429 in <module>
+
+python: ./Modules/_interpqueuesmodule.c:559: void _queue_clear(_queue *): Assertion `!queue->alive' failed.
+
+Program received signal SIGABRT, Aborted.
+#0  __pthread_kill_implementation (threadid=..., signo=..., no_tid=...) at ./nptl/pthread_kill.c:44
+#1  __pthread_kill_internal (threadid=..., signo=...) at ./nptl/pthread_kill.c:89
+#2  __GI___pthread_kill (threadid=..., signo=...) at ./nptl/pthread_kill.c:100
+#3  0x00007ffff7c45b7e in __GI_raise (sig=...) at ../sysdeps/posix/raise.c:26
+#4  0x00007ffff7c288ec in __GI_abort () at ./stdlib/abort.c:77
+#5  0x00007ffff7c29979 in __libc_message_impl (vma_name=..., fmt=...) at ../sysdeps/posix/libc_fatal.c:138
+#6  0x00007ffff7c3bf75 in __libc_message_wrapper (vmaname=..., fmt=...) at ../include/stdio.h:203
+#7  __assert_fail (assertion=..., file=..., line=..., function=...) at ./assert/assert.c:37
+#8  0x00007bfff5ad8e3d in _queue_clear (queue=...) at ./Modules/_interpqueuesmodule.c:559
+#9  0x00007bfff5ad4434 in queue_create (defaults=..., queues=..., maxsize=...) at ./Modules/_interpqueuesmodule.c:1104
+#10 _interpqueues_create_impl (module=..., unboundarg=..., fallbackarg=..., maxsize=...) at ./Modules/_interpqueuesmodule.c:1529
+#11 _interpqueues_create (module=..., args=..., nargs=..., kwnames=...) at ./Modules/clinic/_interpqueuesmodule.c.h:100
+#12 0x0000555555ebf987 in _Py_BuiltinCallFastWithKeywords_StackRef (callable=..., arguments=..., total_args=...) at Python/ceval.c:841
+#13 0x0000555555ee2a44 in _PyEval_EvalFrameDefault (tstate=..., frame=..., throwflag=...) at Python/generated_cases.c.h:2603
+#14 0x0000555555ebd9b4 in _PyEval_EvalFrame (tstate=..., frame=..., throwflag=...) at ./Include/internal/pycore_ceval.h:122
+
+# frame 8: queue->alive == 1  (set by _queue_init at L547; never cleared because
+# the queue_create OOM error path skips _queue_kill_and_wait()).

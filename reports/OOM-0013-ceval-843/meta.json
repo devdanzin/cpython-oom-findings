@@ -1,0 +1,29 @@
+{
+  "id": "OOM-0013",
+  "slug": "ceval-843",
+  "title": "abort on assert((res != NULL) ^ (PyErr_Occurred() != NULL)) in _Py_BuiltinCallFastWithKeywords_StackRef (Python/ceval.c) when a builtin (compile) breaks the return/error contract under MemoryError",
+  "description": "`Python/ceval.c:843`: the specialized `CALL_BUILTIN_FAST_WITH_KEYWORDS` dispatch asserts `(res != NULL) ^ (PyErr_Occurred() != NULL)` after calling a `METH_FASTCALL|METH_KEYWORDS` builtin. Under OOM the builtin `compile()` (via `timeit.Timer.__init__`) returns NULL without a surviving exception, breaking the xor and aborting. The assert is correct; the defect is the builtin's OOM error handling.",
+  "crash_kind": "abort",
+  "sites": ["Python/ceval.c _Py_BuiltinCallFastWithKeywords_StackRef:843", "Objects/call.c _Py_CheckFunctionResult:43 (unspecialized variant)"],
+  "signature": {
+    "site_frame": "_Py_BuiltinCallFastWithKeywords_StackRef@Python/ceval.c:843",
+    "top_frames": ["_Py_BuiltinCallFastWithKeywords_StackRef@Python/ceval.c:843", "_PyEval_EvalFrameDefault@Python/generated_cases.c.h:2603", "_PyEval_Vector@Python/ceval.c:2141", "PyEval_EvalCode@Python/ceval.c:679"]
+  },
+  "vehicles": [
+    "python-5/timeit-assertion-sigabrt",
+    "python-7/dis-assertion",
+    "python-7/dis-sigabrt-assertion",
+    "python-7/timeit-sigabrt-assertion",
+    "python-7/zipfile__path-assertion-sigabrt",
+    "python-7/zipfile__path-sigabrt-assertion"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort", "upstream": "n/a"},
+  "repro_start": 19,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "assert-based abort: fires on builds with assertions compiled in (ft_debug_asan AND jit both abort at the identical ceval.c:843 assertion); ft_release/upstream define NDEBUG so the assert is a no-op and the same OOM path raises a clean MemoryError (rc 1) -> recorded n/a. The C contract '(res != NULL) ^ (PyErr_Occurred() != NULL)' is correct; the real defect is builtin compile()'s OOM error handling (builtin_compile_impl, bltinmodule.c:844 -> _Py_CompileStringObjectWithModule) returning NULL without a live exception. Specialization is load-bearing for the SITE: the abort lands on ceval.c:843 only after the compile() call site specializes to CALL_BUILTIN_FAST_WITH_KEYWORDS (the repro warms it up with a 2000-iteration loop; the fuzzer reaches it via its repeated oom_call sweep over timeit). The unspecialized variant of the same defect aborts one frame deeper in _Py_CheckFunctionResult (Objects/call.c:43, 'a function returned NULL without setting an exception'). repro_start=19 is with the warm-up loop; the timeit vehicle's faulthandler stack points at Lib/timeit.py:82 (compile(setup, dummy_src_name, 'exec')). Six vehicles (timeit x2, dis x2, zipfile._path x2) all abort at ceval.c:843 via different METH_FASTCALL|METH_KEYWORDS builtins on the specialized dispatch path. Suggested fix: make compile()'s OOM exits never return NULL without an exception (defensive PyErr_NoMemory on the finally path); keep the assert."
+}

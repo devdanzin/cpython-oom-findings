@@ -1,0 +1,38 @@
+# Authoritative backtrace -- FT debug+ASan build
+#   ~/projects/3.16_ft_debug_asan_cpython/python
+#   (commit 15d7406), running the representative vehicle source.py
+#   ~/crashers/python-4/sys-assertion-sigabrt-2/source.py
+#
+# Assertion message (stdout / stderr):
+python: Python/instrumentation.c:1106: uint8_t get_tools_for_instruction(PyCodeObject *, PyInterpreterState *, int, int): Assertion `debug_check_sanity(interp, code)' failed.
+Fatal Python error: Aborted
+
+# faulthandler Python stack (minimization hint):
+#   File ".../source.py", line 400 in oom_call
+#   File ".../source.py", line 443 in <module>      # sys._settraceallthreads under OOM sweep
+
+Program received signal SIGABRT, Aborted.
+#4  0x00007ffff7c288ec in __GI_abort () at ./stdlib/abort.c:77
+#5  0x00007ffff7c29979 in __libc_message_impl (...) at ../sysdeps/posix/libc_fatal.c:138
+#7  __assert_fail (assertion=..., file=..., line=..., function=...) at ./assert/assert.c:37
+#8  0x000055555605be85 in get_tools_for_instruction (code=..., interp=..., event=..., i=...) at Python/instrumentation.c:1106   <- assert(debug_check_sanity(interp, code))
+#9  call_instrumentation_vector (instr=..., tstate=..., event=..., frame=..., arg2=..., nargs=..., args=...) at Python/instrumentation.c:1189
+#10 0x000055555605c179 in _Py_call_instrumentation_arg (tstate=..., event=..., frame=..., instr=..., arg=...) at Python/instrumentation.c:1250
+#11 0x0000555555f474d2 in do_monitor_exc (tstate=..., frame=..., instr=..., event=...) at Python/ceval.h:350
+#12 0x0000555555f3469b in _PyEval_EvalFrameDefault (tstate=..., frame=..., throwflag=...) at Python/generated_cases.c.h:13839   (_PyEval_MonitorRaise on the in-flight MemoryError)
+#13 0x0000555555ebd9b4 in _PyEval_EvalFrame (...) at ./Include/internal/pycore_ceval.h:122
+#14 _PyEval_Vector (...) at Python/ceval.c:2141
+
+# ---------------------------------------------------------------------------
+# Same defect on the RELEASE / upstream builds is NOT compiled out: instead of
+# the assert it dereferences the inconsistent (NULL/partial) _co_monitoring and
+# SEGV at instrumentation.c:1119. Backtrace from upstream_cpython:
+#
+# Program received signal SIGSEGV, Segmentation fault.
+# #0  get_tools_for_instruction (...) at Python/instrumentation.c:1119
+#       tools = code->_co_monitoring->active_monitors.tools[event];
+# #1  call_instrumentation_vector (...) at Python/instrumentation.c:1189
+# #2  _Py_call_instrumentation_arg (...) at Python/instrumentation.c:1250
+# #3  do_monitor_exc (...) at Python/ceval.h:350
+# #4  _PyEval_MonitorRaise (...) at Python/ceval.c:2429
+# #5  _PyEval_EvalFrameDefault (...) at Python/generated_cases.c.h:13839

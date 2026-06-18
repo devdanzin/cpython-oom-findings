@@ -1,0 +1,47 @@
+Fatal Python error: _Py_CheckFunctionResult: a function returned NULL without setting an exception
+Python runtime state: initialized
+object address  : 0x7bffb6128110
+object refcount : 1
+object type     : 0x55555678d920
+object type name: MemoryError
+object repr     : 
+lost sys.stderr
+
+Stack (most recent call first):
+  File ".../Lib/symtable.py", line 26 in symtable     # top = _symtable.symtable(code, filename, compile_type, module=module)
+  File ".../Lib/symtable.py", line 412 in main
+  File ".../source.py", line 400 in oom_call
+  File ".../source.py", line 461 in <module>
+
+Extension modules: _testcapi (total: 1)
+
+Program received signal SIGABRT, Aborted.
+#0  __pthread_kill_implementation                  ./nptl/pthread_kill.c:44
+#1  __pthread_kill_internal                        ./nptl/pthread_kill.c:89
+#2  __GI___pthread_kill                            ./nptl/pthread_kill.c:100
+#3  __GI___raise                                   ../sysdeps/posix/raise.c:26
+#4  __GI_abort                                     ./stdlib/abort.c:77
+#5  fatal_error_exit                               Python/pylifecycle.c:3517
+#6  fatal_error                                    Python/pylifecycle.c:3742
+#7  _Py_FatalErrorFunc                             Python/pylifecycle.c:3765
+#8  _Py_CheckFunctionResult                        Objects/call.c:43      <- Py_FatalError: result==NULL && !PyErr_Occurred()
+#9  _Py_VectorCall_StackRefSteal                   Python/ceval.c:726
+#10 _PyEval_EvalFrameDefault                       Python/generated_cases.c.h:3686   (CALL of _symtable.symtable)
+#11 _PyEval_EvalFrame                              ./Include/internal/pycore_ceval.h:122
+#12 _PyEval_Vector                                 Python/ceval.c:2141
+#13 PyEval_EvalCode                                Python/ceval.c:679
+#14 run_eval_code_obj                              Python/pythonrun.c:1369
+
+Notes:
+  - The faulting "object" reported by faulthandler is a MemoryError instance
+    (refcount 1) with an EMPTY repr -- a MemoryError whose normalization/repr
+    could not allocate. This is the exception the pegen error-recovery pass
+    cleared; _Py_CheckFunctionResult then sees result==NULL with no live error.
+  - The C function that returned NULL-without-exception is _symtable.symtable()
+    (Modules/symtablemodule.c:26), via _Py_SymtableStringObjectFlags ->
+    _PyParser_ASTFromString -> _PyPegen_run_parser (Parser/pegen.c:939); the
+    error-loss is at Parser/pegen.c:917/928 (_PyPegen_set_syntax_error_metadata)
+    and the second-pass _PyPegen_parse under OOM.
+  - Captured on the FT debug+ASan build (Py_DEBUG=1, GIL_DISABLED=1) at start=4.
+    The JIT debug build (Py_DEBUG=1, GIL_DISABLED=0) aborts identically at
+    start=4. Release builds (Py_DEBUG=0) compile the Py_FatalError out (n/a).

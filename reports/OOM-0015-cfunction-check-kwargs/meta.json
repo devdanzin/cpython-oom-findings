@@ -1,0 +1,27 @@
+{
+  "id": "OOM-0015",
+  "slug": "cfunction-check-kwargs",
+  "title": "abort on assert(!_PyErr_Occurred(tstate)) in cfunction_check_kwargs (Objects/methodobject.c:409) because sys._baserepl() returns None with a MemoryError still pending under OOM",
+  "description": "`sys._baserepl` (`Python/sysmodule.c:2620`) calls `PyRun_AnyFileExFlags`, ignores its return value, and unconditionally `Py_RETURN_NONE`s. Under OOM the REPL/parse machinery raises `MemoryError` that the interactive loop does not reliably clear, so `_baserepl` returns a non-NULL `None` with an exception still live; the next NOARGS `sys` builtin then trips the debug `assert(!_PyErr_Occurred(tstate))` in `cfunction_check_kwargs` and aborts.",
+  "crash_kind": "abort",
+  "sites": ["Objects/methodobject.c cfunction_check_kwargs:409", "Python/sysmodule.c sys__baserepl_impl:2624"],
+  "signature": {
+    "site_frame": "cfunction_check_kwargs@Objects/methodobject.c:409",
+    "top_frames": ["cfunction_check_kwargs@Objects/methodobject.c:409", "cfunction_vectorcall_NOARGS@Objects/methodobject.c:491", "_PyObject_VectorcallTstate@Include/internal/pycore_call.h:144", "_Py_VectorCall_StackRefSteal@Python/ceval.c:726", "_PyEval_EvalFrameDefault@Python/generated_cases.c.h:4559"]
+  },
+  "vehicles": [
+    "python-4/sys-assertion-sigabrt",
+    "python-7/sys-assertion-sigabrt",
+    "python-7/sys-sigabrt-assertion-3",
+    "python-7/asyncio_format_helpers-assertion-sigabrt"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort", "upstream": "n/a"},
+  "repro_start": 1,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "NOT free-threading-specific: a generic exception-discard bug in sys._baserepl. sys__baserepl_impl (sysmodule.c:2620) ignores the int return of PyRun_AnyFileExFlags and always returns None; under OOM the interactive loop (pythonrun.c:152-178) can return with a stale MemoryError, so _baserepl returns a non-NULL result with an exception set. Aborts on BOTH assertions-enabled builds (ft_debug_asan and jit); ft_release/upstream compile the assert out and propagate a clean MemoryError (exit 1), so they are n/a. Minimization is partial: the minimal stdlib repro (sys._baserepl(); sys._clear_type_cache() under set_nomemory(1,0), stdin at EOF) is deterministic but lands one frame earlier on _Py_CheckFunctionResult ('a function returned a result with an exception set', object type name MemoryError) because cfunction_vectorcall_NOARGS does not run the result check but the enclosing _PyObject_VectorcallTstate (pycore_call.h:145) does; the exact methodobject.c:409 frame is reproduced by the python-4/python-7 sys vehicles where the leak surfaces at the entry of the next NOARGS sys call. Fix: make sys__baserepl_impl return NULL when PyRun_AnyFileExFlags fails, and/or ensure _PyRun_InteractiveLoopObject never returns with a stale exception on the thread state."
+}

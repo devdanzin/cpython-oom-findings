@@ -1,0 +1,27 @@
+{
+  "id": "OOM-0021",
+  "slug": "checkfunctionresult-null",
+  "title": "fatal _Py_CheckFunctionResult: _symtable.symtable() returns NULL without setting an exception (Objects/call.c) when pegen's error-recovery pass loses a MemoryError under OOM",
+  "description": "`_symtable.symtable()` parses source via pegen; on a failed first parse pegen runs a second error-recovery pass that calls `PyErr_Clear()` (`Parser/pegen.c:917`/`928`, and the second `_PyPegen_parse`). Under OOM that path clears the live `MemoryError` and then fails its own allocation, so the C call returns `NULL` with no exception set, tripping `_Py_CheckFunctionResult`'s debug `Py_FatalError`.",
+  "crash_kind": "fatal",
+  "sites": ["Objects/call.c _Py_CheckFunctionResult:43", "Parser/pegen.c _PyPegen_set_syntax_error_metadata:928", "Parser/pegen.c _PyPegen_run_parser:966", "Modules/symtablemodule.c _symtable_symtable_impl:66"],
+  "signature": {
+    "site_frame": "_Py_CheckFunctionResult@Objects/call.c:43",
+    "top_frames": ["_Py_CheckFunctionResult@Objects/call.c:43", "_Py_VectorCall_StackRefSteal@Python/ceval.c:726", "_PyEval_EvalFrameDefault@Python/generated_cases.c.h:3686", "_PyEval_Vector@Python/ceval.c:2141"]
+  },
+  "vehicles": [
+    "python-5/symtable-fatal_python_error-sigabrt",
+    "python-7/symtable-fatal_python_error-sigabrt",
+    "python-7/symtable-sigabrt-fatal_python_error",
+    "python-7/symtable-sigabrt-fatal_python_error-2"
+  ],
+  "matrix": {"ft_debug_asan": "fatal", "ft_release": "n/a", "jit": "fatal", "upstream": "n/a"},
+  "repro_start": 4,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Generic 'returned NULL without setting an exception' invariant, fired through the symtable/pegen path. _symtable.symtable() (Modules/symtablemodule.c:66) -> _Py_SymtableStringObjectFlags -> _PyParser_ASTFromString -> _PyPegen_run_parser (Parser/pegen.c:939). On a failed first parse pegen does a heavy second error-recovery pass (reset_parser_state_for_error_pass + _PyPegen_parse + _Pypegen_set_syntax_error + _PyPegen_set_syntax_error_metadata); under OOM these allocations raise MemoryError, which the recovery code PyErr_Clear()s (pegen.c:917/928) while trying to upgrade the diagnostic, then fails its own alloc and returns NULL with no exception. faulthandler dumps a MemoryError with refcount 1 and EMPTY repr (normalization/repr could not allocate) -- the cleared exception. This is a Py_FatalError gated on #ifdef Py_DEBUG inside _Py_CheckFunctionResult (call.c:40-43): aborts on BOTH debug builds (ft_debug_asan and jit, Py_DEBUG=1) at start=4; compiled out on release builds (ft_release, upstream, Py_DEBUG=0), where the same defect instead yields a silent SystemError return rather than a clean MemoryError (latent correctness bug). Sweeping start 1..200 on the release builds raised only clean MemoryErrors and never aborted, so non-debug builds recorded n/a. Unlike OOM-0003 this is NOT FT-specific (jit/GIL build also aborts). Fix: preserve a pending non-SyntaxError exception across the error-recovery pass (save with PyErr_GetRaisedException before reset, restore if recovery set nothing; restore exc on the !metadata branch of _PyPegen_set_syntax_error_metadata instead of PyErr_Clear()); optionally backstop with PyErr_NoMemory() in _symtable_symtable_impl when a build helper returns NULL without an exception. 4 vehicles (python-5 x1, python-7 x3), all identical site via symtable.symtable (Lib/symtable.py:26) from symtable.main (Lib/symtable.py:412)."
+}

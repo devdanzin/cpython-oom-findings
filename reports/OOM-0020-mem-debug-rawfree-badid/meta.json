@@ -1,0 +1,45 @@
+{
+  "id": "OOM-0020",
+  "slug": "mem-debug-rawfree-badid",
+  "title": "fatal _PyMem_DebugRawFree: bad ID in free_threadstate (Python/pystate.c) when free-threaded sub-interpreter thread-state setup fails under MemoryError",
+  "description": "`Python/pystate.c`: a fresh free-threaded sub-interpreter hands out its embedded `_initial_thread` from `alloc_threadstate`; if the `Py_GIL_DISABLED`-only `_Py_qsbr_reserve`/`_Py_ReserveTLBCIndex` allocation fails under OOM, `free_threadstate` reads the still-NULL `tstate->base.interp`, so its `tstate == &interp->_initial_thread` check compares against a NULL-offset and is false, and it `PyMem_RawFree`s the interpreter-embedded (non-heap) thread state -> `_PyMem_DebugRawFree: bad ID` fatal (segfault on release)",
+  "crash_kind": "fatal",
+  "sites": [
+    "Python/pystate.c free_threadstate:1527",
+    "Python/pystate.c new_threadstate:1668",
+    "Objects/obmalloc.c _PyMem_DebugCheckAddress:3347"
+  ],
+  "signature": {
+    "site_frame": "free_threadstate@Python/pystate.c:1527",
+    "top_frames": [
+      "_PyMem_DebugCheckAddress@Objects/obmalloc.c:3347",
+      "_PyMem_DebugRawFree@Objects/obmalloc.c:3166",
+      "free_threadstate@Python/pystate.c:1527",
+      "new_threadstate@Python/pystate.c:1668",
+      "new_interpreter@Python/pylifecycle.c:2728",
+      "_PyXI_NewInterpreter@Python/crossinterp.c:3269"
+    ]
+  },
+  "vehicles": [
+    "python-5/concurrent_interpreters-segfault-2",
+    "python-5/concurrent_interpreters-segfault",
+    "python-7/concurrent_interpreters-segfault-sigabrt",
+    "python-7/concurrent_interpreters-segfault-sigabrt-2",
+    "python-7/concurrent_interpreters-segfault-sigabrt-3",
+    "python-7/concurrent_interpreters-sigabrt-segfault"
+  ],
+  "matrix": {
+    "ft_debug_asan": "fatal",
+    "ft_release": "segfault",
+    "jit": "n/a",
+    "upstream": "n/a"
+  },
+  "repro_start": 28,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Free-threading-specific: the failing _Py_qsbr_reserve/_Py_ReserveTLBCIndex reservations and the free_threadstate cleanup are gated on Py_GIL_DISABLED, so GIL builds (jit, upstream) never reach the path -> n/a (upstream still segfaults at a nearby start, but in an unrelated OOM site: make_unraisable_hook_args/PyStructSequence_New during Py_EndInterpreter, pylifecycle.c:2292). Root cause: init_interpreter (pystate.c:568) publishes interp->threads.preallocated = &interp->_initial_thread but never sets _initial_thread.base.interp; alloc_threadstate (L1498) hands that out; on OOM reservation failure new_threadstate calls free_threadstate (L1668/L1673), which reads the still-NULL tstate->base.interp (only set later in init_threadstate L1558), so tstate == &interp->_initial_thread (L1520) compares against &((NULL)->_initial_thread) and is false, and PyMem_RawFree(tstate) at L1527 frees the interpreter-embedded (calloc'd, untagged, API ' ') thread state. Debug build aborts via _PyMem_DebugRawFree bad ID; ft_release has the check compiled out and segfaults from the corrupted heap (captured mid-fault at _PyIndexPool_AllocIndex / new_threadstate pystate.c:1671). Fix: set interp->_initial_thread.base.interp = interp before publishing it as preallocated, or make free_threadstate identify the embedded tstate without trusting tstate->base.interp. Minimal repro drives _interpreters.create(reqrefs=True) directly; deterministic at start=28 (shipped repro.py, no args) and start=30 (argv-driven sweep / original vehicle) on ft_debug_asan (3/3). repro_start (28) is sensitive to the script's allocation preamble (the argv/import variant hits it at 30); the defect itself is index-agnostic. Six vehicles all create a sub-interpreter under the OOM sweep; matched on 'bad ID' + Py_NewInterpreterFromConfig C stack."
+}

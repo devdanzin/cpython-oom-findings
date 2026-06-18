@@ -1,0 +1,25 @@
+# Authoritative gdb backtrace from the free-threaded debug+ASan build
+# (~/projects/3.16_ft_debug_asan_cpython/python), running the representative
+# fuzzer vehicle ~/crashers/python-4/html-sigabrt-assertion/source.py.
+
+python: Objects/unicodeobject.c:10783: PyObject *replace(PyObject *, PyObject *, PyObject *, Py_ssize_t): Assertion `release1 == (buf1 != PyUnicode_DATA(str1))' failed.
+
+Program received signal SIGABRT, Aborted.
+#3  __GI_raise           ../sysdeps/posix/raise.c:26
+#4  __GI_abort           ./stdlib/abort.c:77
+#7  __assert_fail        ./assert/assert.c:37
+#8  replace              Objects/unicodeobject.c:10783   <- assert release1 == (buf1 != PyUnicode_DATA(str1))
+#9  unicode_replace_impl Objects/unicodeobject.c:12586   (str.replace -> replace())
+#10 unicode_replace      Objects/clinic/unicodeobject.c.h:1002
+#11 _PyCallMethodDescriptorFastWithKeywords_StackRef  Python/ceval.c:883
+#12 _PyEval_EvalFrameDefault  Python/generated_cases.c.h:4205
+#13 _PyEval_EvalFrame    ./Include/internal/pycore_ceval.h:122
+#14 _PyEval_Vector       Python/ceval.c:2141
+
+# faulthandler Python stack (from the vehicle's stdout) -- minimization hint:
+#   File ".../Lib/html/__init__.py", line 19 in escape      # s.replace("&", "&amp;")
+#   File ".../source.py", line 400 in oom_call
+#   File ".../source.py", line 461 in <module>              # html.escape(<UCS-2 string>)
+
+# Faulting state: buf1 == NULL (unicode_askind/PyMem_New failed under OOM) while
+# release1 is still 0 -> (buf1 != PyUnicode_DATA(str1)) is 1, so 0 == 1 fails.

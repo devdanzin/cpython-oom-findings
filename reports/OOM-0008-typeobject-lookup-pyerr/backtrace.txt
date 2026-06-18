@@ -1,0 +1,31 @@
+# Authoritative backtrace, free-threaded debug+ASan build
+# (~/projects/3.16_ft_debug_asan_cpython/python), commit 15d7406
+# Original vehicle: ~/crashers/python-4/gettext-assertion/source.py
+
+python: Objects/typeobject.c:6343: unsigned int _PyType_LookupStackRefAndVersion(PyTypeObject *, PyObject *, _PyStackRef *): Assertion `!PyErr_Occurred()' failed.
+
+Program received signal SIGABRT, Aborted.
+#0  __pthread_kill_implementation () at ./nptl/pthread_kill.c:44
+#1  __pthread_kill_internal () at ./nptl/pthread_kill.c:89
+#2  __GI___pthread_kill () at ./nptl/pthread_kill.c:100
+#3  __GI_raise (sig=...) at ../sysdeps/posix/raise.c:26
+#4  __GI_abort () at ./stdlib/abort.c:77
+#5  __libc_message_impl () at ../sysdeps/posix/libc_fatal.c:138
+#6  __libc_message_wrapper () at ../include/stdio.h:203
+#7  __assert_fail () at ./assert/assert.c:37
+#8  _PyType_LookupStackRefAndVersion (type=..., name=..., out=...) at Objects/typeobject.c:6343   <- assert !PyErr_Occurred()
+#9  _PyObject_GenericGetAttrWithDict (obj=..., name=..., dict=..., suppress=...) at Objects/object.c:1919
+#10 _PyObject_GetAttrStackRef (v=..., name=...) at Objects/object.c:1369
+#11 _PyEval_EvalFrameDefault (tstate=..., frame=..., throwflag=...) at Python/generated_cases.c.h:8786   (LOAD_ATTR)
+#12 _PyEval_EvalFrame (tstate=..., frame=..., throwflag=...) at ./Include/internal/pycore_ceval.h:122
+#13 _PyEval_Vector (tstate=..., func=..., locals=..., args=..., argcount=..., kwnames=...) at Python/ceval.c:2141
+#14 PyEval_EvalCode (co=..., globals=..., locals=...) at Python/ceval.c:679
+
+# Python stack (faulthandler) for the original gettext vehicle:
+#   File ".../Lib/gettext.py", line 190 in _as_int2     (n.__class__.__name__ after an f.f_back walk)
+#   File ".../Lib/gettext.py", line 620 in dnpgettext
+
+# Minimal reproducer (repro.py) produces the identical C site via:
+#   #10 _Py_module_getattro_impl  Objects/moduleobject.c:1334  (sys.maxsize LOAD_ATTR)
+#   #9  _PyObject_GenericGetAttrWithDict  Objects/object.c:1919
+#   #8  _PyType_LookupStackRefAndVersion  Objects/typeobject.c:6343  (assert !PyErr_Occurred())

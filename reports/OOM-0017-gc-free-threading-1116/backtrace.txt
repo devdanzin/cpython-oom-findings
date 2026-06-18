@@ -1,0 +1,47 @@
+# Abort: Python/gc_free_threading.c:1116
+# validate_gc_objects: Assertion "gc_get_refs(op) >= 0" failed: refcount is too small
+#
+# Build: ~/projects/3.16_ft_debug_asan_cpython/python  (free-threaded debug + ASan, commit 15d7406)
+# Repro: ~/crashers/python-5/socket-sigabrt-assertion/source.py
+# rc=134 (SIGABRT), deterministic.
+
+# ---- fatal message (stdout) ----
+Python/gc_free_threading.c:1116: validate_gc_objects: Assertion "gc_get_refs(op) >= 0" failed: refcount is too small
+object address  : 0x.....c56910
+object refcount : 1152921504606847026        # 0x1000000000000032  (deferred-refcount base, drifted)
+object type     : ...
+object type name: type
+object repr     : <class 'array.array'>      # the corrupted object is the array.array TYPE
+
+Fatal Python error: _PyObject_AssertFailed: _PyObject_AssertFailed
+Python runtime state: finalizing             # abort happens during interpreter shutdown GC
+
+Stack (most recent call first):
+                                             # (empty: body finished; crash is in finalize-time GC)
+
+# ---- gdb backtrace (bt 30) ----
+#8  _PyObject_AssertFailed       Objects/object.c:3278
+#9  validate_gc_objects          Python/gc_free_threading.c:1115   <- assert gc_get_refs(op) >= 0  (L1116)
+#10 _mi_heap_area_visit_blocks   Objects/mimalloc/heap.c:569
+#11 mi_heap_area_visitor         Objects/mimalloc/heap.c:684
+#12 mi_heap_visit_areas_page     Objects/mimalloc/heap.c:664
+#13 mi_heap_visit_pages          Objects/mimalloc/heap.c:46
+#14 mi_heap_visit_areas          Objects/mimalloc/heap.c:670
+#15 mi_heap_visit_blocks         Objects/mimalloc/heap.c:695
+#16 gc_visit_heaps_lock_held     Python/gc_free_threading.c:390
+#17 gc_visit_heaps               Python/gc_free_threading.c:429
+#18 deduce_unreachable_heap      Python/gc_free_threading.c:1452
+#19 gc_collect_internal          Python/gc_free_threading.c:2119
+#20 gc_collect_main              Python/gc_free_threading.c:2257
+#21 PyGC_Collect                 Python/gc_free_threading.c:2559
+#22 _Py_Finalize                 Python/pylifecycle.c:2487
+#23 Py_RunMain                   Modules/main.c:798
+#24 pymain_main                  Modules/main.c:826
+#25 Py_BytesMain                 Modules/main.c:850
+#26 __libc_start_call_main       libc-start.c
+#27 __libc_start_main_impl       libc-start.c
+#28 _start
+
+# ---- jit build (Python/gc.c GC; also a debug build) ----
+# Same underlying refcount-too-small bug, different GC implementation/site:
+# Python/gc.c:96: gc_decref: Assertion "gc_get_refs(g) > 0" failed: refcount is too small

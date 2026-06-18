@@ -1,0 +1,47 @@
+# Authoritative backtrace — free-threaded debug+ASan build
+# (~/projects/3.16_ft_debug_asan_cpython/python), commit 15d7406.
+# Representative vehicle: ~/crashers/python-4/sys-assertion-sigabrt/source.py
+#
+# Assertion message (from stdout):
+#   python: Objects/methodobject.c:409: int cfunction_check_kwargs(
+#       PyThreadState *, PyObject *, PyObject *):
+#       Assertion `!_PyErr_Occurred(tstate)' failed.
+#   Fatal Python error: Aborted
+#   (object type name: MemoryError — a MemoryError is live on the thread state)
+
+#0  __pthread_kill_implementation                       ./nptl/pthread_kill.c:44
+#1  __pthread_kill_internal                             ./nptl/pthread_kill.c:89
+#2  __GI___pthread_kill                                 ./nptl/pthread_kill.c:100
+#3  __GI_raise                                          ../sysdeps/posix/raise.c:26
+#4  __GI_abort                                          ./stdlib/abort.c:77
+#5  __libc_message_impl                                 ../sysdeps/posix/libc_fatal.c:138
+#6  __libc_message_wrapper                              ../include/stdio.h:203
+#7  __assert_fail                                       ./assert/assert.c:37
+#8  cfunction_check_kwargs        Objects/methodobject.c:409   <- assert(!_PyErr_Occurred(tstate))
+#9  cfunction_vectorcall_NOARGS   Objects/methodobject.c:491
+#10 _PyObject_VectorcallTstate    Include/internal/pycore_call.h:144
+#11 _Py_VectorCall_StackRefSteal  Python/ceval.c:726
+#12 _PyEval_EvalFrameDefault      Python/generated_cases.c.h:4559  (CALL_NON_PY_GENERAL)
+#13 _PyEval_EvalFrame             Include/internal/pycore_ceval.h:122
+#14 _PyEval_Vector                Python/ceval.c:2141
+
+# faulthandler Python stack (representative vehicle):
+#   File ".../source.py", line 402 in oom_call        (func(*args, **kwargs))
+#   File ".../source.py", line 457 in <module>
+# The fuzzed call at the crash is a NOARGS sys builtin; the python-7 vehicles
+# pin it to sys._baserepl (the function that leaked the pending exception).
+
+# ----------------------------------------------------------------------------
+# Minimal stdlib repro hits the SAME root cause one frame earlier: the bad
+# result is caught on _baserepl's own return by the debug result-checker
+# (cfunction_vectorcall_NOARGS does not run _Py_CheckFunctionResult, but the
+# enclosing _PyObject_VectorcallTstate does):
+#
+#   Fatal Python error: _Py_CheckFunctionResult:
+#       a function returned a result with an exception set
+#   object type name: MemoryError
+#   Stack (most recent call first):
+#     File "repro.py", line 15 in <module>   (sys._baserepl())
+#
+# Both assertions are the same defect: sys._baserepl returns None with a
+# MemoryError still pending on the thread state.

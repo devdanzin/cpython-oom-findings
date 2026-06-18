@@ -1,0 +1,37 @@
+{
+  "id": "OOM-0009",
+  "slug": "unicode-replace",
+  "title": "abort on assert(release1 == (buf1 != PyUnicode_DATA(str1))) in replace (Objects/unicodeobject.c) when a kind-widening allocation fails under MemoryError",
+  "description": "`Objects/unicodeobject.c`: in `replace()` (str.replace), the `srelease`/`release1`/`release2` ownership flags are set on the line *after* the matching `unicode_askind()` pointer assignment. Under OOM `unicode_askind` returns NULL, leaving e.g. `buf1=NULL` while `release1=0`; the `done`/`nothing`/`error` cleanup labels then assert `release1 == (buf1 != PyUnicode_DATA(str1))` (0 == 1) and abort",
+  "crash_kind": "abort",
+  "sites": ["Objects/unicodeobject.c replace:10783"],
+  "signature": {
+    "site_frame": "replace@Objects/unicodeobject.c:10783",
+    "top_frames": ["replace@Objects/unicodeobject.c:10783", "unicode_replace_impl@Objects/unicodeobject.c:12586", "unicode_replace@Objects/clinic/unicodeobject.c.h:1002", "_PyCallMethodDescriptorFastWithKeywords_StackRef@Python/ceval.c:883"]
+  },
+  "vehicles": [
+    "python-4/html-sigabrt-assertion",
+    "python-5/_pylong-sigabrt-assertion",
+    "python-5/html-assertion-sigabrt",
+    "python-5/sqlite3_dump-sigabrt-assertion",
+    "python-5/tomllib-assertion-sigabrt",
+    "python-5/tomllib__parser-assertion-sigabrt",
+    "python-5/xml_etree_ElementInclude-sigabrt-assertion",
+    "python-7/compression_gzip-sigabrt-assertion",
+    "python-7/shlex-assertion-sigabrt",
+    "python-7/sqlite3_dump-sigabrt-assertion",
+    "python-7/tomllib-assertion-sigabrt",
+    "python-7/tomllib-assertion-sigabrt-2",
+    "python-7/wsgiref_headers-sigabrt-assertion",
+    "python-7/xml_etree_ElementInclude-assertion-sigabrt"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort", "upstream": "n/a"},
+  "repro_start": 0,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Build-agnostic C bug in replace() that only manifests where assert() is compiled in. In replace() the ownership flags srelease/release1/release2 are set one line AFTER the unicode_askind() pointer assignment (L10583/10592/10605/10608/10646/10655/10662/10671). unicode_askind (L2406) is a PyMem_New that returns NULL under OOM, so on failure e.g. buf1=NULL while release1=0; the done(L10756)/nothing(L10770)/error(L10782) labels assert release1 == (buf1 != PyUnicode_DATA(str1)) == (0 == 1) and abort. Aborts on ft_debug_asan AND jit (both assertion-enabled debug builds); ft_release/upstream define NDEBUG so the assert is gone, the desync is harmless (if(release1) PyMem_Free skips NULL), and str.replace correctly raises MemoryError -> n/a (no crash). Repro: 'UCS-2 string'.replace('&','&amp;') forces the ASCII substring to widen via unicode_askind; failing allocation #0 hits the desync. 14 vehicles across html/tomllib/sqlite3_dump/_pylong/shlex/wsgiref/xml.etree/gzip all abort at the same site via str.replace on a wide string (html.escape's s.replace('&','&amp;') is the canonical path). Fix: guard each assert against buf==NULL (assert release1 == (buf1 != NULL && buf1 != PyUnicode_DATA(str1))) or set buf1=PyUnicode_DATA(str1) before goto error."
+}

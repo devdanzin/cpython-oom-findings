@@ -1,0 +1,26 @@
+{
+  "id": "OOM-0016",
+  "slug": "interpqueues-queue-clear",
+  "title": "abort on assert(!queue->alive) in _queue_clear (Modules/_interpqueuesmodule.c) when _queues_add() fails under MemoryError in queue_create",
+  "description": "`Modules/_interpqueuesmodule.c`: in `queue_create`, when `_queues_add()` fails to allocate its `_queueref` under OOM, the error path calls `_queue_clear()` on the still-alive queue (it skips `_queue_kill_and_wait()`), so `_queue_clear`'s `assert(!queue->alive)` fires and aborts",
+  "crash_kind": "abort",
+  "sites": ["Modules/_interpqueuesmodule.c _queue_clear:559", "Modules/_interpqueuesmodule.c queue_create:1104"],
+  "signature": {
+    "site_frame": "_queue_clear@Modules/_interpqueuesmodule.c:559",
+    "top_frames": ["_queue_clear@Modules/_interpqueuesmodule.c:559", "queue_create@Modules/_interpqueuesmodule.c:1104", "_interpqueues_create_impl@Modules/_interpqueuesmodule.c:1529", "_interpqueues_create@Modules/clinic/_interpqueuesmodule.c.h:100"]
+  },
+  "vehicles": [
+    "python-4/concurrent_interpreters__queues-assertion-sigabrt",
+    "python-5/concurrent_interpreters__queues-assertion-sigabrt",
+    "python-7/concurrent_interpreters__queues-assertion-sigabrt"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort", "upstream": "n/a"},
+  "repro_start": 2,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "queue_create (L1089) calls _queue_init (sets queue->alive=1, L547) then _queues_add (L1102). Under OOM _queues_add's GLOBAL_MALLOC(_queueref) (L916) fails, returns ERR_QUEUE_ALLOC (<0); queue_create then calls _queue_clear(queue) (L1104) whose first stmt assert(!queue->alive) (L559) fires because the queue is still alive. All correct teardowns reach _queue_clear via _queue_free only after _queue_kill_and_wait sets alive=0 (cf. queue_destroy L1119); the create error path skips that. Not a UAF: _queue_clear's actual work (free items/lock, zero struct) is correct for a fresh never-registered queue, so on NDEBUG the path raises a clean MemoryError. assert-based abort -> fires on assertion builds (ft_debug_asan AND jit); ft_release/upstream compile the assert out and exit cleanly (n/a). Fix: set queue->alive=0 before _queue_clear in queue_create's _queues_add-failure path (or route via _queue_kill_and_wait/_queue_free). Minimal repro start=2: alloc #0=_queue struct, #1=mutex (succeed -> alive), #2=_queueref in _queues_add (fails). unboundop=3 is UNBOUND. 3 vehicles all call concurrent.interpreters._queues.create under OOM."
+}

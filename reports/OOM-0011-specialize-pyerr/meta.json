@@ -1,0 +1,33 @@
+{
+  "id": "OOM-0011",
+  "slug": "specialize-pyerr",
+  "title": "abort on assert(!PyErr_Occurred()) in specialize (Python/specialize.c) when LOAD_ATTR is specialized while a stale MemoryError is pending under OOM",
+  "description": "`Python/specialize.c`: the adaptive `LOAD_ATTR` specializer runs before the attribute load and never checks `PyErr_Occurred()`, so under OOM a stale `MemoryError` from an earlier allocation is still pending when it reaches `specialize(instr, LOAD_ATTR_MODULE)`, tripping the debug assert `!PyErr_Occurred()` (specialize.c:364) and aborting",
+  "crash_kind": "abort",
+  "sites": ["Python/specialize.c specialize:364", "Python/specialize.c specialize_module_load_attr_lock_held:443", "Python/specialize.c _Py_Specialize_LoadAttr:1010"],
+  "signature": {
+    "site_frame": "specialize@Python/specialize.c:364",
+    "top_frames": ["specialize@Python/specialize.c:364", "specialize_module_load_attr_lock_held@Python/specialize.c:443", "specialize_module_load_attr@Python/specialize.c:460", "_Py_Specialize_LoadAttr@Python/specialize.c:1010", "_PyEval_EvalFrameDefault@Python/generated_cases.c.h:8761"]
+  },
+  "vehicles": [
+    "python-4/argparse-assertion",
+    "python-5/bdb-assertion",
+    "python-5/bdb-assertion-sigabrt",
+    "python-5/bdb-sigabrt-assertion",
+    "python-5/optparse-assertion-2",
+    "python-5/optparse-assertion",
+    "python-7/argparse-assertion-sigabrt",
+    "python-7/bdb-sigabrt-assertion",
+    "python-7/bdb-assertion",
+    "python-7/gettext-assertion-sigabrt"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort", "upstream": "n/a"},
+  "repro_start": 54,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "assert-based abort in the adaptive specializer. _SPECIALIZE_LOAD_ATTR (generated_cases.c.h:8761) calls _Py_Specialize_LoadAttr at the start of the LOAD_ATTR opcode, before the attribute is loaded; neither it nor specialize_module_load_attr_lock_held checks PyErr_Occurred(). Under set_nomemory, an earlier allocation leaves a MemoryError pending, so specialize() (specialize.c:364) and the type cache (typeobject.c:6342-6343) both hit their assert(!PyErr_Occurred()). Crashes on assertion-enabled builds: ft_debug_asan=abort, jit=abort; ft_release/upstream define NDEBUG so the assert is compiled out (n/a, clean exit -- specialized opcode is written with the error still pending, propagated normally). Confirmed crashing opcode 190 = LOAD_ATTR_MODULE; pending exception is MemoryError (gdb). Fix: bail out of specialization (unspecialize + return) when PyErr_Occurred() at the _Py_Specialize_* entry points, or don't invoke the specializer while tstate has a pending error. Minimization PARTIAL: needs a failing allocation to coincide with a hot, not-yet-specialized LOAD_ATTR, so the repro drives the real gettext._as_int2 path (n.__class__.__name__ via npgettext with non-int n) under a set_nomemory sweep (~start 54); warnings is pre-imported/silenced to avoid the OOM-0003 code_dealloc assert. 10 vehicles across python-4/5/7 (argparse/bdb/optparse/gettext), all at specialize.c:364."
+}
