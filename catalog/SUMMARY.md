@@ -60,6 +60,8 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 **Totals:** 35 bugs — 7 segv, 23 abort, 5 fatal · 11 reproduce on a **release** build · 23 have a minimal
 reproducer, 12 vehicle-confirmed.
 
+**Upstream status** (issue-tracker check 2026-06-19, see `catalog/prior_art.md`): only **OOM-0001** is already filed — [#151673](https://github.com/python/cpython/issues/151673) (open). The other 34 have no matching python/cpython issue (appear novel).
+
 **Suggested starting points** — crashes a release build **and** has a minimal reproducer (highest
 confidence, lowest effort to verify): **OOM-0001, 0002, 0012, 0014, 0020, 0028, 0033, 0034**. Of these,
 **OOM-0034** and **OOM-0028** are the cleanest single-defect unchecked-allocation NULL derefs (≈one-line fixes).
