@@ -1,0 +1,44 @@
+OOM-0033 — import under OOM over-decrefs a sys.path entry; two detection faces
+==============================================================================
+
+Setup (both faces): a list slice-assignment makes sys.path a list of mortal 1-char
+strings -- `sys.path[:] = "<unicode>"` -- then `__import__(name)` walks that sys.path.
+Under the set_nomemory sweep the import's path-based finder over-decrefs a sys.path
+entry; the freed/over-decreffed entry is then detected in one of two places.
+
+
+FACE 1 (segv, the fleet vehicle, ft_release/jit/upstream + sometimes ft_debug_asan):
+the corrupted entry is iterated by PathFinder._get_spec and `isinstance(entry, str)`
+reads its garbage ob_type -> PyType_IsSubtype derefs a->tp_mro on a bad pointer.
+
+Fatal Python error: Segmentation fault   (READ at 0x03e9........, ob_type bled a count value)
+#5  PyType_IsSubtype          Objects/typeobject.c:2931   # return is_subtype_with_mro(a->tp_mro, a, b)  -- a = Py_TYPE(freed entry)
+#7  object_isinstance         Objects/abstract.c:2608
+#8  _PyEval_EvalFrameDefault  (isinstance in _get_spec)
+#13 PyObject_CallMethodObjArgs Objects/call.c:960
+#14 import_find_and_load      Python/import.c:4133
+#15 PyImport_ImportModuleLevelObject Python/import.c:4249
+#16 builtin___import__        Python/bltinmodule.c:286
+Python: _get_spec (<frozen importlib._bootstrap_external>:1240, `if not isinstance(entry, str)`)
+  <- find_spec(1270) <- _find_spec(1216) <- _find_and_load(1340) <- forkserver._handle_preload (vehicle)
+
+
+FACE 2 (abort / _Py_NegativeRefcount, deterministic on ft_debug_asan, repro.py 6/6):
+the freed entry is decreffed again as a "recycled" old element by the next list
+slice-assignment -> negative refcount detected at the recycle-cleanup loop.
+
+Fatal Python error: _Py_NegativeRefcount: <obj> object has negative ref count
+#9  _Py_NegativeRefcount      Objects/object.c:275
+#11 Py_XDECREF                Include/refcount.h:520
+#12 list_ass_slice_lock_held  Objects/listobject.c:1030   # `Py_XDECREF(recycle[k]);` -- over-decref of a recycled (old) element
+#13 list_ass_subscript_lock_held Objects/listobject.c:3839
+#14 list_ass_subscript        Objects/listobject.c:3902
+#15 PyObject_SetItem          Objects/abstract.c:245
+#16 _PyEval_EvalFrameDefault  (STORE_SUBSCR: sys.path[:] = ...)
+
+
+Note: a list of *small ints* does NOT expose this -- small ints are immortal, so an
+over-decref is a no-op. Mortal entries (sys.path's path strings / the 1-char strings)
+are required to surface it.
+
+Matrix (repro.py): ft_debug_asan=abort(negrefcount), jit=segv, upstream=segv, ft_release=no-crash.

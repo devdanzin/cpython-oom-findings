@@ -341,3 +341,11 @@ OOM-0032	abort	line	Objects/object.c:818
 OOM-0032	abort	line	Objects/typeobject.c:2441
 OOM-0032	abort	line	Python/_warnings.c:799
 OOM-0032	abort	line	Python/_warnings.c:806
+OOM-0033	segv	func	Objects/listobject.c:list_ass_slice_lock_held
+OOM-0033	segv	func	Objects/listobject.c:list_ass_subscript
+OOM-0033	segv	func	Objects/listobject.c:list_ass_subscript_lock_held
+OOM-0033	segv	func	Objects/typeobject.c:PyType_IsSubtype
+OOM-0033	segv	line	Objects/listobject.c:1030
+OOM-0033	segv	line	Objects/listobject.c:3839
+OOM-0033	segv	line	Objects/listobject.c:3902
+OOM-0033	segv	line	Objects/typeobject.c:2931

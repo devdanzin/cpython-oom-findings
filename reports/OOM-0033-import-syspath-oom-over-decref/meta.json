@@ -1,0 +1,30 @@
+{
+  "id": "OOM-0033",
+  "slug": "import-syspath-oom-over-decref",
+  "title": "Import under OOM over-decrefs a sys.path entry — PyType_IsSubtype segv (typeobject.c:2931) / list_ass_slice negative-refcount (listobject.c:1030)",
+  "description": "When sys.path contains mortal entries and a module import runs under allocation failure, the path-based finder over-decrefs a sys.path entry. The freed/over-decreffed entry is then detected in one of two places: (segv) PathFinder._get_spec iterates sys.path and isinstance(entry, str) reads the entry's garbage ob_type -> PyType_IsSubtype derefs a->tp_mro on a bad pointer (typeobject.c:2931); or (abort) the next list slice-assignment decrefs the entry again as a recycled old element -> _Py_NegativeRefcount at list_ass_slice_lock_held (listobject.c:1030). Two faces of one over-decref. The vehicle reaches it via multiprocessing.forkserver._handle_preload, which does `sys.path[:] = sys_path` (a string -> a list of 1-char strings) then __import__ of each char.",
+  "crash_kind": "segv",
+  "sites": [
+    "Objects/typeobject.c PyType_IsSubtype:2931",
+    "Objects/listobject.c list_ass_slice_lock_held:1030",
+    "Objects/listobject.c list_ass_subscript_lock_held:3839",
+    "Objects/listobject.c list_ass_subscript:3902"
+  ],
+  "signature": {
+    "site_frame": "PyType_IsSubtype@Objects/typeobject.c:2931",
+    "top_frames": [
+      "PyType_IsSubtype@Objects/typeobject.c:2931",
+      "list_ass_slice_lock_held@Objects/listobject.c:1030"
+    ]
+  },
+  "vehicles": ["fleet inst-04 python-5 multiprocessing_forkserver-segmentation_fault-oomNEW"],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "no-crash", "jit": "segv", "upstream": "segv"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-19",
+  "confirmed_commit": "15d7406",
+  "notes": "DETERMINISTIC minimal repro (repro.py, 6/6 ft_debug_asan): `sys.path[:] = '<unicode>'; __import__('H')` under the set_nomemory sweep -> _Py_NegativeRefcount at list_ass_slice_lock_held:1030. The import is REQUIRED -- `sys.path[:] = str` alone (no import) does NOT crash (5/5), so the over-decref producer is the import's path-based finder walking the new sys.path under OOM, not list_ass_slice itself; list_ass_slice:1030 is the recycle-cleanup decref that DETECTS the already-freed entry on the next slice op. The segv face (vehicle, PyType_IsSubtype:2931) is the same freed entry read by `isinstance(entry, str)` in _get_spec (importlib._bootstrap_external:1240). Small ints don't expose it (immortal); mortal entries (sys.path strings / 1-char strings) do. Root is PARTIAL: the exact over-decref line in the import path is not pinned, but the mechanism, both detection sites, and a deterministic repro are. This was the 'import-time PyType_IsSubtype outlier' that was NOREPRO on the host (catalog/norepro_investigation.md) -- now locally reproduced. Distinct from OOM-0004 (list_dealloc/PyList_New/free_list_items) and OOM-0019/0005/0029 (other negrefcount sites). Reached publicly via list slice-assignment + import under OOM; the vehicle's forkserver._handle_preload is one entry point (`sys.path[:] = sys_path` then __import__). Future: a testcase minimizer (shrinkray/creduce) + a reliable-repro bash loop could shrink vehicles like this automatically."
+}
