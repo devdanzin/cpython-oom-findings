@@ -53,8 +53,9 @@ Deterministic path (reproducer + vehicles, `bt` under gdb):
 #15 _Py_Finalize              Python/pylifecycle.c:2491
 ```
 
-Rare alternate path (cross-thread dealloc, caught only intermittently under gdb) — same
-assert/branch, reached via biased reference counting:
+Alternate path (cross-thread dealloc) — same assert/branch, reached via biased reference
+counting. Captured during first triage but **did not recur in a 210-run local census** (see
+Notes); likely host-specific timing:
 
 ```
 #10 subtype_dealloc           Objects/typeobject.c:2847
@@ -108,15 +109,18 @@ This also corrects the `IS_DICT_SHARED(dict)` argument to `dictkeys_decref` (L78
 Found by OOM-injection fuzzing (`set_nomemory`). Free-threading-specific: `set_keys`'s ownership assert and the `_Py_IsOwnedByCurrentThread`/`IS_DICT_SHARED` machinery only exist under `Py_GIL_DISABLED` (the non-FT `set_keys` at L270 is a bare `mp->ma_keys = keys`). Reproduces as an **abort only on the FT debug build** -- the FT release build defines `NDEBUG`, so the assert is compiled out, but the same branch then rewrites `ma_keys` and decrefs the old keys with the wrong `IS_DICT_SHARED()` value, skipping the QSBR delay (a latent memory-safety hazard for concurrent readers, not just a debug assert). GIL builds (`jit`, `upstream`) lack the field and the assert entirely and run the reproducer cleanly. Per the OOM-catalog convention for assert-based aborts, non-debug builds are recorded as `n/a`.
 
 Minimization **complete** (2026-06-19): the deterministic manifestation is the cyclic GC
-clearing a managed-dict object under OOM, *not* a cross-thread race. Re-running the
-`wsgiref_util` vehicle under gdb lands on the shutdown-GC path (`subtype_clear <- delete_garbage
-<- gc_collect_main reason=SHUTDOWN`) **8/8** — the earlier "racy / ~1-in-20 / cross-thread"
-characterization reflected a rare alternate route (`_Py_brc_queue_object`) that was caught once
-under gdb, not the vehicle's normal behavior. shrinkray reduced the vehicle to the 30/30
-4-line repro above; the `MagicMock()`-abandoned-into-a-traceback-cycle that all three vehicles
-(`wsgiref_util`, `pickletools`, `sched`) build is exactly what survives to shutdown GC. The
-`set_nomemory` argument selects when the allocation fails (window `[113, 900]` on this build);
-it is not tied to the small-int cache.
+clearing a managed-dict object under OOM, *not* a cross-thread race. A crash-face census of
+the `wsgiref_util` vehicle resolved the caller frame above `PyObject_ClearManagedDict` (via
+`addr2line`) on every run: **shutdown-GC (`subtype_clear`) in 160/160 runs without gdb and
+50/50 under gdb — 0/210 cross-thread**. The original "racy / ~1-in-20 / cross-thread"
+characterization (and the `_Py_brc_queue_object` backtrace below) was a real capture during
+first triage but **does not recur on this local build**; it is host-specific timing (the
+fuzzing host runs the older pre-`ad1513a263b` build, cf. `host_only_candidates.md`). gdb does
+**not** perturb the face here — both modes land on shutdown-GC. shrinkray reduced the vehicle
+to the 30/30 4-line repro above; the `MagicMock()`-abandoned-into-a-traceback-cycle that all
+three vehicles (`wsgiref_util`, `pickletools`, `sched`) build is exactly what survives to
+shutdown GC. The `set_nomemory` argument selects when the allocation fails (window `[113, 900]`
+on this build); it is not tied to the small-int cache.
 
 ## Versions
 
