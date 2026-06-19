@@ -1,6 +1,8 @@
-# Abort: `assert(_Py_IsOwnedByCurrentThread(mp) || IS_DICT_SHARED(mp))` in `set_keys` (`Objects/dictobject.c:205`) from `PyObject_ClearManagedDict`'s OOM-recovery branch under MemoryError
+# Abort: ownership assert in `set_keys` (`dictobject.c:205`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*`PyObject_ClearManagedDict`'s OOM-recovery branch rewrites `ma_keys` via `set_keys(dict, Py_EMPTY_KEYS)` without first calling `ensure_shared_on_resize()`, so on free-threaded builds `set_keys`'s `_Py_IsOwnedByCurrentThread(mp) || IS_DICT_SHARED(mp)` assert aborts when clearing a dict that's neither owned nor marked shared.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

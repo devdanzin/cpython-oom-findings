@@ -1,7 +1,7 @@
 {
   "id": "OOM-0011",
   "slug": "specialize-pyerr",
-  "title": "abort on assert(!PyErr_Occurred()) in specialize (Python/specialize.c) when LOAD_ATTR is specialized while a stale MemoryError is pending under OOM",
+  "title": "Abort: `assert(!PyErr_Occurred())` in `specialize` (`specialize.c:364`)",
   "description": "`Python/specialize.c`: the adaptive `LOAD_ATTR` specializer runs before the attribute load and never checks `PyErr_Occurred()`, so under OOM a stale `MemoryError` from an earlier allocation is still pending when it reaches `specialize(instr, LOAD_ATTR_MODULE)`, tripping the debug assert `!PyErr_Occurred()` (specialize.c:364) and aborting",
   "crash_kind": "abort",
   "sites": ["Python/specialize.c specialize:364", "Python/specialize.c specialize_module_load_attr_lock_held:443", "Python/specialize.c _Py_Specialize_LoadAttr:1010"],

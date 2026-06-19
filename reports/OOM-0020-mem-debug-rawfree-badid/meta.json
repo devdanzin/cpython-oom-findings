@@ -1,7 +1,7 @@
 {
   "id": "OOM-0020",
   "slug": "mem-debug-rawfree-badid",
-  "title": "fatal _PyMem_DebugRawFree: bad ID in free_threadstate (Python/pystate.c) when free-threaded sub-interpreter thread-state setup fails under MemoryError",
+  "title": "Fatal: `_PyMem_DebugRawFree: bad ID` in `free_threadstate` (`pystate.c:1527`)",
   "description": "`Python/pystate.c`: a fresh free-threaded sub-interpreter hands out its embedded `_initial_thread` from `alloc_threadstate`; if the `Py_GIL_DISABLED`-only `_Py_qsbr_reserve`/`_Py_ReserveTLBCIndex` allocation fails under OOM, `free_threadstate` reads the still-NULL `tstate->base.interp`, so its `tstate == &interp->_initial_thread` check compares against a NULL-offset and is false, and it `PyMem_RawFree`s the interpreter-embedded (non-heap) thread state -> `_PyMem_DebugRawFree: bad ID` fatal (segfault on release)",
   "crash_kind": "fatal",
   "sites": [

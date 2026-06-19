@@ -1,7 +1,7 @@
 {
   "id": "OOM-0019",
   "slug": "refcount-520",
-  "title": "abort on _Py_NegativeRefcount at Include/refcount.h:520 (double-free of error_line in _PyPegen_raise_error_known_location) when Py_BuildValue fails under MemoryError",
+  "title": "Abort: double-free in `_PyPegen_raise_error_known_location` (`pegen_errors.c:363`)",
   "description": "`Parser/pegen_errors.c`: `_PyPegen_raise_error_known_location` passes `error_line` to `Py_BuildValue` via the reference-stealing `N` format (L346). `Py_BuildValue` consumes the `N` arg even on failure, but the `error:` path still runs `Py_XDECREF(error_line)` (L363) -- a double-free. On `Py_REF_DEBUG` builds the second decref drives the refcount negative and aborts at `Include/refcount.h:520`.",
   "crash_kind": "abort",
   "sites": ["Parser/pegen_errors.c _PyPegen_raise_error_known_location:363", "Include/refcount.h Py_XDECREF:520", "Parser/pegen_errors.c _PyPegen_raise_error_known_location:346"],

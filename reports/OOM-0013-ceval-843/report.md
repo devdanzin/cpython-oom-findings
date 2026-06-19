@@ -1,6 +1,8 @@
-# Abort: `assert((res != NULL) ^ (PyErr_Occurred() != NULL))` in `_Py_BuiltinCallFastWithKeywords_StackRef` (`Python/ceval.c`) when a builtin (`compile`) breaks the return/error contract under MemoryError
+# Abort: builtin breaks result/error contract in `_Py_BuiltinCallFastWithKeywords_StackRef` (`ceval.c:843`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*A specialized `CALL_BUILTIN_FAST_WITH_KEYWORDS` dispatch asserts the `(res != NULL) ^ (PyErr_Occurred())` xor; under OOM, `compile()` returns `NULL` after an allocation failure swallows its `MemoryError`, so the debug assert fires and aborts.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

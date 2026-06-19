@@ -1,6 +1,8 @@
-# Abort / malformed str: `io.StringIO.getvalue()` builds a string with an invalid `maxchar` from a buffer left uninitialized by a write under OOM — `_PyUnicode_FromUCS4` (`Objects/unicodeobject.c:2228`) → `_PyUnicode_CheckConsistency` (`unicodeobject.c:673`)
+# Abort / malformed str: invalid `maxchar` in `_PyUnicode_FromUCS4` (`unicodeobject.c:2228`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*Growing an `io.StringIO` buffer under OOM leaves uninitialized `Py_UCS4` within `[0, string_size)`; `getvalue()` -> `_PyUnicode_FromUCS4` scans the garbage, builds a `str` with `maxchar > 0x10FFFF`, and trips `_PyUnicode_CheckConsistency` (`unicodeobject.c:673`).*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

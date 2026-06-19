@@ -1,6 +1,8 @@
-# Fatal: `_Py_CheckFunctionResult: a function returned NULL without setting an exception` for `_symtable.symtable()` (`Objects/call.c`) when the pegen parser's error-recovery pass loses a `MemoryError` under OOM
+# Fatal: NULL returned without an exception set in `_Py_CheckFunctionResult` (`call.c:43`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*The pegen parser's error-recovery pass (`_PyPegen_run_parser`, `pegen.c:966`) `PyErr_Clear()`s a `MemoryError` while upgrading a `SyntaxError`, then returns NULL with no exception; `symtable.symtable()`'s C call propagates it out and trips `_Py_CheckFunctionResult`, aborting debug builds.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

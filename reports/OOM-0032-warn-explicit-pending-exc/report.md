@@ -1,6 +1,8 @@
-# Abort: a warning emitted under memory pressure enters `warn_explicit` message-normalization with a pending exception — debug assert `!_PyErr_Occurred(tstate)` in `type_call` (`Objects/typeobject.c:2441`) / `PyObject_Str` (`Objects/object.c:818`)
+# Abort: pending-exception assert from `warn_explicit` normalization (`_warnings.c:799/806`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*`warn_explicit` normalizes a warning message without checking for a pending exception; under OOM a `MemoryError` is already set, so `PyObject_Str` (`object.c:818`) and the `type_call` category-constructor branch (`typeobject.c:2441`) trip their debug `!_PyErr_Occurred(tstate)` assert.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

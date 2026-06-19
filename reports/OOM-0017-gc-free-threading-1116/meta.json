@@ -1,7 +1,7 @@
 {
   "id": "OOM-0017",
   "slug": "gc-free-threading-1116",
-  "title": "abort on assert(gc_get_refs(op) >= 0) \"refcount is too small\" in validate_gc_objects (Python/gc_free_threading.c:1116) during finalization GC after an OOM sweep over socket.recv_fds corrupts the deferred refcount of the array.array type",
+  "title": "Abort: negative `gc_refs` (\"refcount too small\") in `validate_gc_objects` (`gc_free_threading.c:1116`)",
   "description": "Under a dense OOM sweep, `socket.recv_fds` repeatedly fails `array.array(\"i\")` construction; the interaction between the deferred reference `tp_alloc` takes on the `array.array` type and the unconditional `Py_DECREF(tp)` in `array_dealloc` (`arraymodule.c:848`) leaves the **type** object's refcount smaller than the live references to it. At shutdown, the free-threaded cyclic GC's `update_refs`/`visit_decref` tally drives `gc_refs` below zero and the debug assertion `gc_get_refs(op) >= 0` in `validate_gc_objects` aborts.",
   "crash_kind": "abort",
   "sites": [

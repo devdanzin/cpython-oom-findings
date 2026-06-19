@@ -1,7 +1,7 @@
 {
   "id": "OOM-0010",
   "slug": "eval-pyerr-occurred",
-  "title": "abort on assert(_PyErr_Occurred(tstate)) at LABEL(error) in _PyEval_EvalFrameDefault (Python/generated_cases.c.h) when a C-extension constructor returns an error without an exception set under MemoryError",
+  "title": "Abort: `assert(_PyErr_Occurred(tstate))` in `_PyEval_EvalFrameDefault` (`generated_cases.c.h:13817`)",
   "description": "The eval loop's `error` label asserts a live exception (`assert(_PyErr_Occurred(tstate))`; NDEBUG raises SystemError \"error return without exception set\" instead). Under OOM the CALL of `_remote_debugging.RemoteUnwinder(...)` in `profiling.sampling.sample._new_unwinder` returns an error to the eval loop with no exception set, so the debug assert fires and aborts. The signature is generic: any callee returning an error-without-exception under OOM trips it (see notes for the 13-vehicle split).",
   "crash_kind": "abort",
   "sites": ["Python/generated_cases.c.h _PyEval_EvalFrameDefault LABEL(error):13106", "Lib/profiling/sampling/sample.py _new_unwinder:102", "Modules/_remote_debugging/module.c _remote_debugging_RemoteUnwinder___init___impl"],

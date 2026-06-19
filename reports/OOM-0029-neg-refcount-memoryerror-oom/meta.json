@@ -1,7 +1,7 @@
 {
   "id": "OOM-0029",
   "slug": "neg-refcount-memoryerror-oom",
-  "title": "Negative refcount on a MemoryError under OOM (over-decref) — _Py_NegativeRefcount via a list/subtype/tuple dealloc cascade",
+  "title": "Abort: negative refcount on a `MemoryError` (`tuple_dealloc`, `tupleobject.c:277`)",
   "description": "Under OOM a MemoryError is decref'd one time too many; the negative refcount is detected later by _Py_NegativeRefcount (Objects/object.c:275) when the object is freed again during an unrelated dealloc cascade (list_dealloc -> subtype_dealloc -> tuple_dealloc), aborting on debug builds. The dealloc cascade is the incidental detection site, not the defect.",
   "crash_kind": "abort",
   "sites": ["Objects/object.c _Py_NegativeRefcount:275", "Objects/tupleobject.c tuple_dealloc:277", "Objects/typeobject.c subtype_dealloc:2876", "Objects/listobject.c list_dealloc:567"],

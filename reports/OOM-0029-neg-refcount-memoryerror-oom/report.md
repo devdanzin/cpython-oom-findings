@@ -1,6 +1,8 @@
-# Abort: negative refcount on a `MemoryError` under OOM — an OOM error path over-decrefs a `MemoryError`, tripping `_Py_NegativeRefcount` later during a dealloc cascade
+# Abort: negative refcount on a `MemoryError` (`tuple_dealloc`, `tupleobject.c:277`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*A `_pyrepl.utils.disp_str` OOM path over-decrefs a `MemoryError`; `_Py_NegativeRefcount` fires later when that item is freed in a `list`->`subtype`->`tuple` dealloc cascade.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

@@ -1,6 +1,8 @@
-# Abort: `_interpchannels.create()` desyncs its integer error code from the exception state under OOM — both `handle_channel_error` asserts fire (`Modules/_interpchannelsmodule.c:398` / `:443`)
+# Abort: err-code vs `PyErr` desync in `handle_channel_error` (`_interpchannelsmodule.c:398` / `:443`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*`_interpchannels.create()` threads a hand-rolled integer error code alongside the exception state; under OOM `newchannelid()` fails with a pending `MemoryError` while the `channel_destroy()` cleanup returns `0`, so `handle_channel_error`'s `assert(!PyErr_Occurred())` (L398) fires — and separately a `channel_create()` `-1` return sets no exception, tripping `assert(PyErr_Occurred())` (L443).*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

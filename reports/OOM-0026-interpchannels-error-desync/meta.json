@@ -1,7 +1,7 @@
 {
   "id": "OOM-0026",
   "slug": "interpchannels-error-desync",
-  "title": "_interpchannels.create() desyncs its int error code from the exception state under OOM — handle_channel_error asserts (Modules/_interpchannelsmodule.c:398/443)",
+  "title": "Abort: err-code vs `PyErr` desync in `handle_channel_error` (`_interpchannelsmodule.c:398` / `:443`)",
   "description": "The _interpchannels create path threads a hand-rolled int error code in parallel with PyErr; handle_channel_error asserts they agree (err==0 => !PyErr_Occurred() at L398; unhandled err<0 => PyErr_Occurred() at L443). Under OOM (L398 form) newchannelid() fails (-1, MemoryError pending) and the cleanup handle_channel_error(channel_destroy()==0) runs with that MemoryError still pending; or (L443 form) channel_create() returns -1 with no exception set. Either aborts.",
   "crash_kind": "abort",
   "sites": ["Modules/_interpchannelsmodule.c handle_channel_error:398", "Modules/_interpchannelsmodule.c handle_channel_error:443", "Modules/_interpchannelsmodule.c channelsmod_create:2955", "Modules/_interpchannelsmodule.c channelsmod_create:2941"],

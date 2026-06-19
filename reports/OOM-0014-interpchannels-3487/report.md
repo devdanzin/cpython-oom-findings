@@ -1,6 +1,8 @@
-# Abort/Segfault: `assert(mod == self)` / `Py_DECREF(NULL)` in `channelsmod__channel_id` (`Modules/_interpchannelsmodule.c`) when `_get_current_module()` fails under MemoryError
+# Abort/Segfault: unchecked NULL in `channelsmod__channel_id` (`_interpchannelsmodule.c:3487`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*`_channel_id()` treats `get_module_from_owned_type()` as infallible; under OOM the `PyUnicode_FromString` inside `_get_current_module()` fails and returns NULL, tripping `assert(mod == self)` (abort) or `Py_DECREF(NULL)` (segfault).*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

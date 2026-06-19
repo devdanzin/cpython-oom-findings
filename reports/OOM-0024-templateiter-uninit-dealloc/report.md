@@ -1,6 +1,8 @@
-# Segfault: `iter()` on a t-string `Template` frees a partially-initialized iterator under OOM — `template_iter` (`Objects/templateobject.c`) leaves `stringsiter`/`interpolationsiter` uninitialized before the error-path `Py_DECREF`
+# Segfault: dealloc of uninitialized iterator in `template_iter` (`templateobject.c:232`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*`template_iter` allocates the t-string iterator with `PyObject_GC_New` (no zeroing) and only sets `stringsiter`/`interpolationsiter` after both `PyObject_GetIter` calls; when one fails under OOM, the error-path `Py_DECREF(iter)` runs `templateiter_clear`, which `Py_CLEAR`s the still-uninitialized (poison/stale) pointers. Trigger: `iter(t"x{1}y")` under `set_nomemory`.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

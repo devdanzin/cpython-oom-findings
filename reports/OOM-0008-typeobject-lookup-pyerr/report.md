@@ -1,6 +1,8 @@
-# Abort: `assert(!PyErr_Occurred())` in `_PyType_LookupStackRefAndVersion` (`Objects/typeobject.c:6343`) when a prior `LOAD_ATTR` left a `MemoryError` pending under OOM
+# Abort: `assert(!PyErr_Occurred())` in `_PyType_LookupStackRefAndVersion` (`typeobject.c:6343`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*Under OOM, `frame.f_back`'s lazy parent-frame allocation fails and sets `MemoryError`, but `PyFrame_GetBack` returns `NULL` and `frame_back_get_impl` reports it as `None`, leaving the exception pending; the next `LOAD_ATTR` then trips `assert(!PyErr_Occurred())`.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

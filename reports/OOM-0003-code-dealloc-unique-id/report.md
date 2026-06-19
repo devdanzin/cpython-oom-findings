@@ -1,6 +1,8 @@
-# Abort: `assert(co->_co_unique_id == _Py_INVALID_UNIQUE_ID)` in `code_dealloc` (`Objects/codeobject.c`) when `init_code()` fails under MemoryError
+# Abort: uninitialized `_co_unique_id` assert in `code_dealloc` (`codeobject.c:2440`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*`_PyCode_New` sets `_co_unique_id` only after `init_code()` succeeds; when `init_code`'s tlbc allocation fails under OOM, the resulting `Py_DECREF(co)` reaches `code_dealloc`, which asserts on the never-initialized (garbage) field on free-threaded debug builds.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

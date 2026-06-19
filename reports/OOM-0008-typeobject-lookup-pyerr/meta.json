@@ -1,7 +1,7 @@
 {
   "id": "OOM-0008",
   "slug": "typeobject-lookup-pyerr",
-  "title": "abort on assert(!PyErr_Occurred()) in _PyType_LookupStackRefAndVersion (Objects/typeobject.c:6343) when reading frame.f_back swallows a MemoryError under OOM",
+  "title": "Abort: `assert(!PyErr_Occurred())` in `_PyType_LookupStackRefAndVersion` (`typeobject.c:6343`)",
   "description": "`Objects/frameobject.c`: `PyFrame_GetBack()` lazily allocates the parent `PyFrameObject`; under OOM that fails and sets `MemoryError`, but the failure is not propagated -- `frame.f_back` returns `None` with the exception still pending, so the next `LOAD_ATTR` trips `_PyType_LookupStackRefAndVersion`'s `assert(!PyErr_Occurred())` and aborts (release builds: swallowed error later surfaces as a spurious `SystemError`).",
   "crash_kind": "abort",
   "sites": ["Objects/typeobject.c _PyType_LookupStackRefAndVersion:6343", "Objects/frameobject.c PyFrame_GetBack:2404", "Objects/frameobject.c frame_back_get_impl:1118"],

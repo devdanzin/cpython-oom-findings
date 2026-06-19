@@ -1,7 +1,7 @@
 {
   "id": "OOM-0032",
   "slug": "warn-explicit-pending-exc",
-  "title": "Warning emitted under OOM enters warn_explicit message-normalization with a pending exception — debug assert `!_PyErr_Occurred(tstate)` (Objects/typeobject.c:2441 / Objects/object.c:818)",
+  "title": "Abort: pending-exception assert from `warn_explicit` normalization (`_warnings.c:799/806`)",
   "description": "When a warning is emitted while an allocation failure is active, the warnings C path (do_warn -> warn_explicit) reaches message normalization with a MemoryError already pending. warn_explicit then normalizes the message with an exception set: PyObject_CallOneArg(category, message) -> type_call (typeobject.c:2441) for a plain-string message, or PyObject_Str(message) (object.c:818) for a Warning-instance message. Both trip the debug-only invariant assert `!_PyErr_Occurred(tstate)` -> SIGABRT on debug builds. The assert is #ifdef Py_DEBUG, so release builds compile it out and silently lose the exception (latent invariant violation).",
   "crash_kind": "abort",
   "sites": [

@@ -1,6 +1,8 @@
-# Abort: `str` subclass instantiation under OOM frees a unicode with NULL data — `unicode_subtype_new` (`Objects/unicodeobject.c`) `Py_DECREF`s a half-built `self` whose data pointer is NULL
+# Abort: `Py_DECREF` of NULL-data unicode in `unicode_subtype_new` (`unicodeobject.c:13986`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*A failing data-buffer allocation in `unicode_subtype_new` sends it to `onError: Py_DECREF(self)` while `self`'s data pointer is still NULL; `unicode_dealloc` -> `unicode_is_singleton` then asserts `data != NULL`. Triggered by parsing a header value containing a NUL byte, which instantiates a `str` subclass.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

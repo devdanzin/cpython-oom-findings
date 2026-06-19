@@ -1,7 +1,7 @@
 {
   "id": "OOM-0007",
   "slug": "context-dealloc-clears-exc",
-  "title": "Context tp_dealloc clears the pending exception under OOM (Fatal _Py_Dealloc invariant) — Python/context.c",
+  "title": "Fatal: `context_tp_dealloc` clears the pending exception (`context.c:535`)",
   "description": "`Python/context.c` `context_tp_dealloc` runs `PyObject_ClearWeakRefs` + `context_tp_clear` (HAMT/value decrefs) without saving/restoring `tstate->current_exception`; under OOM a Context is freed with a MemoryError in flight, the teardown clears it, and the gh-89373 `_Py_Dealloc` debug invariant fatals.",
   "crash_kind": "fatal",
   "sites": ["Python/context.c context_tp_dealloc:535-546", "Python/context.c context_tp_clear:518-524"],

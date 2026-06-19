@@ -1,7 +1,7 @@
 {
   "id": "OOM-0027",
   "slug": "pop-jump-boolcheck",
-  "title": "POP_JUMP_IF_FALSE finds a non-bool on the value stack under OOM — assert(PyStackRef_BoolCheck(cond)) (Python/generated_cases.c.h)",
+  "title": "Abort: `assert(PyStackRef_BoolCheck(cond))` in `POP_JUMP_IF_FALSE` (`generated_cases.c.h:11120`)",
   "description": "Conditional-jump opcodes assume TOS is already a strict bool (a TO_BOOL/compare precedes them) and only assert it. Under OOM an earlier opcode's allocation failure leaves a non-bool / dangling _PyStackRef on the value stack, so `assert(PyStackRef_BoolCheck(cond))` in POP_JUMP_IF_FALSE aborts on debug builds; on release the bad value is used as a branch condition.",
   "crash_kind": "abort",
   "sites": ["Python/generated_cases.c.h _PyEval_EvalFrameDefault POP_JUMP_IF_FALSE:11120"],

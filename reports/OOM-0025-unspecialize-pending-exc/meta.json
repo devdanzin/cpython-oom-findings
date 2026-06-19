@@ -1,7 +1,7 @@
 {
   "id": "OOM-0025",
   "slug": "unspecialize-pending-exc",
-  "title": "unspecialize asserts !PyErr_Occurred() but LOAD_GLOBAL specialization leaves a MemoryError pending under OOM — Python/specialize.c:378",
+  "title": "Abort: `assert(!PyErr_Occurred())` in `unspecialize` (`specialize.c:378`)",
   "description": "specialize_load_global_lock_held is entered with a MemoryError ALREADY pending (set by a prior op under OOM; _SPECIALIZE_LOAD_GLOBAL runs before the lookup micro-op). The builtins/globals key lookup returns DKIX_ERROR because an exception is pending, so the code goto fail -> unspecialize(instr), whose `assert(!PyErr_Occurred())` aborts on debug builds. The de-opt backoff path does not tolerate a pre-existing pending exception. (NOT caused by the keys-version helper, which never allocates/raises.)",
   "crash_kind": "abort",
   "sites": ["Python/specialize.c unspecialize:378", "Python/specialize.c specialize_load_global_lock_held:1441", "Python/specialize.c _Py_Specialize_LoadGlobal:1450"],

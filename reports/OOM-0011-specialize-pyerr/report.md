@@ -1,6 +1,8 @@
-# Abort: `assert(!PyErr_Occurred())` in `specialize` (`Python/specialize.c`) when `LOAD_ATTR` is specialized while a stale `MemoryError` is pending under OOM
+# Abort: `assert(!PyErr_Occurred())` in `specialize` (`specialize.c:364`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*An earlier OOM allocation leaves a stale `MemoryError` pending; `_Py_Specialize_LoadAttr` never checks `PyErr_Occurred()` and walks into `specialize(instr, LOAD_ATTR_MODULE)`, whose opening `assert(!PyErr_Occurred())` aborts.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

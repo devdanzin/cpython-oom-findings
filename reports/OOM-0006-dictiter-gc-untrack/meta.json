@@ -1,7 +1,7 @@
 {
   "id": "OOM-0006",
   "slug": "dictiter-gc-untrack",
-  "title": "_PyObject_GC_UNTRACK assert in dictiter_dealloc (Objects/dictobject.c) when dictiter_new() decref's an untracked item-iterator under MemoryError",
+  "title": "Abort/Segfault: `_PyObject_GC_UNTRACK` assert on untracked iterator in `dictiter_dealloc` (`dictobject.c:5532`)",
   "description": "`Objects/dictobject.c`: `dictiter_new()` Py_DECREF's a not-yet-GC-tracked `dict_itemiterator` when `_PyTuple_FromPairSteal(di_result)` fails under OOM; `dictiter_dealloc` then `_PyObject_GC_UNTRACK`s an untracked object",
   "crash_kind": "abort",
   "sites": ["Objects/dictobject.c dictiter_dealloc:5532", "Objects/dictobject.c dictiter_new:5516"],

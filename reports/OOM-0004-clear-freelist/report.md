@@ -1,6 +1,8 @@
-# Abort/Segfault: corrupted per-thread object freelist under MemoryError — `assert(freelist->size == 0 || freelist->size == -1)` in `clear_freelist` (`Objects/object.c:909`), surfacing as a use-after-free `free_list_items` in `PyList_New` (free-threaded build)
+# Abort/Segfault: corrupted object freelist in `clear_freelist` (`object.c:909`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*Under OOM the free-threaded build's per-`PyThreadState` freelists desync `size` from the chain: `PyList_New`'s `Py_DECREF(op)` failure path re-pushes a list with a stale dangling `ob_item`, tripping the `clear_freelist` size assertion (or a `free_list_items` use-after-free SEGV on the next pop).*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

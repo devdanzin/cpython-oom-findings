@@ -1,7 +1,7 @@
 {
   "id": "OOM-0030",
   "slug": "unicode-subtype-new-null-data",
-  "title": "str subclass instantiation under OOM frees a unicode with NULL data — unicode_subtype_new (Objects/unicodeobject.c:13986)",
+  "title": "Abort: `Py_DECREF` of NULL-data unicode in `unicode_subtype_new` (`unicodeobject.c:13986`)",
   "description": "unicode_subtype_new allocates the str-subclass instance `self` then its data buffer; if a later allocation fails under OOM it jumps to onError: Py_DECREF(self) while _PyUnicode_DATA_ANY(self) is still NULL, so unicode_dealloc -> unicode_is_singleton -> _PyUnicode_NONCOMPACT_DATA asserts data != NULL and aborts.",
   "crash_kind": "abort",
   "sites": ["Objects/unicodeobject.c unicode_subtype_new:13986", "Objects/unicodeobject.c unicode_is_singleton:1723", "Objects/unicodeobject.c unicode_dealloc:1629", "Include/cpython/unicodeobject.h _PyUnicode_NONCOMPACT_DATA:272"],

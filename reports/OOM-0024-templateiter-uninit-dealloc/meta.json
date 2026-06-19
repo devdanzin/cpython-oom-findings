@@ -1,7 +1,7 @@
 {
   "id": "OOM-0024",
   "slug": "templateiter-uninit-dealloc",
-  "title": "t-string Template iterator freed with uninitialized fields under OOM (SIGSEGV) — Objects/templateobject.c template_iter",
+  "title": "Segfault: dealloc of uninitialized iterator in `template_iter` (`templateobject.c:232`)",
   "description": "`template_iter` (Objects/templateobject.c) allocates the iterator with PyObject_GC_New (no zero-init) and only sets `stringsiter`/`interpolationsiter` after two PyObject_GetIter calls; either GetIter failing under OOM runs Py_DECREF(iter) on the error path, so templateiter_dealloc -> templateiter_clear -> Py_CLEAR() dereferences uninitialized memory.",
   "crash_kind": "segv",
   "sites": ["Objects/templateobject.c template_iter:232", "Objects/templateobject.c templateiter_clear:53", "Objects/templateobject.c templateiter_dealloc:45"],

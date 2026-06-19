@@ -1,7 +1,7 @@
 {
   "id": "OOM-0031",
   "slug": "excinfo-clear-type-segv",
-  "title": "_interpreters.capture_exception under OOM calls _PyXI_FreeExcInfo(NULL) — unguarded _excinfo_clear_type NULL deref (Python/crossinterp.c:1319)",
+  "title": "Segfault: NULL `info` deref in `_excinfo_clear_type` (`crossinterp.c:1319`)",
   "description": "_interpreters.capture_exception builds a _PyXI_excinfo via _PyXI_NewExcInfo; under OOM that returns NULL, but _interpreters_capture_exception_impl's finally still calls _PyXI_FreeExcInfo(info) (Modules/_interpretersmodule.c:1544) with info==NULL and there is no NULL guard, so _PyXI_excinfo_clear -> _excinfo_clear_type dereferences offset 0 at crossinterp.c:1319 -> SIGSEGV on all builds.",
   "crash_kind": "segv",
   "sites": ["Python/crossinterp.c _excinfo_clear_type:1319", "Python/crossinterp.c _PyXI_excinfo_clear:1374", "Python/crossinterp.c _PyXI_FreeExcInfo:1712", "Modules/_interpretersmodule.c _interpreters_capture_exception_impl:1544"],

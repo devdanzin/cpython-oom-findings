@@ -1,7 +1,7 @@
 {
   "id": "OOM-0012",
   "slug": "instrumentation-sanity",
-  "title": "abort on assert(debug_check_sanity(interp, code)) in get_tools_for_instruction (Python/instrumentation.c:1106) when applying sys.monitoring instrumentation fails partway under MemoryError (segfaults on release builds)",
+  "title": "Abort/Segfault: stale instrumentation in `get_tools_for_instruction` (`instrumentation.c:1106`)",
   "description": "`Python/instrumentation.c`: registering a global monitoring tool bumps the global instrumentation version and `interp->monitors` before re-instrumenting code objects; when a `PyMem_Malloc` in `update_instrumentation_data` fails under OOM, `force_instrument_lock_held` returns -1 before storing the new `_co_instrumentation_version` and the global state is not rolled back, leaving a code object out of sync. The next monitored event trips `debug_check_sanity` (abort on debug builds) or dereferences a NULL/partial `_co_monitoring` at L1119 (segfault on release builds)",
   "crash_kind": "abort",
   "sites": ["Python/instrumentation.c get_tools_for_instruction:1106", "Python/instrumentation.c get_tools_for_instruction:1119", "Python/instrumentation.c force_instrument_lock_held:1926", "Python/instrumentation.c update_instrumentation_data:1700"],
