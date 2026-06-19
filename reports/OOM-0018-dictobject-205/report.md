@@ -6,52 +6,62 @@ _AI Disclaimer: this issue was drafted by Claude Code, which also generated the 
 
 ## Crash report
 
-On free-threaded builds, `PyObject_ClearManagedDict()` clears an object whose materialized dict still points at the object's inline values by calling `detach_dict_from_object()`, which `copy_values()`-copies the inline values out. Under OOM that copy fails and the function enters a recovery branch that rewrites `dict->ma_keys` via `set_keys(dict, Py_EMPTY_KEYS)` (`Objects/dictobject.c:7896`). Unlike every other path that rewrites `ma_keys`, this branch never marks the dict shared. When the managed-dict object is *owned by one thread but freed on another* (biased reference counting routes the free through `_Py_brc_queue_object` / `_Py_HandlePending`), `set_keys` runs on a non-owning thread on a non-shared dict, so its debug assert `_Py_IsOwnedByCurrentThread(mp) || IS_DICT_SHARED(mp)` fails and the interpreter aborts.
+On free-threaded builds, `PyObject_ClearManagedDict()` clears an object whose materialized dict still points at the object's inline values by calling `detach_dict_from_object()`, which `copy_values()`-copies the inline values out. Under OOM that copy fails and the function enters a recovery branch that rewrites `dict->ma_keys` via `set_keys(dict, Py_EMPTY_KEYS)` (`Objects/dictobject.c:7896`). Unlike every other path that rewrites `ma_keys`, this branch never calls `ensure_shared_on_resize()`, so `set_keys`'s debug assert `_Py_IsOwnedByCurrentThread(mp) || IS_DICT_SHARED(mp)` (`dictobject.c:205`) fires whenever the dict being cleared is neither owned by the current thread nor already marked shared — and the interpreter aborts.
+
+Two routes reach this unguarded `set_keys`, both observed: the **cyclic GC clearing such an object under OOM** (`delete_garbage -> subtype_clear -> PyObject_ClearManagedDict`), which is the **deterministic** manifestation the reproducer and the vehicles actually take (8/8 on a normal run); and a **cross-thread dealloc** where biased reference counting routes the last decref through `_Py_brc_queue_object` on a non-owning thread (a rarer race, captured only intermittently under gdb). Both converge on the same defect, and the fix is the same.
 
 ## Reproducer
 
+Minimal, stdlib-only (shrinkray-reduced from the `wsgiref.util` vehicle). **Deterministic**
+— aborts on every run (30/30); requires a free-threaded debug build (`PYTHON_GIL=0`):
+
 ```python
-import _testcapi, faulthandler, threading, queue
-faulthandler.enable()
+from unittest.mock import MagicMock
+from _testcapi import set_nomemory
 
-class C: pass
-q = queue.Queue()
-
-def producer():
-    for _ in range(2000):
-        o = C(); o.a = 1; o.__dict__; o.b = 2   # materialize dict pointing at inline values
-        q.put(o)
-    q.put(None)
-
-threading.Thread(target=producer).start()
-start = 1
-while True:
-    o = q.get()
-    if o is None: break
-    _testcapi.set_nomemory(start, 0)            # fail every allocation from #start
-    try:
-        del o                                   # cross-thread last decref -> clear managed dict
-    except MemoryError:
-        pass
-    finally:
-        _testcapi.remove_mem_hooks()
-    start = start + 1 if start < 300 else 1
+set_nomemory(200)              # fail allocations from the 200th onward (lands in shutdown GC)
+(MagicMock(), undefined_name)  # build a MagicMock (managed __dict__), then NameError abandons
+                               # it into a traceback cycle -> survives to shutdown GC
 ```
 
-Aborts on the free-threaded debug+ASan build, usually within seconds. The exact abort site is **racy** (`minimization: partial`): the same cross-thread-dealloc-under-OOM machinery also produces sibling aborts (a mimalloc realloc failure in the BRC merge; `_Py_Dealloc` "cleared the current exception"). About 1 run in 20 lands on the `dictobject.c:205` assert; a `set_nomemory` band of `start` 1..300 is swept so `copy_values` eventually fails at the right moment. The original fuzzer vehicle reaches the identical assert by freeing a `MagicMock`-created managed-dict object on the main eval thread under OOM.
+A `MagicMock` (which has a managed `__dict__`) is abandoned into the traceback reference
+cycle created by the `NameError`, so it survives to interpreter shutdown. With allocation
+failure still armed, the shutdown cyclic GC clears it via
+`delete_garbage -> subtype_clear -> PyObject_ClearManagedDict`, whose OOM-recovery branch
+trips the assert. This is exactly the path the full vehicles take on a normal run (8/8 under
+gdb, see Notes), so it is a *faithful* reduction, not a drift.
+
+The `set_nomemory(N)` argument must land the failing allocation inside the shutdown GC:
+the working window is roughly `N` in `[113, 900]` on this build (`N=200` is comfortably
+central) — too small fails during setup, too large (e.g. `999`) overshoots shutdown. The
+window is an allocation-count effect, **not** tied to the small-int cache (tested `N=254..258`
+straddling the 256 boundary: no change). Minimization **complete**; the full fuzzer vehicle
+is preserved as `vehicle_source.py`.
 
 ## Backtrace
 
+Deterministic path (reproducer + vehicles, `bt` under gdb):
+
 ```
-#8  set_keys                  Objects/dictobject.c:205    <- assert _Py_IsOwnedByCurrentThread(mp) || IS_DICT_SHARED(mp)
-#9  PyObject_ClearManagedDict Objects/dictobject.c:7896   <- set_keys(dict, Py_EMPTY_KEYS) in the OOM-recovery branch
-#10 subtype_dealloc           Objects/typeobject.c:2847
-#11 _Py_Dealloc              Objects/object.c:3319
-#12 _Py_brc_queue_object      Python/brc.c:91             <- object owned by another thread, freed here
-#13 Py_DECREF                ./Include/refcount.h:363      <- cross-thread last decref
+#8  set_keys                  Objects/dictobject.c:205          <- assert _Py_IsOwnedByCurrentThread(mp) || IS_DICT_SHARED(mp)
+#9  PyObject_ClearManagedDict Objects/dictobject.c:7896         <- set_keys(dict, Py_EMPTY_KEYS) in the OOM-recovery branch
+#10 subtype_clear             Objects/typeobject.c:2700
+#11 delete_garbage            Python/gc_free_threading.c:1761
+#12 gc_collect_internal       Python/gc_free_threading.c:2176
+#13 gc_collect_main           Python/gc_free_threading.c:2257   <- reason=_Py_GC_REASON_SHUTDOWN
+#14 finalize_modules          Python/pylifecycle.c:1955
+#15 _Py_Finalize              Python/pylifecycle.c:2491
 ```
 
-`set_keys` is `static inline`; in the original vehicle's faulthandler C stack it is inlined into `PyObject_ClearManagedDict+0x8be`, with the free running on the main thread via `_Py_HandlePending` (BRC merge).
+Rare alternate path (cross-thread dealloc, caught only intermittently under gdb) — same
+assert/branch, reached via biased reference counting:
+
+```
+#10 subtype_dealloc           Objects/typeobject.c:2847
+#11 _Py_Dealloc               Objects/object.c:3319
+#12 _Py_brc_queue_object      Python/brc.c:91                   <- object owned by another thread, freed here
+#13 Py_DECREF                 ./Include/refcount.h:363          <- cross-thread last decref
+```
 
 ## Root cause
 
@@ -97,7 +107,16 @@ This also corrects the `IS_DICT_SHARED(dict)` argument to `dictkeys_decref` (L78
 
 Found by OOM-injection fuzzing (`set_nomemory`). Free-threading-specific: `set_keys`'s ownership assert and the `_Py_IsOwnedByCurrentThread`/`IS_DICT_SHARED` machinery only exist under `Py_GIL_DISABLED` (the non-FT `set_keys` at L270 is a bare `mp->ma_keys = keys`). Reproduces as an **abort only on the FT debug build** -- the FT release build defines `NDEBUG`, so the assert is compiled out, but the same branch then rewrites `ma_keys` and decrefs the old keys with the wrong `IS_DICT_SHARED()` value, skipping the QSBR delay (a latent memory-safety hazard for concurrent readers, not just a debug assert). GIL builds (`jit`, `upstream`) lack the field and the assert entirely and run the reproducer cleanly. Per the OOM-catalog convention for assert-based aborts, non-debug builds are recorded as `n/a`.
 
-The abort is inherently racy: the trigger requires a managed-dict object (a) owned by one thread, (b) freed on another, while (c) `copy_values` inside `detach_dict_from_object` fails under OOM. The same cross-thread-dealloc-under-OOM window also produces sibling aborts (mimalloc realloc failure during the BRC merge; `_Py_Dealloc` "cleared the current exception"); only some runs land on `dictobject.c:205`. Minimization is therefore **partial** (vehicle-style threaded reproducer). Three fuzzer vehicles (`wsgiref_util`, `pickletools`, `sched`) all abort at the identical `dictobject.c:205` assertion, each constructing a `MagicMock()` under an OOM sweep with fuzzer threads running.
+Minimization **complete** (2026-06-19): the deterministic manifestation is the cyclic GC
+clearing a managed-dict object under OOM, *not* a cross-thread race. Re-running the
+`wsgiref_util` vehicle under gdb lands on the shutdown-GC path (`subtype_clear <- delete_garbage
+<- gc_collect_main reason=SHUTDOWN`) **8/8** — the earlier "racy / ~1-in-20 / cross-thread"
+characterization reflected a rare alternate route (`_Py_brc_queue_object`) that was caught once
+under gdb, not the vehicle's normal behavior. shrinkray reduced the vehicle to the 30/30
+4-line repro above; the `MagicMock()`-abandoned-into-a-traceback-cycle that all three vehicles
+(`wsgiref_util`, `pickletools`, `sched`) build is exactly what survives to shutdown GC. The
+`set_nomemory` argument selects when the allocation fails (window `[113, 900]` on this build);
+it is not tied to the small-int cache.
 
 ## Versions
 
