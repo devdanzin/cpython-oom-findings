@@ -1,0 +1,26 @@
+OOM-0034 — unchecked PyUnicode_AsUTF8 in the tokenizer's column-offset helper
+=============================================================================
+
+ft_debug_asan, SIGSEGV (READ at NULL+col_offset). Same site on all four builds.
+
+`line` is a VALID unicode object; `data = PyUnicode_AsUTF8(line)` returned NULL under
+OOM (could not build/cache the UTF-8 form), and pegen.c:33 indexes data[col_offset]
+without a NULL check.
+
+Program received signal SIGSEGV, Segmentation fault.
+#0  _PyPegen_byte_offset_to_character_offset_line (line=<valid>, col_offset=0, end_col_offset=1)
+        at Parser/pegen.c:33            # Py_UCS4 ch = data[col_offset];   <- data == NULL
+#1  _get_col_offsets        Python/Python-tokenize.c:229   # calls byte_offset_to_character_offset_line(line, ...)
+#2  tokenizeriter_next      Python/Python-tokenize.c:304
+#3  _PyForIter_VirtualIteratorNext  Python/ceval.c:3744
+#4  _PyEval_EvalFrameDefault  (FOR_ITER over the tokenizer)
+    ...
+    (vehicle) slot_tp_init -> _pyrepl._module_completer.ImportParser(...) tokenizes import text
+
+Faulting code (Parser/pegen.c):
+  29:     const unsigned char *data = (const unsigned char*)PyUnicode_AsUTF8(line);   # unchecked
+  ...
+  33:         Py_UCS4 ch = data[col_offset];                                          # NULL deref
+
+Matrix: ft_debug_asan=segv, ft_release=segv, jit=segv, upstream=segv (clean NULL deref,
+not assert-gated). Deterministic (4/4).

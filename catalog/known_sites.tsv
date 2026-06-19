@@ -349,3 +349,9 @@ OOM-0033	segv	line	Objects/listobject.c:1030
 OOM-0033	segv	line	Objects/listobject.c:3839
 OOM-0033	segv	line	Objects/listobject.c:3902
 OOM-0033	segv	line	Objects/typeobject.c:2931
+OOM-0034	segv	func	Parser/pegen.c:_PyPegen_byte_offset_to_character_offset_line
+OOM-0034	segv	func	Python/Python-tokenize.c:_get_col_offsets
+OOM-0034	segv	func	Python/Python-tokenize.c:tokenizeriter_next
+OOM-0034	segv	line	Parser/pegen.c:33
+OOM-0034	segv	line	Python/Python-tokenize.c:229
+OOM-0034	segv	line	Python/Python-tokenize.c:304
