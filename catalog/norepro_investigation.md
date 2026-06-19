@@ -15,6 +15,13 @@ Mining the saved host `stdout` of all 46 (`scripts/cluster_segv.py`-style) — t
 - **1 outlier**: `PyType_IsSubtype <- PyObject_CallMethodObjArgs <- PyImport_ImportModuleLevelObject`
   (`multiprocessing_forkserver`, import-time) — the only host crash not obviously a
   known site; still host-only (below), so no local backtrace to confirm.
+  **RESOLVED 2026-06-19 → [OOM-0033](../reports/OOM-0033-import-syspath-oom-over-decref/report.md):**
+  reproduced locally from the fleet (`multiprocessing.forkserver._handle_preload` does
+  `sys.path[:] = <string>` then `__import__`). Root: an import under OOM over-decrefs a
+  `sys.path` entry; the freed entry is read by `_get_spec`'s `isinstance(entry, str)` →
+  `PyType_IsSubtype` segv (`typeobject.c:2931`), or re-decreffed by the next list
+  slice-assignment → `_Py_NegativeRefcount` (`list_ass_slice_lock_held`, `listobject.c:1030`).
+  Deterministic minimal repro: `sys.path[:] = "<unicode>"; __import__("H")` under the sweep.
 
 No clearly-novel bug is visible in the 46 host crash signatures.
 
