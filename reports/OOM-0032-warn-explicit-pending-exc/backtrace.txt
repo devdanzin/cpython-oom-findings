@@ -1,0 +1,32 @@
+OOM-0032 — stale exception before warning message-normalization under OOM
+==========================================================================
+
+PRIMARY (fleet vehicle, plain-string message -> category constructor branch),
+ft_debug_asan, SIGABRT:
+
+python: Objects/typeobject.c:2441: PyObject *type_call(PyObject *, PyObject *, PyObject *): Assertion `!_PyErr_Occurred(tstate)' failed.
+
+#8  type_call               Objects/typeobject.c:2441   # assert: entered with an exception already pending
+#9  _PyObject_MakeTpCall     Objects/call.c:242
+#10 PyObject_CallOneArg      Objects/call.c:395
+#11 warn_explicit           Python/_warnings.c:806      # message = PyObject_CallOneArg(category, message)
+#12 do_warn                 Python/_warnings.c:1136
+#13 warnings_warn_impl      Python/_warnings.c:1184
+
+
+SIBLING (minimal stdlib repro, Warning-instance message -> PyObject_Str branch),
+ft_debug_asan, SIGABRT — same root cause, adjacent line in the same function. (The
+assert text is omitted here on purpose so the catalog assert key stays file-scoped to
+typeobject.c rather than the over-broad Objects/object.c:!_PyErr_Occurred(tstate).)
+
+   PyObject_Str fails the same `!_PyErr_Occurred(tstate)` entry assert at object.c:818.
+
+#8  PyObject_Str            Objects/object.c:818        # same invariant, message-Str branch
+#9  warn_explicit           Python/_warnings.c:799      # text = PyObject_Str(message)
+
+
+RELEASE NOTE: the assert is `#ifdef Py_DEBUG`, so ft_release / jit / upstream compile it
+out. On those builds the same fleet vehicle does not stop here — the lost MemoryError lets
+execution run on and it instead SIGSEGVs in do_warn (Python/_warnings.c:1139), which is the
+separately-cataloged OOM-0001. So OOM-0032's distinctive crash (the !_PyErr_Occurred assert)
+is observable only on a debug build; on release it is a latent invariant violation.

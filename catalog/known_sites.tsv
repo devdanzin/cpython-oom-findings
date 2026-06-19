@@ -334,3 +334,10 @@ OOM-0031	segv	line	Objects/methodobject.c:465
 OOM-0031	segv	line	Python/crossinterp.c:1319
 OOM-0031	segv	line	Python/crossinterp.c:1374
 OOM-0031	segv	line	Python/crossinterp.c:1712
+OOM-0032	abort	assert	Objects/typeobject.c:!_PyErr_Occurred(tstate)
+OOM-0032	abort	func	Objects/typeobject.c:type_call
+OOM-0032	abort	func	Python/_warnings.c:warn_explicit
+OOM-0032	abort	line	Objects/object.c:818
+OOM-0032	abort	line	Objects/typeobject.c:2441
+OOM-0032	abort	line	Python/_warnings.c:799
+OOM-0032	abort	line	Python/_warnings.c:806
