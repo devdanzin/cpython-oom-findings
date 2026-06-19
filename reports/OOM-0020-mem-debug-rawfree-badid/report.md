@@ -22,7 +22,7 @@ finally:
         pass
 ```
 
-Deterministic at `start=29` for this exact (import-free) snippet on the free-threaded debug+ASan build (5/5 aborts, rc 134). The OOM budget must be large enough that the interpreter/obmalloc state is built and `alloc_threadstate()` takes the preallocated `_initial_thread`, but small enough that the subsequent free-threaded-only `_Py_ReserveTLBCIndex()`/`_Py_qsbr_reserve()` allocation fails. The exact `start` is sensitive to surrounding allocations: the shipped `repro.py` (which adds an `import sys` + `int(sys.argv[1])` preamble) defaults to `31` (10/10), and the original fuzzer vehicles hit it at `30`. The underlying defect is allocation-index-agnostic.
+Deterministic at `start=29` for this exact (import-free) snippet on the free-threaded debug+ASan build. The OOM budget must be large enough that the interpreter/obmalloc state is built and `alloc_threadstate()` takes the preallocated `_initial_thread`, but small enough that the subsequent free-threaded-only `_Py_ReserveTLBCIndex()`/`_Py_qsbr_reserve()` allocation fails. The exact `start` is sensitive to surrounding allocations (this snippet hits it at `29`; the original fuzzer vehicles at `30`) — which is why the shipped `repro.py` **self-sweeps** `N` in a fresh subprocess per value (a fresh process avoids cache warm-up shifting the window) and stops at the first crash, so a developer just runs `python repro.py`. The underlying defect is allocation-index-agnostic.
 
 ## Backtrace
 

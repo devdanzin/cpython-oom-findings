@@ -12,11 +12,7 @@ Affected:   CPython 3.16.0a0 (main), commit 15d7406.
 Crash:      SIGABRT, ./Include/refcount.h:520 (Py_XDECREF -> Py_DECREF ->
             _Py_NegativeRefcount). "<object ... is freed>",
             "object type name: MemoryError".
-Requires:   a free-threaded debug build exposing _testcapi.set_nomemory.
-
-Run:
-    python repro.py
-    # aborts (rc 134) on the FT debug+ASan build at start=54.
+Requires:   a debug build exposing _testcapi.set_nomemory (Py_REF_DEBUG).
 
 Backtrace (gdb):
     #11 Py_XDECREF                            ./Include/refcount.h:520
@@ -61,20 +57,48 @@ same start and same site.
 Likely fix: set `error_line = NULL;` immediately after the Py_BuildValue() call
 (before the `if (!tmp)` check) so the error: path's Py_XDECREF(error_line) is a
 no-op, or pass error_line with the 'O' format and keep an explicit decref.
+
+Self-sweeping: `python repro.py` runs the trigger under set_nomemory(N, 0) for N in a
+sweep, each in a FRESH subprocess (a fresh process avoids cache warm-up shifting the OOM
+window), and stops at the first N that crashes. Needs a debug build (the check is compiled
+out under NDEBUG). Bare trigger (fixed N=54):
+    import ast, _testcapi
+    _testcapi.set_nomemory(54, 0)
+    ast.parse("x y z\n")
 """
+import os
+import sys
+import subprocess
+
+TRIGGER = r"""
 import ast
 import _testcapi
 import faulthandler
-
 faulthandler.enable()
-
 # Generic "invalid syntax" drives _Pypegen_set_syntax_error ->
 # RAISE_SYNTAX_ERROR_KNOWN_LOCATION -> _PyPegen_raise_error_known_location.
-src = "x y z\n"
-
-_testcapi.set_nomemory(54, 0)   # fail every allocation from #54 onward
+_testcapi.set_nomemory({n}, 0)
 try:
-    ast.parse(src)              # Py_BuildValue consumes error_line's ref on
-                                # failure; error: path decrefs it again -> abort
+    ast.parse("x y z\n")   # Py_BuildValue consumes error_line's ref on failure;
+                           # error: path decrefs it again -> abort
 finally:
     _testcapi.remove_mem_hooks()
+"""
+
+SIGNATURE = "Include/refcount.h:520: _Py_NegativeRefcount"
+
+def main():
+    env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=0"}
+    # env["PYTHON_GIL"] = "0"   # ONLY if this bug is free-threading-only (it is not)
+    for n in range(120):
+        out = subprocess.run([sys.executable, "-c", TRIGGER.format(n=n)],
+                             capture_output=True, text=True, env=env)
+        if SIGNATURE in out.stdout + out.stderr:
+            print("reproduced at set_nomemory(%d, 0):" % n)
+            sys.stdout.write(out.stderr or out.stdout)
+            return 1
+    print("no crash in range(120); widen it for your build")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

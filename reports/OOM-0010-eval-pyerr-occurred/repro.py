@@ -13,11 +13,6 @@ Requires:   a free-threaded DEBUG build exposing _testcapi.set_nomemory.
             condition is turned into a clean MemoryError and the process exits
             normally (rc 1), so only the debug build aborts.
 
-Run:
-    python repro.py
-    # aborts (rc 134) on the FT debug+ASan build;
-    # exits cleanly with MemoryError on ft_release / jit / upstream.
-
 What happens
 ------------
 The eval loop reaches its central LABEL(error) -- taken when an opcode (here a
@@ -66,19 +61,44 @@ way): on each ``return -1`` / NULL-return, ensure ``PyErr_NoMemory()`` /
 ``PyErr_Occurred()`` holds before returning, and do not ``PyErr_Clear()`` a
 pending MemoryError while bailing out. The eval-loop assert itself is correct --
 it is reporting a real contract violation by the callee.
+
+Self-sweeping: `python repro.py` runs the trigger under set_nomemory(N, 0) for N in a
+sweep, each in a FRESH subprocess (a fresh process avoids cache warm-up shifting the OOM
+window), and stops at the first N that crashes. Needs a debug build (the check is compiled
+out under NDEBUG). Bare trigger (fixed N=5):
+    import _testcapi
+    import profiling.sampling.sample as sample
+    _testcapi.set_nomemory(5, 0)
+    sample.dump_stack(-5)   # __init__ -> _new_unwinder -> RemoteUnwinder(...) errors w/o exc
 """
-import faulthandler
+import os
+import sys
+import subprocess
+
+TRIGGER = r"""
 import _testcapi
 import profiling.sampling.sample as sample
-
-faulthandler.enable()
-
-# Fail every allocation from #5 onward. The earlier allocations let
-# dump_stack() build the SampleProfiler and reach the RemoteUnwinder(...) call;
-# allocation #5 then fails inside that C constructor, which returns an error to
-# the eval loop without a live exception -> LABEL(error) assert -> SIGABRT.
-_testcapi.set_nomemory(5, 0)
+_testcapi.set_nomemory({n}, 0)
 try:
-    sample.dump_stack(-5)   # SampleProfiler.__init__ -> _new_unwinder -> RemoteUnwinder(...)
+    sample.dump_stack(-5)   # __init__ -> _new_unwinder -> RemoteUnwinder(...) errors w/o exc
 finally:
     _testcapi.remove_mem_hooks()
+"""
+
+SIGNATURE = "Assertion `_PyErr_Occurred(tstate)' failed."
+
+def main():
+    env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=0"}
+    # env["PYTHON_GIL"] = "0"   # ONLY if this bug is free-threading-only
+    for n in range(80):
+        out = subprocess.run([sys.executable, "-c", TRIGGER.format(n=n)],
+                             capture_output=True, text=True, env=env)
+        if SIGNATURE in out.stdout + out.stderr:
+            print("reproduced at set_nomemory(%d, 0):" % n)
+            sys.stdout.write(out.stderr or out.stdout)
+            return 1
+    print("no crash in range(80); widen it for your build")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

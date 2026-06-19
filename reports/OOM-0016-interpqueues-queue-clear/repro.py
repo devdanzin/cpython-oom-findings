@@ -11,10 +11,6 @@ Crash:      SIGABRT, Modules/_interpqueuesmodule.c:559
 Requires:   a debug/JIT build exposing _testcapi.set_nomemory and the
             _interpqueues extension module.
 
-Run:
-    python repro.py
-    # aborts (rc 134) on the FT debug+ASan build and the JIT build.
-
 Backtrace (gdb):
     #8  _queue_clear              Modules/_interpqueuesmodule.c:559   (assert !queue->alive; alive == 1)
     #9  queue_create              Modules/_interpqueuesmodule.c:1104  (_queue_clear after _queues_add() < 0)
@@ -66,14 +62,25 @@ unboundop=3 is UNBOUND, i.e.
 Likely fix: set queue->alive = 0 before _queue_clear in the queue_create
 error path (or route through _queue_kill_and_wait/_queue_free), so cleanup
 matches the invariant _queue_clear asserts.
+
+Self-sweeping: `python repro.py` runs the trigger under set_nomemory(N, 0) for N in a
+sweep, each in a FRESH subprocess (a fresh process avoids cache warm-up shifting the OOM
+window), and stops at the first N that crashes. Needs a debug build (the check is compiled
+out under NDEBUG). Bare trigger (fixed N=2):
+    import _testcapi, _interpqueues
+    _testcapi.set_nomemory(2, 0)
+    _interpqueues.create(0, 3, -1)   # maxsize=0, unboundop=UNBOUND(3), fallback=-1
 """
+import os
+import sys
+import subprocess
+
+TRIGGER = r"""
 import _testcapi
 import _interpqueues
 import faulthandler
-
 faulthandler.enable()
-
-_testcapi.set_nomemory(2, 0)   # fail every allocation from #2 onward
+_testcapi.set_nomemory({n}, 0)
 try:
     # maxsize=0, unboundop=3 (UNBOUND), fallback=-1
     _interpqueues.create(0, 3, -1)   # queue_create: _queues_add's _queueref
@@ -81,3 +88,24 @@ try:
                                      # queue -> assert(!queue->alive) -> SIGABRT
 finally:
     _testcapi.remove_mem_hooks()
+"""
+
+SIGNATURE = "_interpqueuesmodule.c:559"
+
+
+def main():
+    env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=0"}
+    # env["PYTHON_GIL"] = "0"   # not needed: this bug fires under GIL=1 too
+    for n in range(80):
+        out = subprocess.run([sys.executable, "-c", TRIGGER.format(n=n)],
+                             capture_output=True, text=True, env=env)
+        if SIGNATURE in out.stdout + out.stderr:
+            print("reproduced at set_nomemory(%d, 0):" % n)
+            sys.stdout.write(out.stderr or out.stdout)
+            return 1
+    print("no crash in range(80); widen it for your build")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

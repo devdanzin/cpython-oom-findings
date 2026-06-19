@@ -12,10 +12,6 @@ Crash:      SIGABRT via Py_FatalError, Objects/call.c:43
             silent SystemError instead of a clean MemoryError (see Notes).
 Requires:   a debug build exposing _testcapi.set_nomemory.
 
-Run:
-    python repro.py
-    # aborts (rc 134) on the FT debug+ASan build and the JIT debug build.
-
 Backtrace (gdb, debug build):
     #8  _Py_CheckFunctionResult      Objects/call.c:43   (Py_FatalError: NULL w/o exception)
     #9  _Py_VectorCall_StackRefSteal Python/ceval.c:726
@@ -64,29 +60,54 @@ Root cause (Parser/pegen.c):
     EMPTY repr -- a MemoryError whose normalization/repr could not allocate:
     exactly the exception the recovery pass cleared.
 
-A single set_nomemory(4, 0) is enough on these builds: a few earlier
-allocations succeed, and the failing allocation lands inside the parser's
-error-recovery pass. Observed crash at start=4 on both debug builds.
-
 Likely fix: the parser error-recovery pass must not clear a pending
 non-SyntaxError exception (e.g. MemoryError). Save it with
 PyErr_GetRaisedException() before reset_parser_state_for_error_pass and
 restore it if recovery produced no exception; in
 _PyPegen_set_syntax_error_metadata, restore the saved exc on the !metadata
 branch instead of PyErr_Clear(); return;.
+
+Self-sweeping: `python repro.py` runs the trigger under set_nomemory(N, 0) for N in a
+sweep, each in a FRESH subprocess (a fresh process avoids cache warm-up shifting the OOM
+window), and stops at the first N that crashes. Needs a debug build (the check is compiled
+out under NDEBUG). Bare trigger (fixed N=4):
+    import symtable, _testcapi, faulthandler
+    faulthandler.enable()
+    _testcapi.set_nomemory(4, 0)
+    symtable.symtable("def f(x):\n    return x + 1\n", "<min>", "exec")
 """
+import os
+import sys
+import subprocess
+
+TRIGGER = r"""
 import symtable
 import _testcapi
 import faulthandler
 
 faulthandler.enable()
 
-# Fail every allocation from #4 onward. The parse of this trivial source makes a
-# few allocations succeed, then a later allocation inside pegen's error-recovery
-# pass fails -- and that path clears the MemoryError and returns NULL with no
-# exception set, tripping _Py_CheckFunctionResult.
-_testcapi.set_nomemory(4, 0)
+_testcapi.set_nomemory({n}, 0)
 try:
     symtable.symtable("def f(x):\n    return x + 1\n", "<min>", "exec")
 finally:
     _testcapi.remove_mem_hooks()
+"""
+
+SIGNATURE = "_Py_CheckFunctionResult: a function returned NULL without setting an exception"
+
+def main():
+    env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=0"}
+    # env["PYTHON_GIL"] = "0"   # ONLY if this bug is free-threading-only
+    for n in range(80):
+        out = subprocess.run([sys.executable, "-c", TRIGGER.format(n=n)],
+                             capture_output=True, text=True, env=env)
+        if SIGNATURE in out.stdout + out.stderr:
+            print("reproduced at set_nomemory(%d, 0):" % n)
+            sys.stdout.write(out.stderr or out.stdout)
+            return 1
+    print("no crash in range(80); widen it for your build")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -13,10 +13,6 @@ Crash:      Fatal Python error / SIGABRT, Python/pystate.c:1527
             verified using API 'r'
 Requires:   a free-threaded debug build exposing _testcapi.set_nomemory.
 
-Run:
-    python repro.py
-    # aborts (rc 134) on the FT debug+ASan build.
-
 Backtrace (gdb):
     #8  _PyMem_DebugCheckAddress  Objects/obmalloc.c:3347  ("bad ID")
     #9  _PyMem_DebugRawFree       Objects/obmalloc.c:3166
@@ -64,34 +60,52 @@ Root cause (Python/pystate.c):
 
 The OOM sweep is needed so the interpreter/obmalloc state is built and the
 preallocated _initial_thread is taken, while a later free-threaded-only
-reservation allocation fails. This script aborts deterministically at start=31
-on the FT debug+ASan build (10/10); the exact index is sensitive to the
-surrounding allocations (the original vehicle and the argv-driven sweep hit it
-at start=30), so pass an explicit start to re-sweep if your build differs.
+reservation allocation fails.
 
 Likely fix: set interp->_initial_thread.base.interp = interp before publishing
 it as preallocated (init_interpreter), or make free_threadstate() identify the
 embedded thread state without trusting tstate->base.interp.
+
+Self-sweeping: `python repro.py` runs the trigger under set_nomemory(N, 0) for N in a
+sweep, each in a FRESH subprocess (a fresh process avoids cache warm-up shifting the OOM
+window), and stops at the first N that crashes. Needs a free-threaded debug build (the
+check is compiled out under NDEBUG) and the free-threaded interpreter (PYTHON_GIL=0; this
+bug lives on a Py_GIL_DISABLED-only path). Bare trigger (fixed N=31):
+    import _interpreters, _testcapi
+    _testcapi.set_nomemory(31, 0)
+    _interpreters.create(reqrefs=True)
 """
+import os
 import sys
+import subprocess
+
+TRIGGER = r"""
 import _interpreters
 import _testcapi
-
-# Deterministic crashing index for THIS script on the FT debug+ASan build
-# (3/3 aborts).  The exact value is sensitive to surrounding allocations, so it
-# can be overridden on the command line if your build's allocation count differs
-# (sweep a small window, e.g. `for s in $(seq 20 60); do python repro.py $s; done`).
-start = int(sys.argv[1]) if len(sys.argv) > 1 else 31
-
-_testcapi.set_nomemory(start, 0)   # fail every allocation from #start onward
+_testcapi.set_nomemory({n}, 0)
 try:
-    # New sub-interpreter: alloc_threadstate() takes the preallocated
-    # _initial_thread, then _Py_ReserveTLBCIndex()/_Py_qsbr_reserve() fails
-    # under OOM -> free_threadstate() PyMem_RawFree()s the embedded thread
-    # state -> _PyMem_DebugRawFree bad ID -> SIGABRT.
     _interpreters.create(reqrefs=True)
 finally:
     try:
         _testcapi.remove_mem_hooks()
     except Exception:
         pass
+"""
+
+SIGNATURE = "_PyMem_DebugRawFree: bad ID"
+
+def main():
+    env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=0"}
+    env["PYTHON_GIL"] = "0"   # free-threading-only bug: force the GIL off
+    for n in range(100):
+        out = subprocess.run([sys.executable, "-c", TRIGGER.format(n=n)],
+                             capture_output=True, text=True, env=env)
+        if SIGNATURE in out.stdout + out.stderr:
+            print("reproduced at set_nomemory(%d, 0):" % n)
+            sys.stdout.write(out.stderr or out.stdout)
+            return 1
+    print("no crash in range(100); widen it for your build")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

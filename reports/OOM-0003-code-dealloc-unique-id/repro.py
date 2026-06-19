@@ -9,10 +9,6 @@ Crash:      SIGABRT, Objects/codeobject.c:2440
             Assertion `co->_co_unique_id == _Py_INVALID_UNIQUE_ID' failed.
 Requires:   a free-threaded debug build exposing _testcapi.set_nomemory.
 
-Run:
-    python repro_code_dealloc_unique_id_oom_minimal.py
-    # aborts (rc 134) on the FT debug+ASan build.
-
 Backtrace (gdb):
     #8  code_dealloc      Objects/codeobject.c:2440  (assert _co_unique_id == INVALID)
     #9  _Py_Dealloc       Objects/object.c:3319
@@ -53,20 +49,51 @@ Observed crash at start=9 on this build; a single set_nomemory(9, 0) suffices.
 Likely fix: initialize co->_co_unique_id = _Py_INVALID_UNIQUE_ID in init_code()
 (or right after PyObject_GC_NewVar in _PyCode_New) before any path that can lead
 to code_dealloc().
+
+Self-sweeping: `python repro.py` runs the trigger under set_nomemory(N, 0) for N in a
+sweep, each in a FRESH subprocess (a fresh process avoids cache warm-up shifting the OOM
+window), and stops at the first N that crashes. Needs a free-threaded debug build (the
+assert is compiled out under NDEBUG and the field is gated on Py_GIL_DISABLED). Bare
+trigger (fixed N=9):
+    import marshal, _testcapi
+    blob = marshal.dumps(compile("def f(x):\n    return x + 1\n", "<gen>", "exec"))
+    _testcapi.set_nomemory(9, 0)
+    marshal.loads(blob)
 """
+import os
+import sys
+import subprocess
+
+TRIGGER = r"""
 import marshal
 import _testcapi
 import faulthandler
-
 faulthandler.enable()
-
 # Build a marshalled code object up front (before any OOM injection), so the
 # crashing work is purely the code-object reconstruction in marshal.loads().
 blob = marshal.dumps(compile("def f(x):\n    return x + 1\n", "<gen>", "exec"))
-
-_testcapi.set_nomemory(9, 0)   # fail every allocation from #9 onward
+_testcapi.set_nomemory({n}, 0)   # fail every allocation from #{n} onward
 try:
-    marshal.loads(blob)        # _PyCode_New: init_code's _PyCodeArray_New fails
-                               # -> Py_DECREF(co) -> code_dealloc assert -> SIGABRT
+    marshal.loads(blob)          # _PyCode_New: init_code's _PyCodeArray_New fails
+                                 # -> Py_DECREF(co) -> code_dealloc assert -> SIGABRT
 finally:
     _testcapi.remove_mem_hooks()
+"""
+
+SIGNATURE = "co->_co_unique_id == _Py_INVALID_UNIQUE_ID"
+
+def main():
+    env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=0"}
+    env["PYTHON_GIL"] = "0"   # free-threading-only bug: needs the GIL disabled
+    for n in range(80):
+        out = subprocess.run([sys.executable, "-c", TRIGGER.format(n=n)],
+                             capture_output=True, text=True, env=env)
+        if SIGNATURE in out.stdout + out.stderr:
+            print("reproduced at set_nomemory(%d, 0):" % n)
+            sys.stdout.write(out.stderr or out.stdout)
+            return 1
+    print("no crash in range(80); widen it for your build")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

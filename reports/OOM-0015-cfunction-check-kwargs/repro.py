@@ -13,12 +13,6 @@ Crash:      SIGABRT on assertions-enabled builds.
                 in cfunction_check_kwargs(), on the *next* NOARGS sys call.
 Requires:   a debug / assertions build exposing _testcapi.set_nomemory.
 
-Run:
-    python repro.py < /dev/null
-    # aborts (rc 134) on the FT debug+ASan and JIT builds.
-    # On ft_release / upstream the assert is compiled out: a normal
-    # MemoryError propagates and the process exits cleanly (rc 1).
-
 Root cause (Python/sysmodule.c):
 
     sys._baserepl  ->  sys__baserepl_impl()  (sysmodule.c:2620):
@@ -53,13 +47,52 @@ Likely fix: in sys__baserepl_impl, propagate failure:
 The OOM sweep is needed so initialization succeeds (start small) while an
 allocation deep inside the REPL/parse machinery fails.  Deterministic at
 start=1 on the FT debug+ASan build with stdin at EOF.
+
+Self-sweeping: `python repro.py` runs the trigger under set_nomemory(N, 0) for N in a
+sweep, each in a FRESH subprocess (a fresh process avoids cache warm-up shifting the OOM
+window), and stops at the first N that crashes. Needs a debug build (the check is compiled
+out under NDEBUG). The trigger needs stdin at EOF, so each child is fed /dev/null. Bare
+trigger (fixed N=1):
+    import sys, _testcapi
+    _testcapi.set_nomemory(1, 0)
+    try:
+        sys._baserepl()         # returns None with MemoryError still pending
+        sys._clear_type_cache() # next C call observes the leaked exception
+    finally:
+        _testcapi.remove_mem_hooks()
+    # run with stdin at EOF: python repro.py < /dev/null
 """
+import os
+import sys
+import subprocess
+
+TRIGGER = r"""
 import sys
 import _testcapi
 
-_testcapi.set_nomemory(1, 0)   # fail every allocation from #1 onward
+_testcapi.set_nomemory({n}, 0)   # fail every allocation from #{n} onward
 try:
-    sys._baserepl()            # returns None with MemoryError still pending
-    sys._clear_type_cache()    # next C call observes the leaked exception
+    sys._baserepl()              # returns None with MemoryError still pending
+    sys._clear_type_cache()      # next C call observes the leaked exception
 finally:
     _testcapi.remove_mem_hooks()
+"""
+
+SIGNATURE = "a function returned a result with an exception set"
+
+def main():
+    env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=0"}
+    # This bug is NOT free-threading-only; it aborts on every assertions build.
+    for n in range(80):
+        out = subprocess.run([sys.executable, "-c", TRIGGER.format(n=n)],
+                             capture_output=True, text=True, env=env,
+                             stdin=subprocess.DEVNULL)
+        if SIGNATURE in out.stdout + out.stderr:
+            print("reproduced at set_nomemory(%d, 0):" % n)
+            sys.stdout.write(out.stderr or out.stdout)
+            return 1
+    print("no crash in range(80); widen it for your build")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

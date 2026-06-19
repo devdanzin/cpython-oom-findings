@@ -11,10 +11,6 @@ Crash:      SIGABRT, Python/ceval.c:843
             Assertion `(res != NULL) ^ (PyErr_Occurred() != NULL)' failed.
 Requires:   a debug build exposing _testcapi.set_nomemory.
 
-Run:
-    python repro_ceval_843_builtin_call_contract_oom.py
-    # aborts (rc 134) on the FT debug+ASan build and the JIT debug build.
-
 Backtrace (gdb):
     #8  _Py_BuiltinCallFastWithKeywords_StackRef  Python/ceval.c:843
             (assert (res != NULL) ^ (PyErr_Occurred() != NULL))
@@ -55,16 +51,26 @@ Why the warm-up loop:
     an OOM sweep, and timeit.Timer.__init__ (Lib/timeit.py:82) calls
     compile(setup, dummy_src_name, "exec").
 
-Observed crash at start=19 on this build (with the 2000-iteration warm-up).
-
 Likely fix: make builtin_compile_impl / the AST-compile path never return
 NULL without a live exception under OOM (defensively PyErr_NoMemory() on the
 finally path). Keep the ceval.c:843 assert.
-"""
-import _testcapi
-import faulthandler
 
-faulthandler.enable()
+Self-sweeping: `python repro.py` runs the trigger under set_nomemory(N, 0) for N in a
+sweep, each in a FRESH subprocess (a fresh process avoids cache warm-up shifting the OOM
+window), and stops at the first N that crashes. Needs a debug build (the check is compiled
+out under NDEBUG). Bare trigger (fixed N=19):
+    import _testcapi
+    def hot(): return compile("pass", "<timeit-src>", "exec")
+    for _ in range(2000): hot()       # specialize CALL -> BUILTIN_FAST_WITH_KEYWORDS
+    _testcapi.set_nomemory(19, 0)
+    hot()                             # -> assert -> SIGABRT
+"""
+import os
+import sys
+import subprocess
+
+TRIGGER = r"""
+import _testcapi
 
 
 def hot():
@@ -76,9 +82,30 @@ def hot():
 for _ in range(2000):
     hot()
 
-_testcapi.set_nomemory(19, 0)   # fail every allocation from #19 onward
+_testcapi.set_nomemory({n}, 0)   # fail every allocation from #{n} onward
 try:
-    hot()                       # specialized call -> _Py_BuiltinCallFastWithKeywords_StackRef
-                                # -> compile() fails under OOM -> assert -> SIGABRT
+    hot()                        # specialized call -> _Py_BuiltinCallFastWithKeywords_StackRef
+                                 # -> compile() fails under OOM -> assert -> SIGABRT
 finally:
     _testcapi.remove_mem_hooks()
+"""
+
+SIGNATURE = "Assertion `(res != NULL) ^ (PyErr_Occurred() != NULL)' failed."
+
+
+def main():
+    env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=0"}
+    # env["PYTHON_GIL"] = "0"   # not needed: this is an assert-based abort, not FT-only
+    for n in range(80):
+        out = subprocess.run([sys.executable, "-c", TRIGGER.format(n=n)],
+                             capture_output=True, text=True, env=env)
+        if SIGNATURE in out.stdout + out.stderr:
+            print("reproduced at set_nomemory(%d, 0):" % n)
+            sys.stdout.write(out.stderr or out.stdout)
+            return 1
+    print("no crash in range(80); widen it for your build")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
