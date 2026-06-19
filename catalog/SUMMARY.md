@@ -49,7 +49,7 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0026 | `_interpchannels` int-error vs `PyErr` desync | abort | ASan/jit | yes | `_interpchannelsmodule.c:handle_channel_error` |
 | OOM-0027 | `POP_JUMP_IF_FALSE` non-bool stackref assert | abort | ASan/jit | yes | `generated_cases.c.h:_PyEval_EvalFrameDefault` |
 | OOM-0028 | `os._path_normpath(bytes)` → unchecked encode → NULL deref | segv | release | yes | `unicodeobject.c:unicode_encode_utf8` |
-| OOM-0029 | negative refcount (over-decref) on `MemoryError` path | abort | ASan/jit | no | `tupleobject.c:tuple_dealloc` |
+| OOM-0029 | negative refcount (over-decref) on `MemoryError` path (`disp_str`) | abort | ASan/jit | yes | `tupleobject.c:tuple_dealloc` |
 | OOM-0030 | `str` subclass instantiation frees a unicode with NULL data | abort | ASan/jit | yes | `unicodeobject.c:unicode_is_singleton` |
 | OOM-0031 | `_interpreters.capture_exception` frees an invalid cross-interp excinfo → UAF | segv | release | yes | `crossinterp.c:_excinfo_clear_type` |
 | OOM-0032 | warning emitted with a pending exception (`!_PyErr_Occurred`) | abort | ASan/jit | yes | `typeobject.c:type_call` / `object.c:PyObject_Str` |
@@ -57,8 +57,8 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0034 | tokenizer col-offset: unchecked `PyUnicode_AsUTF8` → NULL deref | segv | release | yes | `pegen.c:_PyPegen_byte_offset_to_character_offset_line` |
 | OOM-0035 | `StringIO.getvalue()` scans uninitialized buffer → bad `maxchar` | abort | ASan/jit | yes | `unicodeobject.c:_PyUnicode_FromUCS4` |
 
-**Totals:** 35 bugs — 7 segv, 23 abort, 5 fatal · 11 reproduce on a **release** build · 34 have a minimal
-reproducer, 1 vehicle-confirmed.
+**Totals:** 35 bugs — 7 segv, 23 abort, 5 fatal · 11 reproduce on a **release** build · **all 35 have a
+minimal reproducer** (0 vehicle-confirmed).
 
 **Upstream status** (issue-tracker check 2026-06-19, see `catalog/prior_art.md`): only **OOM-0001** is already filed — [#151673](https://github.com/python/cpython/issues/151673) (open). The other 34 have no matching python/cpython issue (appear novel).
 
