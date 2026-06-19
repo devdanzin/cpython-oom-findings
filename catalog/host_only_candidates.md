@@ -22,6 +22,20 @@ to promote one to a full `OOM-####` report. OOM crash sites are binary/timing-sp
   mid-dealloc trips the frame-consistency assert. Plausibly free-threading-relevant (the
   host runs `PYTHON_GIL=0`) and/or subinterpreter-state specific.
 - **Local repro:** **NOREPRO** on all four builds (`ft_debug_asan`, `ft_release`, `jit`,
-  `upstream`), both GIL modes, 8+ attempts. Host-only on our binaries.
-- **Next:** re-run on the host (same binary that found it) to capture a symbolized
-  backtrace; if it reproduces there, promote to an `OOM-####` report.
+  `upstream`), both GIL modes, 8+ attempts.
+- **Why (diagnosed):** it is **gated by a commit, not by clang/timing.** Both host builds
+  (FT `65afcdd8dfb`, JIT `fd53ae11391`) are *before* `ad1513a263b` ("GH-150516: Reduce the
+  work done to spill and reload the stack around calls"); both local builds are *after* it,
+  and reproduction tracks that boundary exactly. The assertion
+  `assert(tstate->current_frame == NULL || tstate->current_frame->stackpointer != NULL)`
+  (ceval.c:1216) is byte-identical across the commits, so the behavior — not the assert —
+  changed: `ad1513a263b` reworks the stackpointer-around-calls machinery (adds
+  `entry.frame.stackpointer_valid`) that the assertion guards. The clang difference
+  (host 21.1.8 vs local 22.1.2) is incidental correlation.
+- **Status:** **likely RESOLVED upstream by GH-150516 / `ad1513a263b`** (the trigger — a
+  finalizer re-entering eval mid-dealloc while `stackpointer` is unset — is eliminated by
+  the new validity tracking). Not minting an OOM-#### report. To confirm decisively, build
+  the host commit `65afcdd8dfb` with clang-22 (isolating commit from compiler) and re-run.
+- **General lesson:** when an OOM crasher doesn't reproduce on a newer build, diff the
+  commit range first — a relevant `main` commit may have shifted/fixed it. This
+  build-sensitivity is real and will bite anyone verifying OOM fixes.
