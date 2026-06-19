@@ -25,7 +25,7 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0002 | `contextvars.ContextVar.set` over-decref under OOM | segv | release | yes | `context.c:PyContextVar_Set` |
 | OOM-0003 | `code_dealloc` asserts `co != NULL` (codeobject) | abort | debug | yes | `codeobject.c:code_dealloc` |
 | OOM-0004 | list freelist clear / `PyList_New`→`free_list_items` dealloc | abort | debug | yes | `object.c:clear_freelist` |
-| OOM-0005 | eval stackref `PyStackRef_XCLOSE` over-decref | abort | release | no | `pycore_stackref.h:PyStackRef_XCLOSE` |
+| OOM-0005 | eval stackref `PyStackRef_XCLOSE` over-decref | abort | release | yes | `pycore_stackref.h:PyStackRef_XCLOSE` |
 | OOM-0006 | `dictiter_dealloc` dict-iterator dealloc under OOM | abort | release | yes | `dictobject.c:dictiter_dealloc` |
 | OOM-0007 | `context_tp_dealloc` with a pending exception | fatal | ASan/jit | yes | `context.c:context_tp_dealloc` |
 | OOM-0008 | type lookup leaves stale/missing exception; NDEBUG→latent NULL | abort | ASan/jit | yes | `typeobject.c:_PyType_LookupStackRefAndVersion` |
@@ -57,14 +57,15 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0034 | tokenizer col-offset: unchecked `PyUnicode_AsUTF8` → NULL deref | segv | release | yes | `pegen.c:_PyPegen_byte_offset_to_character_offset_line` |
 | OOM-0035 | `StringIO.getvalue()` scans uninitialized buffer → bad `maxchar` | abort | ASan/jit | yes | `unicodeobject.c:_PyUnicode_FromUCS4` |
 
-**Totals:** 35 bugs — 7 segv, 23 abort, 5 fatal · 11 reproduce on a **release** build · 32 have a minimal
-reproducer, 3 vehicle-confirmed.
+**Totals:** 35 bugs — 7 segv, 23 abort, 5 fatal · 11 reproduce on a **release** build · 33 have a minimal
+reproducer, 2 vehicle-confirmed.
 
 **Upstream status** (issue-tracker check 2026-06-19, see `catalog/prior_art.md`): only **OOM-0001** is already filed — [#151673](https://github.com/python/cpython/issues/151673) (open). The other 34 have no matching python/cpython issue (appear novel).
 
 **Suggested starting points** — crashes a release build **and** has a minimal reproducer (highest
-confidence, lowest effort to verify): **OOM-0001, 0002, 0012, 0014, 0020, 0028, 0031, 0033, 0034**. Of these,
-**OOM-0034** and **OOM-0028** are the cleanest single-defect unchecked-allocation NULL derefs (≈one-line fixes).
+confidence, lowest effort to verify): **OOM-0001, 0002, 0005, 0012, 0014, 0020, 0028, 0031, 0033, 0034**. Of these,
+**OOM-0034** and **OOM-0028** are the cleanest single-defect unchecked-allocation NULL derefs (≈one-line fixes);
+**OOM-0005** is the most severe (a genuine eval-loop stackref over-decref → use-after-free on release).
 
 Notes:
 - The `ASan/jit` rows are mostly `Py_DEBUG` assertions compiled out under `-DNDEBUG`; several reports note
