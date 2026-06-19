@@ -20,8 +20,8 @@
   "repro_start": null,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/10e0fdaf3d89dbe394d94fbf765c70a1",
+  "status": "gisted",
   "found_date": "2026-06-19",
   "confirmed_commit": "15d7406",
   "notes": "Corrupted object is a MemoryError (from the fatal's 'object type name'). Root cause = an unbalanced Py_DECREF of a MemoryError on an OOM error path (reachable via _pyrepl.utils fuzzing: gen_colors_from_token_stream/iter_display_chars/_ascii_control_repr/...); the _Py_NegativeRefcount detector fires at an incidental later decref (tuple item freed in a list->subtype->tuple teardown), so the dealloc-cascade chain is NOT the defect site and may vary across vehicles. Distinct from OOM-0005 (frame locals, PyStackRef_XCLOSE) and OOM-0019 (pegen parser, Py_XDECREF) -- same negative-refcount family, different subsystem; may share a root (unbalanced decref under OOM). Debug-only abort (Py_DEBUG-gated detector; silent UAF risk on release). Reproduces deterministically on ft_debug_asan/jit (same cascade every run). Minimization DONE (2026-06-19): 8-line stdlib repro `_pyrepl.utils.disp_str(\"\\x004\\x8A\\xD5\\x03\")` under the set_nomemory sweep range(150), 30/30 GIL=1. shrinkray oracle pinned to the tuple_dealloc@tupleobject.c:277 cascade via ASan handle_abort=1 (symbolized C backtrace at crash time, no gdb -- the cascade is byte-identical 10/10). The arg is load-bearing (mix of NUL/control + high bytes; every simpler arg incl. dropping the NUL or the high byte = 0/20). Over-decref LINE still unisolated (root cause partial). Flagged oomNEW by fusil in-loop dedup; host ran a slightly stale fusil. Found 2026-06-19 from a fresh host download."

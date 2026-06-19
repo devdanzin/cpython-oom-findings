@@ -25,8 +25,8 @@
   "repro_start": null,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/8c86ca358f3711740a692eaac730b527",
+  "status": "gisted",
   "found_date": "2026-06-19",
   "confirmed_commit": "15d7406",
   "notes": "Found by the NEW OOM Phase-2 METHOD fuzzing: an `oc1m4` sweep of email.iterators.StringIO.__getstate__, where the buffer had grown to ~32830 chars over a preceding writelines sweep. Deterministic minimal stdlib repro (4/4): a two-phase sweep -- writelines(small str) swept ~1000x to grow the buffer under intermittent OOM, then getvalue() swept -> _PyUnicode_FromUCS4 reads the uninitialized tail -> bad maxchar -> consistency assert (gdb-confirmed identical: _PyUnicode_FromUCS4 size=32830 <- getvalue_impl:294 <- __getstate__). The real SITE is _PyUnicode_FromUCS4:2228; _PyUnicode_CheckConsistency:673 is the generic detector (like _Py_NegativeRefcount) and is keyed only so the abort dedupes from stdout (an abort emits no ASan file:line frames; the gdb chain skips to _PyUnicode_FromUCS4). Root PARTIAL: the exact write/resize path that leaves the garbage Py_UCS4 in [0, string_size) is not pinned (resize_buffer zero-fills seek gaps, line 253, so it is the grow-under-OOM realloc tail). Distinct from OOM-0030 (unicode_subtype_new / _PyUnicode_NONCOMPACT_DATA data!=NULL -- a different consistency check). Second Phase-2 bug after OOM-0034. Fix: zero-init or bound the StringIO buffer tail so getvalue never scans uninitialized Py_UCS4, and/or have _PyUnicode_FromUCS4 reject out-of-range code points instead of asserting."

@@ -16,8 +16,8 @@
   "repro_start": 2,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/2dfeabe7508f8e98f27f6df7e381f1cf",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Build-agnostic (NOT free-threading-specific). The _py_warnings vehicle only reaches it when context_aware_warnings is on (FT default); the C bug reproduces via direct contextvars.ContextVar.set() on GIL builds too."

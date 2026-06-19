@@ -18,8 +18,8 @@
   "repro_start": null,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/c809eb4072c0c787c0c890f54ba1c843",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Assertion bug: fires only on assertion-enabled builds (ft_debug_asan abort, jit abort). ft_release=n/a (NDEBUG strips assert; no segv on that run). upstream (release+ASan) segv in _Py_Dealloc -- same root, NDEBUG corrupts GC list instead of asserting; this is why the zipapp vehicle was labeled 'segfault' yet trips the identical dictiter assert on the debug build (verified). Only item iterators affected (dict_itemiterator) -- only kind whose di_result needs an alloc between PyObject_GC_New and _PyObject_GC_TRACK. MINIMAL REPRO (shrinkray-reduced from the vehicle, then cleaned; deterministic, re-verified): `_strptime._strptime(\"\", \"\")` under the set_nomemory sweep."
