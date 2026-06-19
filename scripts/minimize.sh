@@ -25,6 +25,7 @@ if ! "$HERE/min_oracle.sh" "$WORK/cand.py"; then
 fi
 echo "[minimize] vehicle reproduces ($(wc -l <"$WORK/cand.py") lines). Reducing with shrinkray (niced)..."
 nice -n 19 ~/venvs/shrinkray_venv/bin/shrinkray --input-type arg --volume normal \
+    --parallelism "${SR_PARALLELISM:-1}" --timeout "${SR_TIMEOUT:-120}" \
     "$HERE/min_oracle.sh" "$WORK/cand.py" || true
 echo "[minimize] reduced to $(wc -l <"$WORK/cand.py") lines -> $WORK/cand.py"
 if [ -n "$OUT" ]; then cp "$WORK/cand.py" "$OUT"; echo "[minimize] copied -> $OUT"; fi
