@@ -117,14 +117,15 @@ Found via OOM-injection fuzzing (`_testcapi.set_nomemory`) by the local systemd 
 `oomNEW` and surfaced by the native-backtrace ingest sweep over the 31-bug catalog. Member of
 the "stale/missing exception under OOM" assert family (cf. OOM-0008/0010/0011/0015), distinct
 site. **Not** OOM-0001 (`do_warn:1139` `Py_DECREF`-of-freed segv) — though the *same* fleet
-vehicle is build-dependent: it aborts here (OOM-0032) on the debug build and segfaults in
-`do_warn` (OOM-0001) on release/jit/upstream, a textbook one-vehicle-multiple-bugs case.
+vehicle is build-dependent: it aborts here (OOM-0032) on both debug builds (`ft_debug_asan`
+*and* `jit`, which is also `Py_DEBUG`) and segfaults in `do_warn` (OOM-0001) on the release
+builds (`ft_release`/`upstream`), a textbook one-vehicle-multiple-bugs case.
 Verified distinct: OOM-0001's *own* reducer SIGSEGVs at `do_warn:1139` (`Py_DECREF(filename)`,
 the `setup_context` over-decref) on the **debug** build too — same site on debug and release,
 never tripping this `warn_explicit` assert. Different function, different defect.
 
 ## Versions
 
-- main (3.16.0a0), commit `15d7406`. SIGABRT on the free-threaded debug+ASan build
-  (`Py_DEBUG`); the assert is compiled out on `ft_release` / `jit` / `upstream` (latent —
-  that vehicle segfaults via OOM-0001 there).
+- main (3.16.0a0), commit `15d7406`. SIGABRT on both `Py_DEBUG` builds (`ft_debug_asan`
+  and `jit`); the assert is compiled out on the release builds `ft_release` / `upstream`
+  (latent — that vehicle segfaults via OOM-0001 there).

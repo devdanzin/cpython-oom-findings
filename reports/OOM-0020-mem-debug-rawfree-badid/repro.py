@@ -64,8 +64,8 @@ Root cause (Python/pystate.c):
 
 The OOM sweep is needed so the interpreter/obmalloc state is built and the
 preallocated _initial_thread is taken, while a later free-threaded-only
-reservation allocation fails. This script aborts deterministically at start=28
-on the FT debug+ASan build (3/3); the exact index is sensitive to the
+reservation allocation fails. This script aborts deterministically at start=31
+on the FT debug+ASan build (10/10); the exact index is sensitive to the
 surrounding allocations (the original vehicle and the argv-driven sweep hit it
 at start=30), so pass an explicit start to re-sweep if your build differs.
 
@@ -81,7 +81,7 @@ import _testcapi
 # (3/3 aborts).  The exact value is sensitive to surrounding allocations, so it
 # can be overridden on the command line if your build's allocation count differs
 # (sweep a small window, e.g. `for s in $(seq 20 60); do python repro.py $s; done`).
-start = int(sys.argv[1]) if len(sys.argv) > 1 else 28
+start = int(sys.argv[1]) if len(sys.argv) > 1 else 31
 
 _testcapi.set_nomemory(start, 0)   # fail every allocation from #start onward
 try:

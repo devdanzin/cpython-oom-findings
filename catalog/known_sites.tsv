@@ -305,10 +305,12 @@ OOM-0030	abort	line	Objects/unicodeobject.c:13849
 OOM-0030	abort	line	Objects/unicodeobject.c:13986
 OOM-0030	abort	line	Objects/unicodeobject.c:1629
 OOM-0030	abort	line	Objects/unicodeobject.c:1723
+OOM-0031	segv	func	Modules/_interpretersmodule.c:_interpreters_capture_exception_impl
 OOM-0031	segv	func	Objects/methodobject.c:cfunction_vectorcall_FASTCALL_KEYWORDS
 OOM-0031	segv	func	Python/crossinterp.c:_PyXI_FreeExcInfo
 OOM-0031	segv	func	Python/crossinterp.c:_PyXI_excinfo_clear
 OOM-0031	segv	func	Python/crossinterp.c:_excinfo_clear_type
+OOM-0031	segv	line	Modules/_interpretersmodule.c:1544
 OOM-0031	segv	line	Objects/methodobject.c:465
 OOM-0031	segv	line	Python/crossinterp.c:1319
 OOM-0031	segv	line	Python/crossinterp.c:1374

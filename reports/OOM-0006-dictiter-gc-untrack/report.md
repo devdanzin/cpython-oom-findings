@@ -11,7 +11,8 @@ Creating a **dict item-iterator** (`iter(d.items())`, reversed items) while allo
 ## Reproducer
 
 Minimal, stdlib-only (shrinkray-reduced from the vehicle, then cleaned; deterministic,
-re-verified). Strptime parsing under OOM corrupts the per-thread object freelist.
+re-verified). Triggers an `iter(d.items())` inside `_strptime` under the `set_nomemory`
+sweep, hitting the `dictiter_new` OOM error path.
 
 ```python
 import faulthandler, _strptime

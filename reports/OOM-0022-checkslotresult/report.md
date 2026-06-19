@@ -10,8 +10,11 @@ Re-importing a single-phase (legacy) C extension module routes through `reload_s
 
 ## Reproducer
 
-Minimal, stdlib-only (shrinkray-reduced from the vehicle, then cleaned; deterministic,
-re-verified). A dict `__delitem__` slot succeeds with an exception set under OOM.
+Minimal, stdlib-only (shrinkray-reduced from the vehicle, then cleaned; deterministic on the
+`ft_debug_asan` build, re-verified 10/10). A dict `__delitem__` slot succeeds with an
+exception set under OOM. (This minimal repro is `ft_debug_asan`-specific; the build matrix
+below is verified against the full `vehicle_source.py`, which also fatals on the `jit` debug
+build via the readline single-phase-extension reload path the minimal form doesn't exercise.)
 
 ```python
 import faulthandler, pdb

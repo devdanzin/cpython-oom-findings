@@ -1,14 +1,14 @@
 # Title
 
-Abort/Segfault: negative refcount (`PyStackRef_XCLOSE` -> `Py_DECREF`) in `_PyFrame_ClearLocals` (`Python/frame.c`) when a frame is torn down during exception unwinding under MemoryError
+Abort (negative refcount; latent UAF on release): `PyStackRef_XCLOSE` over-decref in `_PyFrame_ClearLocals` (`Python/frame.c`) when a frame is torn down during exception unwinding under MemoryError
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 
-When an allocation fails (`MemoryError`) in the middle of a bytecode instruction, the eval loop unwinds the frame through its `exit_unwind` label, which clears the frame's operand stack via `_PyFrame_ClearLocals()`. Under OOM, an opcode error path has left a stale / already-dead `_PyStackRef` on the value stack, so closing it (`PyStackRef_XCLOSE` -> `Py_DECREF`) drives the referenced object's refcount below zero. On the debug build this aborts with `_Py_NegativeRefcount: "object has negative ref count"`; on release builds the assert is compiled out and the underflowed refcount frees a still-live object, producing a later use-after-free **segfault**. The over-decref'd object in the observed crashes is a `MemoryError` instance.
+When an allocation fails (`MemoryError`) in the middle of a bytecode instruction, the eval loop unwinds the frame through its `exit_unwind` label, which clears the frame's operand stack via `_PyFrame_ClearLocals()`. Under OOM, an opcode error path has left a stale / already-dead `_PyStackRef` on the value stack, so closing it (`PyStackRef_XCLOSE` -> `Py_DECREF_MORTAL`) drives the referenced object's refcount below zero. On the debug build this aborts with `_Py_NegativeRefcount: "object has negative ref count"`; on release builds the assert is compiled out, so the underflow would free a still-live object — a latent use-after-free hazard. The over-decref'd object is a `MemoryError` instance.
 
-This is the largest crash group in the run (8+ vehicles, all converging on the same site) and the most severe: it is a genuine refcount-underflow / memory-safety bug, not merely a debug assertion.
+This is a genuine refcount-underflow / memory-safety bug, not merely a debug assertion. It is confirmed deterministically on the `ft_debug_asan` build by the minimal `xml.dom.minidom` reproducer below (10/10). The OOM sweep also trips several *other* distinct latent bugs, so other vehicles that produce a similar negative-refcount abort are listed only as *possibly related* (not individually confirmed to share this exact site — see Notes).
 
 ## Reproducer
 
@@ -46,7 +46,7 @@ Minimization **complete**.
 
 ```
 #9  _Py_NegativeRefcount        Objects/object.c:275       (op = a MemoryError, refcount underflowed)
-#10 Py_DECREF                   Include/refcount.h:354
+#10 Py_DECREF_MORTAL            Include/refcount.h (BITS_TO_PTR(ref))
 #11 PyStackRef_XCLOSE           Include/internal/pycore_stackref.h:726
 #12 _PyFrame_ClearLocals        Python/frame.c:101         (while (sp > locals) PyStackRef_XCLOSE(*sp))
 #13 _PyFrame_ClearExceptCode    Python/frame.c:126
@@ -54,7 +54,7 @@ Minimization **complete**.
 #15 _PyEval_EvalFrameDefault    Python/generated_cases.c.h:13908   (LABEL exit_unwind -> _PyEval_FrameClearAndPop)
 ```
 
-Fatal dump: `object type name: MemoryError`. Identical top frames (#11-#15) confirmed on multiprocessing_spawn, concurrent_futures_process, xml_dom_minidom, _pyrepl_main, importlib_resources, zoneinfo__tzpath, profiling_sampling__sync_coordinator -- the group does **not** split.
+Fatal dump: `object type name: MemoryError`. The minimal `xml.dom.minidom` repro hits frames #11-#15 deterministically (10/10) on `ft_debug_asan`. Several other OOM vehicles (multiprocessing_spawn, _pyrepl_main, importlib_resources, zoneinfo__tzpath, …) produce a *similar* negative-refcount abort, but were not individually re-confirmed to share this exact stackref-close site on the current binary — and the originally-headlined `concurrent_futures_process` vehicle actually hits a **different** `list_dealloc` segv (see Notes), so the "single group" framing is not relied on here.
 
 ## Root cause
 
@@ -90,10 +90,10 @@ Audit the bytecode-handler error/cleanup paths (and the generated `pop_N_error:`
 ## Notes
 
 - Found by OOM-injection fuzzing (`_testcapi.set_nomemory`). Largest group in `python-4`.
-- **Build matrix:** `ft_debug_asan` -> **abort** (negative-refcount assert). `ft_release` and `upstream` -> **segv** (use-after-free; assert compiled out). `jit` -> **abort**, but at a *sibling* assert in the same `exit_unwind` path: `generated_cases.c.h:13817 "_PyErr_Occurred(tstate)"` -- same teardown machinery, different invariant tripped by JIT dispatch.
-- **`concurrent_futures_process`** (filed as a "segfault" vehicle) is **confirmed** part of this group: it hits the negative-refcount assert on `ft_debug_asan` and segfaults 5/5 on both `ft_release` and `upstream` (rc 139). This is the clearest demonstration that the release-build segfault and the debug-build assert are the same underlying refcount underflow.
+- **Build matrix (minimal repro):** `ft_debug_asan` -> **abort** (negative-refcount assert; 10/10). On the release builds (`ft_release`, `upstream`) the assert is compiled out (`NDEBUG`), so the underflow is a latent use-after-free hazard — but the minimal repro does **not** deterministically segv at this site there (it exits cleanly), so the exact release fault is **not pinned** to this site; recorded `n/a`. `jit` (also a debug build) does not hit this stackref path with the minimal repro either (a different OOM allocation fails first) -> `n/a`. Only the `ft_debug_asan` abort is solidly confirmed as *this* bug.
+- **The OOM sweep trips several distinct latent bugs across builds** — so other vehicles are *possibly related*, not individually confirmed. Concretely, the `concurrent_futures_process` vehicle (a "segfault" vehicle) on `ft_debug_asan` deterministically (8/8) hits a **different** `list_dealloc` heap-corruption segv (via `unicode.split` -> `PyList_New`), **not** this negative-refcount assert; an earlier draft incorrectly claimed it as confirmed in this group. The release/upstream segvs of the minimal repro likewise resolve (under gdb) to unrelated OOM sites (`weakref___new__`/`PyArg_UnpackTuple`, `PyType_HasFeature`/`tuple_alloc`), not the `_PyFrame_ClearLocals` stackref path.
 - **Sibling bug spotted during minimization:** under the same OOM sweep, `runpy.run_path()` / `spawn._fixup_main_from_path()` can instead abort at `Objects/codeobject.c:2440` (`_co_unique_id == _Py_INVALID_UNIQUE_ID` in `code_dealloc`) -- a *different* over-free during code-object teardown under OOM, likely worth a separate id.
 
 ## Versions
 
-- main (3.16.0a0), commit 15d7406. Reproduces on free-threaded debug+ASan (abort), free-threaded release and default/GIL release (segfault); JIT build aborts at a sibling assert in the same path.
+- main (3.16.0a0), commit 15d7406. Confirmed on free-threaded debug+ASan (abort, 10/10 via the minimal repro). On the release builds (`ft_release`, `upstream`) the assert is compiled out — a latent use-after-free, but the minimal repro does not pin a segv at this site there. The `jit` build does not reach this stackref path with the minimal repro.

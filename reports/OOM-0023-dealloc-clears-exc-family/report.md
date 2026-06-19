@@ -109,8 +109,14 @@ Found via OOM-injection fuzzing (`_testcapi.set_nomemory`). **One root, many veh
 
 Relationship to OOM-0007 (`Context`): **same _symptom and same class of defect_ (a `tp_dealloc` clears the in-flight exception), but a different C site and fix location.** OOM-0007 is the dedicated `context_tp_dealloc` in `Python/context.c`; this family is the generic `subtype_dealloc` in `Objects/typeobject.c`. They are best fixed independently (Context has its own C deallocator that needs its own bracket), which is why `Context` is excluded from this cluster.
 
-**Debug-only signature.** The `_Py_Dealloc` invariant is `#ifdef Py_DEBUG`. On the FT debug+ASan build it fatals deterministically with this message. The JIT build is also `Py_DEBUG=1`, but on this vehicle the OOM race lands at an earlier, unrelated site (`re._compiler._optimize_charset`) and segfaults *before* reaching the `_StoreAction` teardown, so it does not surface this signature (note: unlike OOM-0007, where JIT did fatal with the Context signature). On release builds (ft_release, upstream; `Py_DEBUG=0`) the invariant is compiled out and the same vehicle segfaults at an unrelated downstream OOM site. Hence ft_release/jit/upstream are recorded as `n/a` / segv for this signature.
+**Debug-only signature.** The `_Py_Dealloc` invariant is `#ifdef Py_DEBUG`. Both `Py_DEBUG`
+builds fatal deterministically with this message: `ft_debug_asan` and `jit` (the JIT build is
+also `Py_DEBUG=1`) — verified 10/10 each, identical `_StoreAction cleared the current
+exception` signature, exactly as in OOM-0007. On the release builds (`ft_release`, `upstream`;
+`Py_DEBUG=0`) the invariant is compiled out, so the signature does not surface (the vehicle
+either exits cleanly or segfaults at an unrelated downstream OOM site). Hence `ft_release` /
+`upstream` are recorded as `n/a` for this signature; `jit` is `fatal`.
 
 ## Versions
 
-- main (3.16.0a0), commit 15d7406. Reproduces (fatal) deterministically on the free-threaded debug+ASan build via the sweep above. Release/upstream: invariant compiled out (`n/a`; segfault elsewhere). JIT (debug): does not reach this signature on the vehicle (segfaults earlier under OOM).
+- main (3.16.0a0), commit 15d7406. Reproduces (fatal) deterministically via the sweep above on both `Py_DEBUG` builds — free-threaded debug+ASan and JIT. Release/upstream: invariant compiled out (`n/a`; clean exit or unrelated downstream segv).

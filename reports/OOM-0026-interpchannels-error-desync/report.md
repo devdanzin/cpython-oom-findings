@@ -9,10 +9,12 @@ _AI Disclaimer: this issue was drafted by Claude Code, which also generated the 
 The `_interpchannels` channel-create path threads a hand-rolled integer error code in
 parallel with the Python exception state, and `handle_channel_error()` asserts the two
 agree: `err == 0 ⟹ !PyErr_Occurred()`, and an unhandled `err < 0 ⟹ PyErr_Occurred()`.
-Under OOM these diverge. A callee can return the success code `0` while leaving a
-`MemoryError` pending (→ `assert(!PyErr_Occurred())` at L398), or return a generic
-failure code without setting any exception (→ `assert(PyErr_Occurred())` at L443).
-Either aborts on debug builds.
+Under OOM these diverge. In the **L398** form a prior step fails with a `MemoryError`
+pending and the cleanup path then calls `handle_channel_error(channel_destroy()==0)` —
+`channel_destroy()` returns the success code `0` but does not clear the still-pending
+`MemoryError`, so `assert(!PyErr_Occurred())` fires. In the **L443** form `channel_create()`
+returns a generic failure code (`-1`) without setting any exception, so
+`assert(PyErr_Occurred())` fires. Either aborts on debug builds.
 
 ## Reproducer
 
@@ -26,7 +28,7 @@ for start in range(1, 4000):
     set_nomemory(start, 0)
     try:
         try:
-            _interpchannels.create(1)     # channelsmod_create -> newchannelid() returns 0 w/ MemoryError pending
+            _interpchannels.create(1)     # newchannelid() fails (-1); cleanup handle_channel_error(channel_destroy()==0) aborts w/ MemoryError still pending
         finally:
             remove_mem_hooks()
     except BaseException:
@@ -41,7 +43,7 @@ failure-branch form (L443): `channel_create()` returns `-1` with no exception se
 ```
 _interpchannelsmodule.c:398: handle_channel_error: Assertion `!PyErr_Occurred()' failed.   # minimal repro
 #8  handle_channel_error  _interpchannelsmodule.c:398    # if (err==0) assert(!PyErr_Occurred())
-#9  channelsmod_create    _interpchannelsmodule.c:2955   # handle_channel_error(newchannelid(...), self, cid)
+#9  channelsmod_create    _interpchannelsmodule.c:2955   # handle_channel_error(channel_destroy()==0) in the cleanup block, MemoryError still pending
 
 _interpchannelsmodule.c:443: handle_channel_error: Assertion `PyErr_Occurred()' failed.    # vehicle
 #9  channelsmod_create    _interpchannelsmodule.c:2941   # handle_channel_error(-1, self, cid) when cid < 0
@@ -69,37 +71,46 @@ handle_channel_error(int err, PyObject *mod, int64_t cid)
 }
 ```
 
-Callers in `channelsmod_create`:
+Callers in `channelsmod_create` (`_interpchannelsmodule.c:2938-2958`):
 
 ```c
     int64_t cid = channel_create(&_globals.channels, defaults);
     if (cid < 0) {
-        (void)handle_channel_error(-1, self, cid);   /* L2941: -1 is unhandled -> L443 */
+        (void)handle_channel_error(-1, self, cid);   /* L2940: -1 unhandled, no exc set -> L443 (vehicle) */
         return NULL;
     }
     ...
-    int err = newchannelid(state->ChannelIDType, cid, 0, &_globals.channels, 0, 0, &cidobj);
-    if (handle_channel_error(err, self, cid)) { ... } /* L2955: err==0 -> L398 */
+    int err = newchannelid(..., &cidobj);            /* L2948: fails under OOM -> -1, MemoryError set */
+    if (handle_channel_error(err, self, cid)) {      /* L2951: err<0 + exc set -> L443 holds, returns 1 */
+        assert(cidobj == NULL);
+        err = channel_destroy(&_globals.channels, cid);   /* L2953: succeeds, returns 0, MemoryError still pending */
+        if (handle_channel_error(err, self, cid)) { }     /* L2954: err==0 -> assert(!PyErr_Occurred()) at L398 (minimal repro) */
+        return NULL;
+    }
 ```
 
-Under OOM, `channel_create()` allocates (mutex, queue, ID) and can fail returning the
-generic `-1` **without** calling `PyErr_NoMemory()` — failure-branch form. And
-`newchannelid()` can allocate the `channelid` object, fail internally, set a
-`MemoryError`, yet still return `err == 0` to its out-param caller — success-branch
-form. In both cases the int-code channel and the exception state disagree.
+Under OOM, `newchannelid()` (L2948) allocates the `channelid` object, fails, and returns
+`-1` with a `MemoryError` pending. The first `handle_channel_error(-1)` (L2951) sees
+`err < 0` with the exception set, so L443 holds and it returns 1, entering the cleanup
+block. `channel_destroy()` (L2953) then succeeds and returns `0` but does **not** clear the
+pending `MemoryError`, so the second `handle_channel_error(0)` (L2954) takes the `err == 0`
+branch and trips `assert(!PyErr_Occurred())` at L398. (The L443 vehicle form is separate:
+`channel_create()` (L2938) can fail returning the generic `-1` **without** calling
+`PyErr_NoMemory()`, so `handle_channel_error(-1)` at L2940 hits `assert(PyErr_Occurred())`.)
 
 ## Suggested fix
 
-Make the two channels consistent at the source:
+Two independent producers:
 
-- `channel_create()` must set an exception (`PyErr_NoMemory()` / a `ChannelError`) on
-  every `< 0` return, so the L443 `assert(PyErr_Occurred())` holds; and
-- `newchannelid()` must return a negative error code (not `0`) whenever it leaves an
-  exception set, so the L398 `assert(!PyErr_Occurred())` holds.
-
-Alternatively make `handle_channel_error` authoritative: on the `err == 0` branch
-clear/ignore a stray exception, and on the unhandled-`err` branch set a generic
-`ChannelError` if none is pending — but fixing the producers is cleaner.
+- **L443:** `channel_create()` must set an exception (`PyErr_NoMemory()` / a `ChannelError`)
+  on every `< 0` return, so `handle_channel_error(-1)` at L2940 finds one pending.
+- **L398:** the cleanup in `channelsmod_create` (≈L2951-2956) must not route
+  `channel_destroy()`'s success code `0` through the `err == 0` assert while a *prior*
+  exception is still pending — e.g. preserve/restore the original exception across the
+  `channel_destroy` cleanup (`PyErr_GetRaisedException`/`PyErr_SetRaisedException`), or skip
+  the second `handle_channel_error` once the first has already established the error.
+  (Note `newchannelid()` already returns `-1` here, so "make `newchannelid` return `< 0`
+  when it sets an exception" — an earlier draft's suggestion — does not apply.)
 
 ## Notes
 

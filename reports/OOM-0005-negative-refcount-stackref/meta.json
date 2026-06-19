@@ -2,7 +2,7 @@
   "id": "OOM-0005",
   "slug": "negative-refcount-stackref",
   "title": "Negative refcount (PyStackRef_XCLOSE/Py_DECREF) in _PyFrame_ClearLocals (Python/frame.c) tearing down a frame during exception unwinding under MemoryError",
-  "description": "Eval-loop exit_unwind clears a frame's operand stack via _PyFrame_ClearLocals; under OOM an opcode error path left a stale/already-dead _PyStackRef on the value stack, so PyStackRef_XCLOSE->Py_DECREF underflows the object's refcount (debug: negative-refcount abort; release: use-after-free segv). Over-decref'd object is a MemoryError.",
+  "description": "Eval-loop exit_unwind clears a frame's operand stack via _PyFrame_ClearLocals; under OOM an opcode error path left a stale/already-dead _PyStackRef on the value stack, so PyStackRef_XCLOSE->Py_DECREF_MORTAL underflows the object's refcount. Confirmed as a negative-refcount abort on ft_debug_asan; on release the assert is compiled out (latent use-after-free, not pinned at this site by the minimal repro). Over-decref'd object is a MemoryError.",
   "crash_kind": "abort",
   "sites": ["Include/internal/pycore_stackref.h:726 PyStackRef_XCLOSE", "Python/frame.c:101 _PyFrame_ClearLocals", "Objects/object.c:275 _Py_NegativeRefcount"],
   "signature": {
@@ -19,7 +19,7 @@
     "python-4/profiling_sampling__sync_coordinator-assertion-sigabrt",
     "python-4/profiling_sampling__css_utils-assertion"
   ],
-  "matrix": {"ft_debug_asan": "abort", "ft_release": "segv", "jit": "abort", "upstream": "segv"},
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "n/a", "upstream": "n/a"},
   "repro_start": null,
   "upstream_reported": false,
   "upstream_issue": null,
@@ -27,5 +27,5 @@
   "status": "drafted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
-  "notes": "Largest group; does NOT split -- 8 vehicles share top frames #11-#15 (PyStackRef_XCLOSE@stackref.h:726 -> _PyFrame_ClearLocals@frame.c:101 -> _PyFrame_ClearExceptCode -> clear_thread_frame -> _PyEval_EvalFrameDefault@generated_cases.c.h:13908 exit_unwind). concurrent_futures_process labeled 'segfault' is CONFIRMED here: abort on ft_debug_asan, segv 5/5 on ft_release+upstream (release = assert compiled out -> use-after-free). jit aborts at a SIBLING assert in the same path (generated_cases.c.h:13817 _PyErr_Occurred). Minimization DONE (2026-06-19): deterministic 12-line stdlib repro `xml.dom.minidom.parse(0)` under the set_nomemory sweep range(100), 20/20 GIL=1 + 8/8 GIL=0 on ft_debug_asan. shrinkray on the xml_dom_minidom vehicle kept the fuzzer weird_classes setup (the final call's arg referenced it); substituting a trivial arg (0) freed it for removal -- the bare parse(0) sweep reproduces alone. The xml.dom.minidom path does NOT trip the sibling code_dealloc assert (Objects/codeobject.c:2440 _co_unique_id) the older multiprocessing.spawn/runpy reduction hit (that sibling is still a candidate for a separate id). dedupe.py = NEW."
+  "notes": "Confirmed deterministically on ft_debug_asan (negative-refcount abort, top frames #11-#15: PyStackRef_XCLOSE@stackref.h:726 -> _PyFrame_ClearLocals@frame.c:101 -> _PyFrame_ClearExceptCode -> clear_thread_frame -> _PyEval_EvalFrameDefault@generated_cases.c.h:13908 exit_unwind). SCOPE CORRECTED (review 2026-06-19): the minimal repro reproduces ONLY on ft_debug_asan; ft_release/upstream = assert compiled out (latent UAF, NOT pinned at this site -- the repro exits clean / a different alloc fails) -> n/a; jit also does not hit this stackref path with the minimal repro (different OOM bug fails first) -> n/a. The OOM sweep trips several distinct latent bugs, so other vehicles are POSSIBLY-RELATED, not confirmed. In particular concurrent_futures_process on ft_debug_asan deterministically (8/8) hits a DIFFERENT list_dealloc heap-corruption segv (via unicode.split->PyList_New), NOT this assert -- the earlier 'cfp CONFIRMED in this group / 8 vehicles don't split / jit sibling assert / release segv = same underflow' claims were wrong (gdb-verified). Core bug is real and severe (eval-loop stackref over-decref / memory-safety), just scoped to the one solid signature. Minimization DONE (2026-06-19): deterministic 12-line stdlib repro `xml.dom.minidom.parse(0)` under the set_nomemory sweep range(100), 20/20 GIL=1 + 8/8 GIL=0 on ft_debug_asan. shrinkray on the xml_dom_minidom vehicle kept the fuzzer weird_classes setup (the final call's arg referenced it); substituting a trivial arg (0) freed it for removal -- the bare parse(0) sweep reproduces alone. The xml.dom.minidom path does NOT trip the sibling code_dealloc assert (Objects/codeobject.c:2440 _co_unique_id) the older multiprocessing.spawn/runpy reduction hit (that sibling is still a candidate for a separate id). dedupe.py = NEW."
 }

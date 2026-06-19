@@ -12,7 +12,7 @@ Creating a sub-interpreter (`concurrent.interpreters.create` -> `_interpreters.c
 
 ```python
 import _interpreters, _testcapi
-_testcapi.set_nomemory(28, 0)   # fail every allocation from #28 onward
+_testcapi.set_nomemory(29, 0)   # fail every allocation from #29 onward
 try:
     _interpreters.create(reqrefs=True)   # new sub-interp; tlbc/qsbr reserve fails -> free_threadstate -> bad ID
 finally:
@@ -22,7 +22,7 @@ finally:
         pass
 ```
 
-Deterministic at `start=28` for this exact script on the free-threaded debug+ASan build (3/3 aborts, rc 134; the shipped `repro.py` uses 28). The OOM budget must be large enough that the interpreter/obmalloc state is built and `alloc_threadstate()` takes the preallocated `_initial_thread`, but small enough that the subsequent free-threaded-only `_Py_ReserveTLBCIndex()`/`_Py_qsbr_reserve()` allocation fails. The exact `start` is sensitive to surrounding allocations -- an `import sys` + `int(sys.argv[1])` preamble shifts the index to `30`, which is also the value the original fuzzer vehicles hit; the underlying defect is allocation-index-agnostic.
+Deterministic at `start=29` for this exact (import-free) snippet on the free-threaded debug+ASan build (5/5 aborts, rc 134). The OOM budget must be large enough that the interpreter/obmalloc state is built and `alloc_threadstate()` takes the preallocated `_initial_thread`, but small enough that the subsequent free-threaded-only `_Py_ReserveTLBCIndex()`/`_Py_qsbr_reserve()` allocation fails. The exact `start` is sensitive to surrounding allocations: the shipped `repro.py` (which adds an `import sys` + `int(sys.argv[1])` preamble) defaults to `31` (10/10), and the original fuzzer vehicles hit it at `30`. The underlying defect is allocation-index-agnostic.
 
 ## Backtrace
 
