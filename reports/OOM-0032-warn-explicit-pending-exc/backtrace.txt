@@ -25,8 +25,9 @@ typeobject.c rather than the over-broad Objects/object.c:!_PyErr_Occurred(tstate
 #9  warn_explicit           Python/_warnings.c:799      # text = PyObject_Str(message)
 
 
-RELEASE NOTE: the assert is `#ifdef Py_DEBUG`, so ft_release / jit / upstream compile it
-out. On those builds the same fleet vehicle does not stop here — the lost MemoryError lets
+RELEASE NOTE: the assert is `#ifdef Py_DEBUG`, so only the release builds ft_release /
+upstream compile it out (jit is also Py_DEBUG and aborts here too). On the release builds
+the same fleet vehicle does not stop here — the lost MemoryError lets
 execution run on and it instead SIGSEGVs in do_warn (Python/_warnings.c:1139), which is the
 separately-cataloged OOM-0001. So OOM-0032's distinctive crash (the !_PyErr_Occurred assert)
 is observable only on a debug build; on release it is a latent invariant violation.

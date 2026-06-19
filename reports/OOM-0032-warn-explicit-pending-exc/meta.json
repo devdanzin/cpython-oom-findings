@@ -18,7 +18,7 @@
     ]
   },
   "vehicles": ["fleet inst-04 python-4 zoneinfo__tzpath-sigabrt-assertion-oomNEW"],
-  "matrix": {"ft_debug_asan": "abort", "ft_release": "segv(OOM-0001)", "jit": "segv(OOM-0001)", "upstream": "segv(OOM-0001)"},
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "segv(OOM-0001)", "jit": "abort", "upstream": "segv(OOM-0001)"},
   "repro_start": null,
   "upstream_reported": false,
   "upstream_issue": null,

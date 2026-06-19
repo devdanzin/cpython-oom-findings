@@ -1,18 +1,19 @@
 # Title
 
-Abort: `assert(!PyErr_Occurred())` in `unspecialize` (`Python/specialize.c:378`) — LOAD_GLOBAL specialization leaves a `MemoryError` pending when bailing out under OOM
+Abort: `assert(!PyErr_Occurred())` in `unspecialize` (`Python/specialize.c:378`) — LOAD_GLOBAL specialization's de-opt backoff runs with a *pre-existing* `MemoryError` pending under OOM
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 
-Inline-cache specialization is meant to be exception-neutral: it either specializes
-or quietly backs off, never touching the caller's error state. Under OOM,
-`specialize_load_global_lock_held` computes a dict keys-version
-(`_PyDict_GetKeysVersionForCurrentState`) that can fail and set a `MemoryError`; the
-code treats the `0` return as a benign "out of versions" backoff and `goto fail` →
-`unspecialize(instr)`, which opens with `assert(!PyErr_Occurred())`. The pending
-`MemoryError` trips it (debug builds; abort).
+Inline-cache specialization is meant to be exception-neutral: it either specializes or
+quietly backs off, and `unspecialize()` opens with `assert(!PyErr_Occurred())`. Under OOM a
+*prior* operation leaves a `MemoryError` pending when the `LOAD_GLOBAL` micro-op runs the
+specializer (`specialize_load_global_lock_held`) — gdb confirms the exception is already set
+at the specializer's entry on the crashing iteration. The builtins/globals key lookup then
+fails *because* an exception is pending, the code `goto fail`s, and it reaches
+`unspecialize(instr)` with the `MemoryError` still set, tripping the assert (debug builds;
+abort). The specializer does not create the `MemoryError`; it inherits one.
 
 ## Reproducer
 
@@ -45,11 +46,11 @@ Two elements are load-bearing (each verified necessary by holding the rest fixed
   `func()` does not reproduce even with a wider sweep. The bug is in the adaptive
   specializer, so the exact bytecode form matters.
 - **a bare undefined global in the `finally`** — `undefined_name` compiles to a
-  `LOAD_GLOBAL`, the very instruction being specialized at the crash. Because the name is
-  in neither globals nor builtins, the lookup forces computing **both** keys-versions (the
-  allocation that fails under OOM); a *defined* name (e.g. `raise RuntimeError`)
-  short-circuits and does **not** reproduce. The undefined lookup also leaves an exception
-  pending, mirroring the invariant `unspecialize` assumes is clear.
+  `LOAD_GLOBAL`, the very instruction specialized at the crash, and (being in neither globals
+  nor builtins) its lookup is what hits the `DKIX_ERROR` `goto fail` while a `MemoryError` is
+  pending. Its role is to keep a pre-existing `MemoryError` pending into the specializer; it
+  does **not** itself allocate (the version helper is exception-neutral). A *defined* name
+  (e.g. `raise RuntimeError`) does **not** reproduce.
 
 (The earlier hand reduction — warm up `def f(): return len(x)` then churn globals under the
 sweep — exercised the same path but did not deterministically hit the window; shrinkray
@@ -67,38 +68,45 @@ Python/specialize.c:378: unspecialize: Assertion `!PyErr_Occurred()' failed.
 
 ## Root cause
 
-`Python/specialize.c`, `specialize_load_global_lock_held` (≈ L1426-1442):
+`Python/specialize.c`, `specialize_load_global_lock_held`. `_SPECIALIZE_LOAD_GLOBAL` runs
+*before* the `_LOAD_GLOBAL` lookup micro-op, so when the specializer is entered with a
+`MemoryError` already pending (from a prior allocation failure under the sweep), the
+name lookup inside specialization fails and bails:
 
 ```c
-    uint32_t builtins_version = _PyDict_GetKeysVersionForCurrentState(
-            interp, (PyDictObject*) builtins);
-    if (builtins_version == 0) {
-        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_OUT_OF_VERSIONS);
-        goto fail;                       /* may have a MemoryError pending */
+    Py_ssize_t index = _PyDictKeys_StringLookup(builtin_keys, name);
+    if (index == DKIX_ERROR) {           /* returns DKIX_ERROR: an exception is already pending */
+        SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_EXPECTED_ERROR);
+        goto fail;                       /* ~L1409 */
     }
     ...
 fail:
-    unspecialize(instr);                 /* assert(!PyErr_Occurred()) */
+    unspecialize(instr);                 /* L1441 -> assert(!PyErr_Occurred()) at L378 */
 ```
 
-`_PyDict_GetKeysVersionForCurrentState` returns `0` both for the benign
-"no version available" case *and* when assigning a new version fails under memory
-pressure — and in the latter case it leaves an exception set. The specialization
-backoff path does not distinguish the two, so an OOM-induced `MemoryError` survives
-into `unspecialize`. (The same `goto fail` guards the globals-version computation
-just above, so either version call can trigger it.)
+gdb-verified on the crashing run: the exception is non-NULL at the function's entry, and the
+`goto fail` taken is the `DKIX_ERROR` branch (the string lookup short-circuits on the pending
+exception) — **not** the keys-version branch. The defect is that *any* `goto fail` reaches
+`unspecialize` while a pre-existing exception is pending: the de-opt/backoff path does not
+tolerate or clear it. (`_PyDict_GetKeysVersionForCurrentState` is **not** involved — its
+callee `get_next_dict_keys_version` does no allocation and never sets an exception; it is
+already exception-neutral and is not even reached on the crashing run.)
 
 ## Suggested fix
 
-Specialization must not propagate an exception. Either:
+The adaptive specializer's de-opt/backoff path must tolerate a pre-existing pending
+exception. Either:
 
-- have `_PyDict_GetKeysVersionForCurrentState` never set an exception (return `0`
-  silently on allocation failure), or
-- clear it on the backoff path, e.g. in `unspecialize` / before `goto fail`:
-  `assert(!PyErr_Occurred() || PyErr_ExceptionMatches(PyExc_MemoryError)); PyErr_Clear();`
+- don't run specialization (or take the backoff) while `PyErr_Occurred()` — check and skip
+  on entry to `_Py_Specialize_LoadGlobal`; or
+- relax the `unspecialize` invariant to allow it, e.g.
+  `assert(!PyErr_Occurred() || PyErr_ExceptionMatches(PyExc_MemoryError));` and not assume a
+  clean error state on de-opt.
 
-The first is cleaner — the version helper is a best-effort optimization hook and
-should be exception-neutral by contract.
+This is really an upstream-design question: is the adaptive specializer permitted to run
+with a pending exception? (Making `_PyDict_GetKeysVersionForCurrentState` "never set an
+exception" — an earlier draft's suggestion — does **not** apply: it already never sets one
+and is not the source of the `MemoryError`.)
 
 ## Notes
 
