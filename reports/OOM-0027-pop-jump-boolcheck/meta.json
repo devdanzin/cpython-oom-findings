@@ -19,8 +19,8 @@
   "repro_start": null,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/d5c602c29ac3881290269b444d77db3c",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Assertion `PyStackRef_BoolCheck(cond)' in TARGET(POP_JUMP_IF_FALSE). Consumer-side SYMPTOM: an earlier opcode failing to allocate under OOM leaves a non-bool/dangling stackref where the conditional jump expects Py_True/Py_False. Root cause PARTIAL -- the producing instruction was not isolated from this single vehicle (would need the preceding-opcode recorded at abort). Debug-only assert (NDEBUG strips it; release uses the bad value as a branch condition = silent control-flow corruption). Distinct from OOM-0010 (generic LABEL(error) assert at generated_cases.c.h:13106). Host stdout shows the same assert at line 10539 (different commit); local 15d7406 = line 11120. One of 3 deferred abort singletons triaged 2026-06-18."

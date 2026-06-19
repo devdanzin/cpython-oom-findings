@@ -19,8 +19,8 @@
   "repro_start": 9,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/b628c59722820b55c61a400a973771d5",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Free-threading-specific (_co_unique_id + assert gated on Py_GIL_DISABLED). assert-based abort: fires only on the FT debug build (release defines NDEBUG), so ft_release/jit/upstream are n/a. init_code (codeobject.c:511) never sets _co_unique_id; _PyCode_New assigns it at L752 only after init_code succeeds, so when init_code's _PyCodeArray_New (tlbc, L570) fails under OOM the Py_DECREF(co) at L747 deallocs with garbage _co_unique_id. Fix: initialize co->_co_unique_id = _Py_INVALID_UNIQUE_ID before any code_dealloc-reachable path. Repro drives _PyCode_New via marshal.loads; original vehicles reach it via importlib _compile_bytecode during stdlib import under OOM."

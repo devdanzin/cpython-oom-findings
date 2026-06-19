@@ -19,8 +19,8 @@
   "repro_start": 1,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/d40d39e6abfb746bd9d96de261205190",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "NOT free-threading-specific: a generic exception-discard bug in sys._baserepl. sys__baserepl_impl (sysmodule.c:2620) ignores the int return of PyRun_AnyFileExFlags and always returns None; under OOM the interactive loop (pythonrun.c:152-178) can return with a stale MemoryError, so _baserepl returns a non-NULL result with an exception set. Aborts on BOTH assertions-enabled builds (ft_debug_asan and jit); ft_release/upstream compile the assert out and propagate a clean MemoryError (exit 1), so they are n/a. Minimization is partial: the minimal stdlib repro (sys._baserepl(); sys._clear_type_cache() under set_nomemory(1,0), stdin at EOF) is deterministic but lands one frame earlier on _Py_CheckFunctionResult ('a function returned a result with an exception set', object type name MemoryError) because cfunction_vectorcall_NOARGS does not run the result check but the enclosing _PyObject_VectorcallTstate (pycore_call.h:145) does; the exact methodobject.c:409 frame is reproduced by the python-4/python-7 sys vehicles where the leak surfaces at the entry of the next NOARGS sys call. Fix: make sys__baserepl_impl return NULL when PyRun_AnyFileExFlags fails, and/or ensure _PyRun_InteractiveLoopObject never returns with a stale exception on the thread state."

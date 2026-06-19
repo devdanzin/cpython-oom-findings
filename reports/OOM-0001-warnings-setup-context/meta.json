@@ -23,8 +23,8 @@
   "repro_start": 0,
   "upstream_reported": true,
   "upstream_issue": "151673",
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/464cef74ca8186843f33a38078476ac4",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Build-agnostic. token: do_warn:1139 = Py_DECREF(filename); setup_context:1087 = handle_error Py_DECREF(*filename). Same root: unchecked PyUnicode_FromString(\"<sys>\") in the f==NULL branch."

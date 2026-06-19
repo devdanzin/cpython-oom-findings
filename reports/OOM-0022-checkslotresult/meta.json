@@ -17,8 +17,8 @@
   "repro_start": 237,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/0964a71a7038ee90137f11c2527aad3c",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Fatal _Py_CheckSlotResult invariant: 'Slot __delitem__ of type dict succeeded with an exception set'. Triggered when reload_singlephase_extension (import.c) re-imports a single-phase legacy C extension (readline in both vehicles) under OOM: _modules_by_index_set (L2010) raises MemoryError via PyList_New/PyList_Append, then the cleanup PyMapping_DelItem (L2011) deletes the name from sys.modules with the exception still set; the dict delete succeeds, so the debug assert(_Py_CheckSlotResult(o,'__delitem__',res>=0)) at abstract.c:280 aborts. Debug-only: the check sits inside assert(), compiled out under NDEBUG. Matrix on the vehicle source.py: ft_debug_asan -> abort (rc134, authoritative); jit (Py_DEBUG=1, GIL) -> same _Py_CheckSlotResult abort (rc134); ft_release (NDEBUG) -> clean (rc0, stale MemoryError harmless here); upstream (NDEBUG) -> a SEPARATE OOM segfault elsewhere (faulthandler stack at pdb._pyrepl_available -> import-lock _find_and_load), not this site, recorded n/a. Fix: save/restore the pending exception around the cleanup delete (PyErr_GetRaisedException/PyErr_SetRaisedException) so the dict __delitem__ slot does not run with a stale exception. MINIMAL REPRO (shrinkray-reduced from the vehicle, then cleaned; deterministic, re-verified): `pdb.runcall()` under the set_nomemory sweep."

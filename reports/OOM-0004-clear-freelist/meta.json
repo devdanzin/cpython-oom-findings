@@ -18,8 +18,8 @@
   "repro_start": 4,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/315e83b2da6a5809ce5ae1d748cdd0ae",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Free-threading-only abort surface (clear_freelist assert + per-PyThreadState freelists are Py_GIL_DISABLED). The DEBUG-only assert is the recorded vehicle signature; the reduced repro deterministically (start=4) hits the build-agnostic sibling SEGV (PyList_New -> free_list_items use-after-free of a 0xcd-filled freed array), which also crashes ft_release/jit/upstream. Matrix kept abort/n-a per brief (assert fires only on debug); underlying corruption is NOT debug-only. All 3 vehicles recorded the identical Objects/object.c:909 assertion; re-running them now non-deterministically yields the sibling SEGV. Distinct from the codeobject.c:2440 _co_unique_id assert the same vehicles can also hit (separate FT unique-id-pool invariant)."

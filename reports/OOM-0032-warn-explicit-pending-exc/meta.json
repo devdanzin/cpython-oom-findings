@@ -22,8 +22,8 @@
   "repro_start": null,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/f7e483080647c7b76fbda79bfeb07e9c",
+  "status": "gisted",
   "found_date": "2026-06-19",
   "confirmed_commit": "15d7406",
   "notes": "Debug-only assert: warn_explicit normalizes the warning message with a pending exception under OOM. Two manifestations of one bug, adjacent lines in warn_explicit: plain-string message -> _warnings.c:806 -> type_call (typeobject.c:2441) [fleet vehicle]; Warning-instance message -> _warnings.c:799 -> PyObject_Str (object.c:818) [minimal repro, deterministic 3/3]. The MemoryError is already pending on entry to warn_explicit (gdb: PyErr at the crashing invocation), so the missing error check is in do_warn/warn_explicit (or the caller emitting the warning) before message normalization. Stale-exception-under-OOM family (cf. OOM-0008/0010/0011/0015), distinct site. NOT the same as OOM-0001 (do_warn:1139 Py_DECREF-of-freed segv) although the same fleet vehicle triggers OOM-0032 on the debug build and OOM-0001 on release builds (classic one-vehicle-multiple-bugs / build-dependent face). Minimal repro hits the PyObject_Str sibling; the exact type_call:2441 window is vehicle-confirmed (a plain-string minimal sweep segfaults in the warnings path before reaching it). Found by the LOCAL systemd fleet, flagged oomNEW, surfaced by the native-backtrace ingest sweep over the 31-bug catalog."

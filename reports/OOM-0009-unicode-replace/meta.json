@@ -29,8 +29,8 @@
   "repro_start": 0,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/34b633230f6d2301ba17dec195ffe4b7",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Build-agnostic C bug in replace() that only manifests where assert() is compiled in. In replace() the ownership flags srelease/release1/release2 are set one line AFTER the unicode_askind() pointer assignment (L10583/10592/10605/10608/10646/10655/10662/10671). unicode_askind (L2406) is a PyMem_New that returns NULL under OOM, so on failure e.g. buf1=NULL while release1=0; the done(L10756)/nothing(L10770)/error(L10782) labels assert release1 == (buf1 != PyUnicode_DATA(str1)) == (0 == 1) and abort. Aborts on ft_debug_asan AND jit (both assertion-enabled debug builds); ft_release/upstream define NDEBUG so the assert is gone, the desync is harmless (if(release1) PyMem_Free skips NULL), and str.replace correctly raises MemoryError -> n/a (no crash). Repro: 'UCS-2 string'.replace('&','&amp;') forces the ASCII substring to widen via unicode_askind; failing allocation #0 hits the desync. 14 vehicles across html/tomllib/sqlite3_dump/_pylong/shlex/wsgiref/xml.etree/gzip all abort at the same site via str.replace on a wide string (html.escape's s.replace('&','&amp;') is the canonical path). Fix: guard each assert against buf==NULL (assert release1 == (buf1 != NULL && buf1 != PyUnicode_DATA(str1))) or set buf1=PyUnicode_DATA(str1) before goto error."

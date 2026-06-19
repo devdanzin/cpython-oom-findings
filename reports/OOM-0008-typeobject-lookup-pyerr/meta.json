@@ -31,8 +31,8 @@
   "repro_start": 1,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/3c6690d0561acc62752a953e12b20197",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Root cause is build-agnostic and lives in PyFrame_GetBack (Objects/frameobject.c:2395): _PyFrame_GetFrameObject -> _PyFrame_MakeAndSetFrameObject allocates the parent PyFrameObject and returns NULL+MemoryError under OOM, but PyFrame_GetBack returns NULL at L2407 without propagating, and frame_back_get_impl (L1116) converts NULL to None at L1118, swallowing the pending exception. The LOAD_ATTR opcode reports success with MemoryError still set, so the next LOAD_ATTR's _PyType_LookupStackRefAndVersion trips assert(!PyErr_Occurred()) at typeobject.c:6343. Symptom by build: abort on ft_debug_asan AND jit (both have assertions); on ft_release/upstream (-DNDEBUG) the assert is compiled out and there is NO crash -- the dangling MemoryError instead surfaces later as 'SystemError: <built-in function ...> returned a result with an exception set' (recorded n/a per assert-abort convention; note it does NOT segfault for the minimal repro, unlike some siblings). Minimized to a stdlib-only frame-walk (f.f_back) + a trailing LOAD_ATTR; deterministic at start=1 on ft_debug_asan and jit. f_locals/f_globals raise MemoryError cleanly; only f_back swallows it. 16 vehicles share the exact typeobject.c:6343 assertion via diverse frame-walkers: gettext._as_int2, logging.findCaller, asyncio extract_stack/traceback.walk_stack, argparse, optparse, concurrent.futures. Fix: propagate the alloc failure from PyFrame_GetBack and only map a clean NULL (no pending error) to None in frame_back_get_impl."

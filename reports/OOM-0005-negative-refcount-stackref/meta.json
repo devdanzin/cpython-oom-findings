@@ -23,8 +23,8 @@
   "repro_start": null,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/22b71f61343c81df5bea9b7fca798e87",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Confirmed deterministically on ft_debug_asan (negative-refcount abort, top frames #11-#15: PyStackRef_XCLOSE@stackref.h:726 -> _PyFrame_ClearLocals@frame.c:101 -> _PyFrame_ClearExceptCode -> clear_thread_frame -> _PyEval_EvalFrameDefault@generated_cases.c.h:13908 exit_unwind). SCOPE CORRECTED (review 2026-06-19): the minimal repro reproduces ONLY on ft_debug_asan; ft_release/upstream = assert compiled out (latent UAF, NOT pinned at this site -- the repro exits clean / a different alloc fails) -> n/a; jit also does not hit this stackref path with the minimal repro (different OOM bug fails first) -> n/a. The OOM sweep trips several distinct latent bugs, so other vehicles are POSSIBLY-RELATED, not confirmed. In particular concurrent_futures_process on ft_debug_asan deterministically (8/8) hits a DIFFERENT list_dealloc heap-corruption segv (via unicode.split->PyList_New), NOT this assert -- the earlier 'cfp CONFIRMED in this group / 8 vehicles don't split / jit sibling assert / release segv = same underflow' claims were wrong (gdb-verified). Core bug is real and severe (eval-loop stackref over-decref / memory-safety), just scoped to the one solid signature. Minimization DONE (2026-06-19): deterministic 12-line stdlib repro `xml.dom.minidom.parse(0)` under the set_nomemory sweep range(100), 20/20 GIL=1 + 8/8 GIL=0 on ft_debug_asan. shrinkray on the xml_dom_minidom vehicle kept the fuzzer weird_classes setup (the final call's arg referenced it); substituting a trivial arg (0) freed it for removal -- the bare parse(0) sweep reproduces alone. The xml.dom.minidom path does NOT trip the sibling code_dealloc assert (Objects/codeobject.c:2440 _co_unique_id) the older multiprocessing.spawn/runpy reduction hit (that sibling is still a candidate for a separate id). dedupe.py = NEW."

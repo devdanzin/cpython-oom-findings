@@ -22,8 +22,8 @@
   "repro_start": null,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/249032e1746d63406a5f68d7dfdedb79",
+  "status": "gisted",
   "found_date": "2026-06-19",
   "confirmed_commit": "15d7406",
   "notes": "DETERMINISTIC minimal repro (repro.py, 6/6 ft_debug_asan): `sys.path[:] = '<unicode>'; __import__('H')` under the set_nomemory sweep -> _Py_NegativeRefcount at list_ass_slice_lock_held:1030. The import is REQUIRED -- `sys.path[:] = str` alone (no import) does NOT crash (5/5), so the over-decref producer is the import's path-based finder walking the new sys.path under OOM, not list_ass_slice itself; list_ass_slice:1030 is the recycle-cleanup decref that DETECTS the already-freed entry on the next slice op. The segv face (vehicle, PyType_IsSubtype:2931) is the same freed entry read by `isinstance(entry, str)` in _get_spec (importlib._bootstrap_external:1240). Small ints don't expose it (immortal); mortal entries (sys.path strings / 1-char strings) do. Root is PARTIAL: the exact over-decref line in the import path is not pinned, but the mechanism, both detection sites, and a deterministic repro are. This was the 'import-time PyType_IsSubtype outlier' that was NOREPRO on the host (catalog/norepro_investigation.md) -- now locally reproduced. Distinct from OOM-0004 (list_dealloc/PyList_New/free_list_items) and OOM-0019/0005/0029 (other negrefcount sites). Reached publicly via list slice-assignment + import under OOM; the vehicle's forkserver._handle_preload is one entry point (`sys.path[:] = sys_path` then __import__). Future: a testcase minimizer (shrinkray/creduce) + a reliable-repro bash loop could shrink vehicles like this automatically."

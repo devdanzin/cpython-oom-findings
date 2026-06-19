@@ -18,8 +18,8 @@
   "repro_start": 2,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/05be8efe6b08c2b3ac3e2c17c784da0c",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "queue_create (L1089) calls _queue_init (sets queue->alive=1, L547) then _queues_add (L1102). Under OOM _queues_add's GLOBAL_MALLOC(_queueref) (L916) fails, returns ERR_QUEUE_ALLOC (<0); queue_create then calls _queue_clear(queue) (L1104) whose first stmt assert(!queue->alive) (L559) fires because the queue is still alive. All correct teardowns reach _queue_clear via _queue_free only after _queue_kill_and_wait sets alive=0 (cf. queue_destroy L1119); the create error path skips that. Not a UAF: _queue_clear's actual work (free items/lock, zero struct) is correct for a fresh never-registered queue, so on NDEBUG the path raises a clean MemoryError. assert-based abort -> fires on assertion builds (ft_debug_asan AND jit); ft_release/upstream compile the assert out and exit cleanly (n/a). Fix: set queue->alive=0 before _queue_clear in queue_create's _queues_add-failure path (or route via _queue_kill_and_wait/_queue_free). Minimal repro start=2: alloc #0=_queue struct, #1=mutex (succeed -> alive), #2=_queueref in _queues_add (fails). unboundop=3 is UNBOUND. 3 vehicles all call concurrent.interpreters._queues.create under OOM."

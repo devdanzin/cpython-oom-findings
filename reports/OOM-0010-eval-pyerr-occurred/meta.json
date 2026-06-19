@@ -28,8 +28,8 @@
   "repro_start": 5,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/d3c1d06e95c006a320dbbfffcc210d52",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "assert-based abort: fires only on the FT debug build (release/JIT/upstream define NDEBUG, where LABEL(error) instead synthesizes SystemError; in practice the same OOM surfaces a clean MemoryError and the process exits rc 1 -- it does NOT segfault), so ft_release/jit/upstream are n/a. Representative root cause: the CALL of _remote_debugging.RemoteUnwinder(...) at sample.py:102 (via SampleProfiler.__init__ -> _new_unwinder) returns an error to the eval loop without a live exception under OOM. gdb on the crashing run shows neither the Argument-Clinic wrapper nor _remote_debugging_RemoteUnwinder___init___impl is entered -> the failure is in the type-call/object-creation path before tp_init; Objects/typeobject.c:type_call documents that it 'can clear (directly or indirectly)' the caller's exception. Fix: ensure every OOM error path of the offending constructor(s) leaves PyErr_Occurred() true (PyErr_NoMemory) and never clears a pending MemoryError; keep the eval-loop assert (it correctly flags the contract violation). SIGNATURE-CLUSTER SPLIT: this signature (generic eval-loop error-without-exception) is shared by 13 vehicles spanning distinct callees -- RemoteUnwinder (profiling_sampling_sample x2, the representative), profiling _sort_to_mode (profiling_sampling_cli x2), subprocess._args_from_interpreter_flags (multiprocessing_spawn/util x5), mimetypes._default_mime_types (x2), json.load (x1), builtins (x1). All listed as vehicles because they match the signature, but each callee's OOM error path is a separate fix; only the RemoteUnwinder path is root-caused here. Minimized stdlib-only repro deterministic at start=5: profiling.sampling.sample.dump_stack(-5)."

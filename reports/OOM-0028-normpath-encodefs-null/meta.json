@@ -19,8 +19,8 @@
   "repro_start": null,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/774867b89b3de8d36d7e2ac405034577",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Clean NULL deref, reproduces on ALL four builds (not debug/ASan-only). result from PyUnicode_FromOrdinal('.')/PyUnicode_FromWideChar can be NULL under OOM and is passed unchecked to PyUnicode_EncodeFSDefault on the PyBytes_Check(path->object) branch. Fix: `if (result != NULL && PyBytes_Check(...))` (function already returns result==NULL to propagate the error). 3-line minimal repro: posix._path_normpath(b\"...\") under set_nomemory sweep (bytes arg required for the re-encode branch). Surfaced by scripts/ingest.py as a NEW site (unicode_encode_utf8) on the python-4..7 corpus -- distinct from OOM-0009 (unicodeobject.c replace:10783). First bug found by the dedupe-ingest pipeline."

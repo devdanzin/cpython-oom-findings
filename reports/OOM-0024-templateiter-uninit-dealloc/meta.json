@@ -23,8 +23,8 @@
   "repro_start": null,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/acf15ad4117c6343b48ed8fdfe7ad167",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Uninitialized-field read (PyObject_GC_New does not zero the struct body). Deterministic SIGSEGV on ASan builds (ft_debug_asan, jit) where fresh memory is 0xbe-poisoned; release builds (ft_release, upstream) exit cleanly in the swept budget because a first allocation often reads back zero (field NULL -> Py_CLEAR(NULL) no-op), but a templateiterobject re-allocated from a dirty freelist slot is a latent use-after-free on release too. Both GetIter error paths share the defect; templateiter_traverse has the same exposure if GC runs pre-init. PEP 750 t-string code (new in 3.14). Minimal 3-line repro (t-string literal + set_nomemory sweep). Fix: NULL the two fields immediately after PyObject_GC_New. Found via segv site-sweep (scripts/segv_sweep.sh): the only NEW bug among 254 segv vehicles; the rest deduped to OOM-0001/0002/0003/0004/0005/0006/0008/0013/0020/0022 or were host-only NOREPRO."

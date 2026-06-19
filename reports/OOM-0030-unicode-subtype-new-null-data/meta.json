@@ -20,8 +20,8 @@
   "repro_start": null,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/fbfb9d6cd5eeb518e4f9eeab44be3893",
+  "status": "gisted",
   "found_date": "2026-06-19",
   "confirmed_commit": "15d7406",
   "notes": "Assertion `data != NULL' in _PyUnicode_NONCOMPACT_DATA (unicodeobject.h:272), reached via unicode_dealloc->unicode_is_singleton when a str-subclass `self` is freed on unicode_subtype_new's onError path with self->data still NULL. Same partially-constructed-object-freed-on-OOM class as OOM-0024 (template_iter); distinct from OOM-0009 (replace). Debug-only assert (Py_DEBUG); release dereferences the NULL data (segfault/UAF risk). Found by 2 fleet instances via email._header_value_parser str-subclass construction. Fix: leave the subtype in a dealloc-safe (empty/valid data) state right after tp_alloc, or make unicode_is_singleton/unicode_dealloc tolerate NULL data. MINIMAL REPRO (shrinkray-reduced from the vehicle, deterministic, re-verified 40x): `email._header_value_parser.get_value(\"\\x00\")` under the set_nomemory sweep. (An earlier hand reduction `class S(str): S('...')` did not hit the window; shrinkray found the email get_value trigger.) First bugs found by the LOCAL systemd fleet against the then-29-bug catalog. Reconfirmed on the HOST (2026-06-19): 3 more host crashers (~/crashers/host_crashers) hit the identical data!=NULL assert via email._header_value_parser get_atext->get_atom->get_word, ingest -> OOM-0030."

@@ -19,8 +19,8 @@
   "repro_start": null,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/bf6f784d4bcd21acd471ea45b6f23c70",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Two faces of one defect (int error code vs PyErr desync in the _interpchannels create path). L398 form (minimal repro, gdb-verified): newchannelid (channelsmod_create L2948) fails under OOM -> returns -1 with MemoryError pending; first handle_channel_error(-1) at L2951 passes (err<0 + exc set, L443 holds) and enters the cleanup block; channel_destroy (L2953) returns 0 without clearing the MemoryError; the second handle_channel_error(0) at L2954 trips assert(!PyErr_Occurred()) at L398. (NOT 'newchannelid returns 0 with pending' -- an earlier draft was wrong; the only newchannelid-returns-0 path does no allocation.) L443 form (vehicle): channel_create (L2938) returns -1 at L2940 without setting an exception -> assert(PyErr_Occurred()) at L443. Fix: (L443) channel_create must set an exception on every <0 return; (L398) the channelsmod_create cleanup must preserve/restore the pending exception across channel_destroy (PyErr_Get/SetRaisedException) or skip the second handle_channel_error once the first established the error. Debug-only asserts (NDEBUG strips them). Distinct from OOM-0014 (channelsmod__channel_id, :3487). Exception-state-under-OOM family. Minimal repro reproduces deterministically (L398 form). One of 3 deferred abort singletons triaged 2026-06-18."

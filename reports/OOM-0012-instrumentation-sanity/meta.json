@@ -24,8 +24,8 @@
   "repro_start": 9,
   "upstream_reported": false,
   "upstream_issue": null,
-  "gist_url": null,
-  "status": "drafted",
+  "gist_url": "https://gist.github.com/devdanzin/610c147c8e2d42a576bab3c1c2713391",
+  "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Build-agnostic memory-safety bug, NOT a debug-only assert. set_global_version (instrumentation.c:1042) bumps the global instrumentation version + interp->monitors BEFORE instrument_all_executing_code_objects (L1146) re-instruments executing code objects. force_instrument_lock_held (L1805) calls update_instrumentation_data (L1700), which does unrolled-back PyMem_Malloc allocations (allocate_instrumentation_data L1682; tools L1723; lines L1759; line_tools L1768; per_instruction_opcodes L1778; per_instruction_tools L1791). Under OOM one fails -> return -1 BEFORE the done: label (L1925) stores global_version into code->_co_instrumentation_version. The -1 surfaces as MemoryError but the global version/monitors are not restored, so the code object is left out of sync (stale version, NULL/partial _co_monitoring). The next monitored event -- RAISE for the in-flight MemoryError via _PyEval_MonitorRaise -> do_monitor_exc (ceval.h:350) -> get_tools_for_instruction -- trips debug_check_sanity (L1082/L1106) on debug builds. On NDEBUG (ft_release/upstream) the assert is compiled out and L1119 reads code->_co_monitoring->active_monitors on the NULL/partial pointer -> SIGSEGV. Fix: make instrumentation application transactional -- defer the global-version bump until all code objects are re-instrumented, or restore the previous version/monitors on any failure. 9 vehicles: representative via sys._settraceallthreads; profile-* via profile.run/runctx (setprofile/PEP 669); threading-assertion via thread tracing. NOTE for dedupe: scripts/signature.py auto-derives site_frame=__assert_fail@./assert/assert.c:37 for the abort (and get_tools_for_instruction@:1119 for the segv variant); site_frame here is pinned to the meaningful CPython frame get_tools_for_instruction@Python/instrumentation.c:1106 per the cluster signature."
