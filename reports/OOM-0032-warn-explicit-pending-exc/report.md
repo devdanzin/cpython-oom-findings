@@ -119,6 +119,9 @@ the "stale/missing exception under OOM" assert family (cf. OOM-0008/0010/0011/00
 site. **Not** OOM-0001 (`do_warn:1139` `Py_DECREF`-of-freed segv) — though the *same* fleet
 vehicle is build-dependent: it aborts here (OOM-0032) on the debug build and segfaults in
 `do_warn` (OOM-0001) on release/jit/upstream, a textbook one-vehicle-multiple-bugs case.
+Verified distinct: OOM-0001's *own* reducer SIGSEGVs at `do_warn:1139` (`Py_DECREF(filename)`,
+the `setup_context` over-decref) on the **debug** build too — same site on debug and release,
+never tripping this `warn_explicit` assert. Different function, different defect.
 
 ## Versions
 
