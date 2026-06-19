@@ -45,7 +45,7 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0022 | slot succeeded with an exception set (extension reload) | fatal | ASan/jit | yes | `call.c:_Py_CheckSlotResult` |
 | OOM-0023 | pure-Python type dealloc with pending exc (argparse/urllib/logging) | fatal | debug | yes | `object.c:_Py_Dealloc` |
 | OOM-0024 | t-string `template_iter` frees uninitialized iterator → UAF | segv | ASan/jit | yes | `templateobject.c:templateiter_clear` |
-| OOM-0025 | `unspecialize` with a pending exception under OOM | abort | ASan/jit | no | `specialize.c:unspecialize` |
+| OOM-0025 | `unspecialize` with a pending exception under OOM | abort | ASan/jit | yes | `specialize.c:unspecialize` |
 | OOM-0026 | `_interpchannels` int-error vs `PyErr` desync | abort | ASan/jit | yes | `_interpchannelsmodule.c:handle_channel_error` |
 | OOM-0027 | `POP_JUMP_IF_FALSE` non-bool stackref assert | abort | ASan/jit | yes | `generated_cases.c.h:_PyEval_EvalFrameDefault` |
 | OOM-0028 | `os._path_normpath(bytes)` → unchecked encode → NULL deref | segv | release | yes | `unicodeobject.c:unicode_encode_utf8` |
@@ -57,8 +57,8 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0034 | tokenizer col-offset: unchecked `PyUnicode_AsUTF8` → NULL deref | segv | release | yes | `pegen.c:_PyPegen_byte_offset_to_character_offset_line` |
 | OOM-0035 | `StringIO.getvalue()` scans uninitialized buffer → bad `maxchar` | abort | ASan/jit | yes | `unicodeobject.c:_PyUnicode_FromUCS4` |
 
-**Totals:** 35 bugs — 7 segv, 23 abort, 5 fatal · 11 reproduce on a **release** build · 30 have a minimal
-reproducer, 5 vehicle-confirmed.
+**Totals:** 35 bugs — 7 segv, 23 abort, 5 fatal · 11 reproduce on a **release** build · 31 have a minimal
+reproducer, 4 vehicle-confirmed.
 
 **Upstream status** (issue-tracker check 2026-06-19, see `catalog/prior_art.md`): only **OOM-0001** is already filed — [#151673](https://github.com/python/cpython/issues/151673) (open). The other 34 have no matching python/cpython issue (appear novel).
 

@@ -16,17 +16,44 @@ code treats the `0` return as a benign "out of versions" backoff and `goto fail`
 
 ## Reproducer
 
-Reliably reproduced via the fuzzing vehicle (`sys` fuzz under the `set_nomemory`
-sweep); a focused stdlib reduction exercises the path but does not deterministically
-hit the exact OOM window (see `repro.py`). Mechanism:
+Minimal, stdlib-only (shrinkray-reduced from the `sys`-fuzz vehicle; **deterministic** —
+aborts on every run, 20/20 observed). Needs a debug build (`PYTHON_GIL=1`):
 
 ```python
-# LOAD_GLOBAL specializes after warmup; then a keys-version realloc fails under OOM
-def f():
-    return len(x)            # two LOAD_GLOBALs
-# ... warm up f() to specialize, then run f() inside a dense set_nomemory(start, 0) sweep
-# while churning globals so the keys-version must be recomputed (allocates) under OOM.
+from _testcapi import set_nomemory
+import sys
+
+
+def oom_call(func, *args):
+    for start in range(40):
+        set_nomemory(start)
+        try:
+            try:
+                func(*args)
+            finally:
+                undefined_name  # LOAD_GLOBAL of an undefined name
+        except:
+            pass
+
+
+oom_call(sys._baserepl)
 ```
+
+Two elements are load-bearing (each verified necessary by holding the rest fixed):
+
+- **`func(*args)`, not `func()`** — the unpacking call is a *specialized CALL*; a plain
+  `func()` does not reproduce even with a wider sweep. The bug is in the adaptive
+  specializer, so the exact bytecode form matters.
+- **a bare undefined global in the `finally`** — `undefined_name` compiles to a
+  `LOAD_GLOBAL`, the very instruction being specialized at the crash. Because the name is
+  in neither globals nor builtins, the lookup forces computing **both** keys-versions (the
+  allocation that fails under OOM); a *defined* name (e.g. `raise RuntimeError`)
+  short-circuits and does **not** reproduce. The undefined lookup also leaves an exception
+  pending, mirroring the invariant `unspecialize` assumes is clear.
+
+(The earlier hand reduction — warm up `def f(): return len(x)` then churn globals under the
+sweep — exercised the same path but did not deterministically hit the window; shrinkray
+found this stable trigger. The full fuzzer vehicle is preserved as `vehicle_source.py`.)
 
 ## Backtrace
 
@@ -80,7 +107,8 @@ Found via OOM-injection fuzzing (`_testcapi.set_nomemory`). Debug-only: the asse
 (de-opt proceeds with a stray `MemoryError`, later surfaced or cleared elsewhere).
 Member of the "exception-state-under-OOM" family (cf. OOM-0008/0010/0011/0015), but a
 distinct site/function from OOM-0011 (`specialize` LoadAttr, specialize.c:364).
-Minimization: PARTIAL — vehicle-confirmed; no deterministic minimal trigger isolated.
+Minimization: DONE — deterministic stdlib reduction (`repro.py`), reduced from the vehicle
+with shrinkray and re-verified (20/20).
 
 ## Versions
 
