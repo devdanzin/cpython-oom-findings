@@ -1,6 +1,8 @@
-# Abort (negative refcount; latent UAF on release): `PyStackRef_XCLOSE` over-decref in `_PyFrame_ClearLocals` (`Python/frame.c`) when a frame is torn down during exception unwinding under MemoryError
+# Abort: negative-refcount over-decref in `_PyFrame_ClearLocals` (`frame.c:101`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*An OOM opcode error path leaves a stale, already-dead `_PyStackRef` on the value stack; during exception unwinding `_PyFrame_ClearLocals` calls `PyStackRef_XCLOSE` on it, driving a `MemoryError` instance's refcount below zero — a latent use-after-free on release builds where the assert is compiled out.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

@@ -1,6 +1,8 @@
-# Abort: `assert(PyStackRef_BoolCheck(cond))` in `POP_JUMP_IF_FALSE` (`Python/generated_cases.c.h`) — the value stack holds a non-bool at a conditional jump under OOM
+# Abort: `assert(PyStackRef_BoolCheck(cond))` in `POP_JUMP_IF_FALSE` (`generated_cases.c.h:11120`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*Under OOM an upstream opcode's error path leaves a non-bool / dangling `_PyStackRef` on the value stack; the following `POP_JUMP_IF_FALSE` reads it as its branch condition and the `PyStackRef_BoolCheck` assert aborts.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

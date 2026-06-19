@@ -1,6 +1,8 @@
-# Abort/Segfault: `_PyObject_GC_UNTRACK` assert in `dictiter_dealloc` (`Objects/dictobject.c`) when `dictiter_new()` decref's an untracked item-iterator under MemoryError
+# Abort/Segfault: `_PyObject_GC_UNTRACK` assert on untracked iterator in `dictiter_dealloc` (`dictobject.c:5532`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*In `dictiter_new()`, a `dict` item-iterator's `di_result` tuple is allocated before `_PyObject_GC_TRACK`; under OOM that alloc fails and the `Py_DECREF(di)` error path runs `dictiter_dealloc`, which unconditionally untracks the never-tracked object — asserting on debug, corrupting the GC list (later segfault) on release.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

@@ -1,6 +1,8 @@
-# Abort: `assert(!_PyErr_Occurred(tstate))` in `cfunction_check_kwargs` (`Objects/methodobject.c:409`) because `sys._baserepl()` returns `None` with a `MemoryError` still pending under OOM
+# Abort: stale exception in `cfunction_check_kwargs` (`methodobject.c:409`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*Under OOM, `sys._baserepl()` ignores `PyRun_AnyFileExFlags`'s failure and returns `None` with a `MemoryError` still pending; the next NOARGS `sys` C-call trips `assert(!_PyErr_Occurred(tstate))` at its entry.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

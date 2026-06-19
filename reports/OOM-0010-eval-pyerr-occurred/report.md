@@ -1,6 +1,8 @@
-# Abort: `assert(_PyErr_Occurred(tstate))` at `LABEL(error)` in `_PyEval_EvalFrameDefault` (`Python/generated_cases.c.h`) when a C-extension constructor (`_remote_debugging.RemoteUnwinder`) returns an error without an exception set under MemoryError
+# Abort: `assert(_PyErr_Occurred(tstate))` in `_PyEval_EvalFrameDefault` (`generated_cases.c.h:13817`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*Under OOM, constructing `_remote_debugging.RemoteUnwinder` (via `sample._new_unwinder`) returns an error result to the eval loop with no live exception, so the `LABEL(error)` assert that an error must carry an exception fires.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

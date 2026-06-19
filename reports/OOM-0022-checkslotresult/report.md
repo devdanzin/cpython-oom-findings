@@ -1,6 +1,8 @@
-# Fatal: `_Py_CheckSlotResult`: "Slot __delitem__ of type dict succeeded with an exception set" in `reload_singlephase_extension` (`Python/import.c`) when `_modules_by_index_set()` fails under MemoryError
+# Fatal: stale `MemoryError` trips `_Py_CheckSlotResult` in `reload_singlephase_extension` (`import.c:2011`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*When `_modules_by_index_set()` fails under OOM, the cleanup `PyMapping_DelItem(modules, name)` runs the dict `__delitem__` slot with the `MemoryError` still set; the delete succeeds with an exception pending, so the debug `_Py_CheckSlotResult` assert fatals the interpreter.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

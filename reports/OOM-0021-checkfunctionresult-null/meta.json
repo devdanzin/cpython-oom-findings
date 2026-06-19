@@ -1,7 +1,7 @@
 {
   "id": "OOM-0021",
   "slug": "checkfunctionresult-null",
-  "title": "fatal _Py_CheckFunctionResult: _symtable.symtable() returns NULL without setting an exception (Objects/call.c) when pegen's error-recovery pass loses a MemoryError under OOM",
+  "title": "Fatal: NULL returned without an exception set in `_Py_CheckFunctionResult` (`call.c:43`)",
   "description": "`_symtable.symtable()` parses source via pegen; on a failed first parse pegen runs a second error-recovery pass that calls `PyErr_Clear()` (`Parser/pegen.c:917`/`928`, and the second `_PyPegen_parse`). Under OOM that path clears the live `MemoryError` and then fails its own allocation, so the C call returns `NULL` with no exception set, tripping `_Py_CheckFunctionResult`'s debug `Py_FatalError`.",
   "crash_kind": "fatal",
   "sites": ["Objects/call.c _Py_CheckFunctionResult:43", "Parser/pegen.c _PyPegen_set_syntax_error_metadata:928", "Parser/pegen.c _PyPegen_run_parser:966", "Modules/symtablemodule.c _symtable_symtable_impl:66"],

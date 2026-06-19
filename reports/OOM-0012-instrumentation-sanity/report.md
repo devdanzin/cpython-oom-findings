@@ -1,6 +1,8 @@
-# Abort: `assert(debug_check_sanity(interp, code))` in `get_tools_for_instruction` (`Python/instrumentation.c:1106`) when applying `sys.monitoring` instrumentation fails partway under MemoryError (segfaults on release builds)
+# Abort/Segfault: stale instrumentation in `get_tools_for_instruction` (`instrumentation.c:1106`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*Registering a global monitoring tool bumps the interpreter's instrumentation version, but an alloc failure in `update_instrumentation_data()` returns `-1` without rolling it back, leaving a code object's version stale and `_co_monitoring` NULL/partial; the next monitored event trips `debug_check_sanity()` (abort on debug, segfault at `instrumentation.c:1119` on release).*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

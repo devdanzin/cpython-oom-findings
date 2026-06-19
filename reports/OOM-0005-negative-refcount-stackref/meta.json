@@ -1,7 +1,7 @@
 {
   "id": "OOM-0005",
   "slug": "negative-refcount-stackref",
-  "title": "Negative refcount (PyStackRef_XCLOSE/Py_DECREF) in _PyFrame_ClearLocals (Python/frame.c) tearing down a frame during exception unwinding under MemoryError",
+  "title": "Abort: negative-refcount over-decref in `_PyFrame_ClearLocals` (`frame.c:101`)",
   "description": "Eval-loop exit_unwind clears a frame's operand stack via _PyFrame_ClearLocals; under OOM an opcode error path left a stale/already-dead _PyStackRef on the value stack, so PyStackRef_XCLOSE->Py_DECREF_MORTAL underflows the object's refcount. Confirmed as a negative-refcount abort on ft_debug_asan; on release the assert is compiled out (latent use-after-free, not pinned at this site by the minimal repro). Over-decref'd object is a MemoryError.",
   "crash_kind": "abort",
   "sites": ["Include/internal/pycore_stackref.h:726 PyStackRef_XCLOSE", "Python/frame.c:101 _PyFrame_ClearLocals", "Objects/object.c:275 _Py_NegativeRefcount"],

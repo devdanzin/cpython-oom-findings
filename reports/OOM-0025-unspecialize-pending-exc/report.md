@@ -1,6 +1,8 @@
-# Abort: `assert(!PyErr_Occurred())` in `unspecialize` (`Python/specialize.c:378`) — LOAD_GLOBAL specialization's de-opt backoff runs with a *pre-existing* `MemoryError` pending under OOM
+# Abort: `assert(!PyErr_Occurred())` in `unspecialize` (`specialize.c:378`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*Under OOM a prior allocation failure leaves a `MemoryError` pending into the `LOAD_GLOBAL` specializer; its builtins lookup returns `DKIX_ERROR` and `goto fail`s, reaching `unspecialize` with the exception still set.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

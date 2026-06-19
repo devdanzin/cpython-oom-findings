@@ -1,6 +1,8 @@
-# Fatal error: `_PyMem_DebugRawFree: bad ID` in `free_threadstate` (`Python/pystate.c`) when sub-interpreter thread-state setup fails under MemoryError
+# Fatal: `_PyMem_DebugRawFree: bad ID` in `free_threadstate` (`pystate.c:1527`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*On free-threaded builds, when a sub-interpreter's `_Py_qsbr_reserve()`/`_Py_ReserveTLBCIndex()` fails under OOM, `free_threadstate()` reads the still-NULL `tstate->base.interp`, so its `tstate == &interp->_initial_thread` identity check is false and it wrongly `PyMem_RawFree`s the interpreter-embedded `_initial_thread`.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

@@ -1,7 +1,7 @@
 {
   "id": "OOM-0009",
   "slug": "unicode-replace",
-  "title": "abort on assert(release1 == (buf1 != PyUnicode_DATA(str1))) in replace (Objects/unicodeobject.c) when a kind-widening allocation fails under MemoryError",
+  "title": "Abort: stale `release1` flag trips an ownership assert in `replace` (`unicodeobject.c:10783`)",
   "description": "`Objects/unicodeobject.c`: in `replace()` (str.replace), the `srelease`/`release1`/`release2` ownership flags are set on the line *after* the matching `unicode_askind()` pointer assignment. Under OOM `unicode_askind` returns NULL, leaving e.g. `buf1=NULL` while `release1=0`; the `done`/`nothing`/`error` cleanup labels then assert `release1 == (buf1 != PyUnicode_DATA(str1))` (0 == 1) and abort",
   "crash_kind": "abort",
   "sites": ["Objects/unicodeobject.c replace:10783"],

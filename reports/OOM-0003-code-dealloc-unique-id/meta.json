@@ -1,7 +1,7 @@
 {
   "id": "OOM-0003",
   "slug": "code-dealloc-unique-id",
-  "title": "abort on assert(co->_co_unique_id == _Py_INVALID_UNIQUE_ID) in code_dealloc (Objects/codeobject.c) when init_code() fails under MemoryError",
+  "title": "Abort: uninitialized `_co_unique_id` assert in `code_dealloc` (`codeobject.c:2440`)",
   "description": "`Objects/codeobject.c`: `_co_unique_id` is left uninitialized when `init_code()` fails under OOM (it is only assigned after success in `_PyCode_New`), so `code_dealloc`'s free-threaded assert fires on garbage and aborts",
   "crash_kind": "abort",
   "sites": ["Objects/codeobject.c code_dealloc:2440", "Objects/codeobject.c _PyCode_New:747"],

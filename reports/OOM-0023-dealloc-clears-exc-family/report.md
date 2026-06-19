@@ -1,6 +1,8 @@
-# Fatal: `_Py_Dealloc: Deallocator of type 'X' cleared the current exception` for ordinary stdlib instances (`_StoreAction`, `UnknownHandler`/`ProxyHandler`, `LogRecord`) — generic `subtype_dealloc` (`Objects/typeobject.c`) does not preserve the pending exception under OOM
+# Fatal: dealloc clears the in-flight exception in `subtype_dealloc` (`typeobject.c:2719`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*Pure-Python stdlib instances with no `__del__` (`_StoreAction`, `UnknownHandler`/`ProxyHandler`, `LogRecord`) are torn down with a `MemoryError` in flight; `subtype_dealloc`'s slot/dict decref cascade clears `tstate->current_exception` without saving/restoring it, tripping the gh-89373 `_Py_Dealloc` debug invariant.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

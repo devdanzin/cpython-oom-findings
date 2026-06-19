@@ -1,7 +1,7 @@
 {
   "id": "OOM-0016",
   "slug": "interpqueues-queue-clear",
-  "title": "abort on assert(!queue->alive) in _queue_clear (Modules/_interpqueuesmodule.c) when _queues_add() fails under MemoryError in queue_create",
+  "title": "Abort: `assert(!queue->alive)` in `_queue_clear` (`_interpqueuesmodule.c:559`)",
   "description": "`Modules/_interpqueuesmodule.c`: in `queue_create`, when `_queues_add()` fails to allocate its `_queueref` under OOM, the error path calls `_queue_clear()` on the still-alive queue (it skips `_queue_kill_and_wait()`), so `_queue_clear`'s `assert(!queue->alive)` fires and aborts",
   "crash_kind": "abort",
   "sites": ["Modules/_interpqueuesmodule.c _queue_clear:559", "Modules/_interpqueuesmodule.c queue_create:1104"],

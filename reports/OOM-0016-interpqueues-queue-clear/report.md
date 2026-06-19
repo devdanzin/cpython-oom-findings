@@ -1,6 +1,8 @@
-# Abort: `assert(!queue->alive)` in `_queue_clear` (`Modules/_interpqueuesmodule.c`) when `_queues_add()` fails under MemoryError in `queue_create`
+# Abort: `assert(!queue->alive)` in `_queue_clear` (`_interpqueuesmodule.c:559`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*`queue_create`'s OOM error path calls `_queue_clear` on a still-alive queue after `_queues_add()` fails to allocate its `_queueref`, tripping the `assert(!queue->alive)` because the kill step was skipped.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

@@ -1,7 +1,7 @@
 {
   "id": "OOM-0034",
   "slug": "pegen-byte-offset-asutf8-null",
-  "title": "Unchecked PyUnicode_AsUTF8 in the tokenizer column-offset helper — NULL deref in _PyPegen_byte_offset_to_character_offset_line (Parser/pegen.c:33) under OOM",
+  "title": "Segfault: unchecked `PyUnicode_AsUTF8` NULL deref in `pegen.c:33`",
   "description": "Tokenizing a line that contains a non-ASCII character calls _get_col_offsets (Python/Python-tokenize.c) -> _PyPegen_byte_offset_to_character_offset_line(line, ...). That function does `data = PyUnicode_AsUTF8(line)` (pegen.c:29) and then indexes `data[col_offset]` (pegen.c:33) without checking data for NULL. Under allocation failure PyUnicode_AsUTF8 cannot build/cache the UTF-8 form and returns NULL, so data[col_offset] dereferences NULL -> SIGSEGV on all build configurations. The non-ASCII char is required: _get_col_offsets only runs when a token's byte offset differs from its character offset.",
   "crash_kind": "segv",
   "sites": [

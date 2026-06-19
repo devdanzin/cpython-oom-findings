@@ -1,6 +1,8 @@
-# Abort: `assert(release1 == (buf1 != PyUnicode_DATA(str1)))` in `replace` (`Objects/unicodeobject.c`) when a kind-widening allocation fails under MemoryError
+# Abort: stale `release1` flag trips an ownership assert in `replace` (`unicodeobject.c:10783`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*When `unicode_askind()`'s `PyMem_New` fails under OOM, `replace()` leaves `buf1 == NULL` with `release1` still `0`; the cleanup path's `assert(release1 == (buf1 != PyUnicode_DATA(str1)))` then sees `0 == 1` and aborts. Triggered by `s.replace("&", "&amp;")` on a wider-than-ASCII string, as `html.escape()` does.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

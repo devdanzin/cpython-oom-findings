@@ -1,6 +1,8 @@
-# Segfault: `Py_DECREF(NULL)` in `PyContextVar_Set` (`Python/context.c`) when `token_new()` fails under MemoryError
+# Segfault: `Py_DECREF(NULL)` in `PyContextVar_Set` (`context.c:367`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*`PyContextVar_Set` doesn't NULL-check `token_new()`; under OOM the `contextvar_set()` error path then `Py_DECREF`s the NULL token.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

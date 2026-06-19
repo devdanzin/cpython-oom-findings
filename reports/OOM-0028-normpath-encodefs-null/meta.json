@@ -1,7 +1,7 @@
 {
   "id": "OOM-0028",
   "slug": "normpath-encodefs-null",
-  "title": "os._path_normpath(bytes) NULL-derefs under OOM: unchecked PyUnicode_From* result passed to PyUnicode_EncodeFSDefault — Modules/posixmodule.c:6149",
+  "title": "Segfault: NULL deref in `os__path_normpath_impl` (`posixmodule.c:6149`)",
   "description": "os__path_normpath_impl builds `result` with PyUnicode_FromOrdinal/PyUnicode_FromWideChar (either NULL under OOM) and, for a bytes input, re-encodes via Py_SETREF(result, PyUnicode_EncodeFSDefault(result)) without a NULL check; EncodeFSDefault(NULL) -> unicode_encode_utf8(NULL) -> PyUnicode_Check(NULL)->ob_type segfault. Reproduces on all builds.",
   "crash_kind": "segv",
   "sites": ["Modules/posixmodule.c os__path_normpath_impl:6149", "Objects/unicodeobject.c unicode_encode_utf8:5681"],

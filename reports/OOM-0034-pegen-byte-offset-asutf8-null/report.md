@@ -1,6 +1,8 @@
-# Segfault: unchecked `PyUnicode_AsUTF8` in the tokenizer's column-offset helper — NULL dereference in `_PyPegen_byte_offset_to_character_offset_line` (`Parser/pegen.c:33`) under OOM
+# Segfault: unchecked `PyUnicode_AsUTF8` NULL deref in `pegen.c:33`
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*Under OOM, `PyUnicode_AsUTF8(line)` returns NULL but `_PyPegen_byte_offset_to_character_offset_line` never checks it, so `data[col_offset]` dereferences NULL; triggered by tokenizing a line with a non-ASCII character, which routes through `_get_col_offsets`.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

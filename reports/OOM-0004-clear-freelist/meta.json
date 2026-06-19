@@ -1,7 +1,7 @@
 {
   "id": "OOM-0004",
   "slug": "clear-freelist",
-  "title": "Corrupted per-thread object freelist under MemoryError: assert(freelist->size==0||-1) in clear_freelist (Objects/object.c:909), surfacing as use-after-free in free_list_items/PyList_New (free-threaded build)",
+  "title": "Abort/Segfault: corrupted object freelist in `clear_freelist` (`object.c:909`)",
   "description": "`Objects/object.c`: per-PyThreadState object freelist `size` desyncs from its chain under OOM. GC's clear_freelist asserts `size==0||-1` (debug abort); the sibling surface is PyList_New popping a corrupted `lists` node with a dangling ob_item that free_list_items then frees (use-after-free SEGV). Root: PyList_New (listobject.c:248) pops a freelist list before the fallible list_allocate_array, and on OOM Py_DECREF(op) pushes it back, churning the freelist accounting.",
   "crash_kind": "abort",
   "sites": ["Objects/object.c clear_freelist:909", "Objects/listobject.c free_list_items:68", "Objects/listobject.c PyList_New:262"],

@@ -1,6 +1,8 @@
-# Abort: `_Py_NegativeRefcount` at `Include/refcount.h:520` (double-free of `error_line` in `_PyPegen_raise_error_known_location`, `Parser/pegen_errors.c`) when `Py_BuildValue` fails under MemoryError
+# Abort: double-free in `_PyPegen_raise_error_known_location` (`pegen_errors.c:363`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*`Py_BuildValue("(OnnNnn)", ...)` consumes `error_line` via the steal-on-failure `N` format even when it fails under OOM; the `error:` path then `Py_XDECREF`s the freed `error_line` again, driving the refcount negative and tripping `_Py_NegativeRefcount`.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

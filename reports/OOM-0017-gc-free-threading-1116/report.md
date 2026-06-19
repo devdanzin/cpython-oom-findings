@@ -1,6 +1,8 @@
-# Abort: `assert(gc_get_refs(op) >= 0)` "refcount is too small" in `validate_gc_objects` (`Python/gc_free_threading.c:1116`) during finalization GC, after an OOM sweep over `socket.recv_fds` corrupts the deferred refcount of the `array.array` type
+# Abort: negative `gc_refs` ("refcount too small") in `validate_gc_objects` (`gc_free_threading.c:1116`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*An OOM sweep over `socket.recv_fds` (which builds `array.array("i")`) net under-counts the deferred-refcounted `array.array` type via the `Py_DECREF(tp)` in `array_dealloc`'s error path; shutdown GC then drives the type's `gc_refs` below zero and the FT-debug assertion aborts.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

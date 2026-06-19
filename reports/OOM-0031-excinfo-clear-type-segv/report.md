@@ -1,6 +1,8 @@
-# Segfault: `_interpreters.capture_exception` under OOM calls `_PyXI_FreeExcInfo(NULL)` — the unguarded cleanup `_excinfo_clear_type` (`Python/crossinterp.c:1319`) dereferences a NULL `info`
+# Segfault: NULL `info` deref in `_excinfo_clear_type` (`crossinterp.c:1319`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*`_interpreters.capture_exception` doesn't NULL-check `_PyXI_NewExcInfo()`; under OOM that allocation returns NULL and the `finally` block calls the unguarded `_PyXI_FreeExcInfo(NULL)`, whose `_excinfo_clear_type` then dereferences offset 0.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

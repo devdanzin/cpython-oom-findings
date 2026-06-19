@@ -1,7 +1,7 @@
 {
   "id": "OOM-0023",
   "slug": "dealloc-clears-exc-family",
-  "title": "Fatal _Py_Dealloc 'Deallocator of type X cleared the current exception' for ordinary stdlib instances (_StoreAction/UnknownHandler/ProxyHandler/LogRecord) under OOM — generic subtype_dealloc (Objects/typeobject.c)",
+  "title": "Fatal: dealloc clears the in-flight exception in `subtype_dealloc` (`typeobject.c:2719`)",
   "description": "`Objects/typeobject.c` `subtype_dealloc` tears down a pure-Python instance's slots and `__dict__` (decref'ing attribute values) without saving/restoring `tstate->current_exception`. The exception-preserving wrapper exists only in the `__del__` path (`slot_tp_finalize`); types with no `__del__` (`tp_finalize == NULL`) skip it. Under OOM such an instance is freed with a `MemoryError` in flight during frame unwinding, the teardown clears it, and the gh-89373 `_Py_Dealloc` debug invariant fatals. ONE root for the whole non-`Context` family.",
   "crash_kind": "fatal",
   "sites": ["Objects/typeobject.c subtype_dealloc:2719", "Objects/typeobject.c clear_slots/ClearManagedDict/Py_DECREF(dict):2840-2854", "Objects/object.c _Py_Dealloc:3338"],

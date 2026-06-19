@@ -3,9 +3,11 @@
 
 Source of truth is the per-report meta.json. Run after any report changes or
 after publishing gists. Mirrors python/cpython#146102: a table of
-Report | Description | Builds | Status, grouped by crash kind.
+Report | Title | Crashing builds | Status, grouped by crash kind.
 """
-import json, pathlib, datetime
+import json
+import pathlib
+import datetime
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 REPORTS = ROOT / "reports"
@@ -60,12 +62,13 @@ def main():
         if not rows:
             continue
         out.append(f"\n## {KIND_TITLE[kind]}\n")
-        out.append("| Report | Description | Builds | Status |")
+        out.append("| Report | Title | Crashing builds | Status |")
         out.append("|---|---|---|---|")
         for d in rows:
             builds = ",".join(k for k, v in d.get("matrix", {}).items()
                               if v not in (None, "n/a", "no-repro"))
-            out.append(f"| {report_link(d)} | {d['description']} | {builds} | {status_cell(d)} |")
+            # the concise title (== the report's H1); the gist holds the full detail
+            out.append(f"| {report_link(d)} | {d.get('title') or d['description']} | {builds} | {status_cell(d)} |")
 
     (ROOT / "INDEX.md").write_text("\n".join(out) + "\n")
     print(f"wrote INDEX.md ({len(metas)} reports)")

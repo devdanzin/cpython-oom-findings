@@ -1,7 +1,7 @@
 {
   "id": "OOM-0018",
   "slug": "dictobject-205",
-  "title": "abort on assert(_Py_IsOwnedByCurrentThread(mp) || IS_DICT_SHARED(mp)) in set_keys (Objects/dictobject.c:205) from PyObject_ClearManagedDict's OOM-recovery branch",
+  "title": "Abort: ownership assert in `set_keys` (`dictobject.c:205`)",
   "description": "`Objects/dictobject.c`: when `detach_dict_from_object()` fails under OOM, `PyObject_ClearManagedDict`'s recovery branch calls `set_keys(dict, Py_EMPTY_KEYS)` (L7896) without first marking the dict shared. The assert fires whenever the dict being cleared is neither owned-by-current-thread nor shared -- deterministically when the cyclic GC clears such an object under OOM (shutdown GC), and also via a cross-thread dealloc (biased refcounting).",
   "crash_kind": "abort",
   "sites": ["Objects/dictobject.c set_keys:205", "Objects/dictobject.c PyObject_ClearManagedDict:7896"],

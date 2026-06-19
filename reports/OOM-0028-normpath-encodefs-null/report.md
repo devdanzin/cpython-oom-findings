@@ -1,6 +1,8 @@
-# Segfault: `os._path_normpath(bytes)` dereferences a NULL string under OOM — `os__path_normpath_impl` (`Modules/posixmodule.c:6149`) passes an unchecked `PyUnicode_From*` result to `PyUnicode_EncodeFSDefault`
+# Segfault: NULL deref in `os__path_normpath_impl` (`posixmodule.c:6149`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*`os__path_normpath_impl` doesn't NULL-check the `PyUnicode_From*` result; on a `bytes` path under OOM it feeds NULL to `PyUnicode_EncodeFSDefault`, which dereferences it in `unicode_encode_utf8` (`unicodeobject.c:5681`).*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 

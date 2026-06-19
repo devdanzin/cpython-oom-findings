@@ -1,7 +1,7 @@
 {
   "id": "OOM-0014",
   "slug": "interpchannels-3487",
-  "title": "abort/segfault in channelsmod__channel_id (Modules/_interpchannelsmodule.c) when _get_current_module() returns NULL under MemoryError",
+  "title": "Abort/Segfault: unchecked NULL in `channelsmod__channel_id` (`_interpchannelsmodule.c:3487`)",
   "description": "`Modules/_interpchannelsmodule.c`: `channelsmod__channel_id` (`_interpchannels._channel_id`) calls `get_module_from_owned_type` -> `_get_current_module`, which can return `NULL` under OOM, then does `assert(mod == self)` and `Py_DECREF(mod)` without a NULL check. Debug builds abort on the assert; release builds segfault on `Py_DECREF(NULL)`.",
   "crash_kind": "abort",
   "sites": ["Modules/_interpchannelsmodule.c channelsmod__channel_id:3487", "Modules/_interpchannelsmodule.c channelsmod__channel_id:3488", "Modules/_interpchannelsmodule.c _get_current_module:151"],

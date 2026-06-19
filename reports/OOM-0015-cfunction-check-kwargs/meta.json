@@ -1,7 +1,7 @@
 {
   "id": "OOM-0015",
   "slug": "cfunction-check-kwargs",
-  "title": "abort on assert(!_PyErr_Occurred(tstate)) in cfunction_check_kwargs (Objects/methodobject.c:409) because sys._baserepl() returns None with a MemoryError still pending under OOM",
+  "title": "Abort: stale exception in `cfunction_check_kwargs` (`methodobject.c:409`)",
   "description": "`sys._baserepl` (`Python/sysmodule.c:2620`) calls `PyRun_AnyFileExFlags`, ignores its return value, and unconditionally `Py_RETURN_NONE`s. Under OOM the REPL/parse machinery raises `MemoryError` that the interactive loop does not reliably clear, so `_baserepl` returns a non-NULL `None` with an exception still live; the next NOARGS `sys` builtin then trips the debug `assert(!_PyErr_Occurred(tstate))` in `cfunction_check_kwargs` and aborts.",
   "crash_kind": "abort",
   "sites": ["Objects/methodobject.c cfunction_check_kwargs:409", "Python/sysmodule.c sys__baserepl_impl:2624"],

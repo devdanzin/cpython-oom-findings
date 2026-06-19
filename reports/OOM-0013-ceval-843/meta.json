@@ -1,7 +1,7 @@
 {
   "id": "OOM-0013",
   "slug": "ceval-843",
-  "title": "abort on assert((res != NULL) ^ (PyErr_Occurred() != NULL)) in _Py_BuiltinCallFastWithKeywords_StackRef (Python/ceval.c) when a builtin (compile) breaks the return/error contract under MemoryError",
+  "title": "Abort: builtin breaks result/error contract in `_Py_BuiltinCallFastWithKeywords_StackRef` (`ceval.c:843`)",
   "description": "`Python/ceval.c:843`: the specialized `CALL_BUILTIN_FAST_WITH_KEYWORDS` dispatch asserts `(res != NULL) ^ (PyErr_Occurred() != NULL)` after calling a `METH_FASTCALL|METH_KEYWORDS` builtin. Under OOM the builtin `compile()` (via `timeit.Timer.__init__`) returns NULL without a surviving exception, breaking the xor and aborting. The assert is correct; the defect is the builtin's OOM error handling.",
   "crash_kind": "abort",
   "sites": ["Python/ceval.c _Py_BuiltinCallFastWithKeywords_StackRef:843", "Objects/call.c _Py_CheckFunctionResult:43 (unspecialized variant)"],

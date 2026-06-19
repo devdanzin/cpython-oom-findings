@@ -1,7 +1,7 @@
 {
   "id": "OOM-0022",
   "slug": "checkslotresult",
-  "title": "fatal _Py_CheckSlotResult 'Slot __delitem__ of type dict succeeded with an exception set' in reload_singlephase_extension (Python/import.c) when _modules_by_index_set fails under MemoryError",
+  "title": "Fatal: stale `MemoryError` trips `_Py_CheckSlotResult` in `reload_singlephase_extension` (`import.c:2011`)",
   "description": "`Python/import.c`: in `reload_singlephase_extension`, when `_modules_by_index_set()` (L2010) fails under OOM (its `PyList_New`/`PyList_Append` raises `MemoryError`), the cleanup `PyMapping_DelItem(modules, info->name)` (L2011) deletes from `sys.modules` with the `MemoryError` still pending; the dict `__delitem__` slot *succeeds*, so the debug `assert(_Py_CheckSlotResult(...))` in `PyObject_DelItem` (`Objects/abstract.c:280`) fires the fatal 'slot succeeded with an exception set' invariant and aborts",
   "crash_kind": "fatal",
   "sites": ["Objects/call.c _Py_CheckSlotResult:80", "Objects/abstract.c PyObject_DelItem:280", "Python/import.c reload_singlephase_extension:2011"],

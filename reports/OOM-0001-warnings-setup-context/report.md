@@ -1,6 +1,8 @@
-# Segfault: `Py_DECREF(NULL)` in `setup_context`/`do_warn` (`_warnings.c`) when emitting a warning under MemoryError
+# Segfault: `Py_DECREF` of a NULL `filename` in `do_warn` (`_warnings.c:1139`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*`setup_context()` doesn't NULL-check `PyUnicode_FromString("<sys>")`; under OOM the resulting NULL `filename` is later `Py_DECREF`'d by `do_warn` (or by `setup_context`'s own `handle_error:` label, which uses `Py_DECREF` not `Py_XDECREF`).*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 ## Crash report
 
 Emitting a warning while allocations are failing segfaults on a `Py_DECREF` of a NULL `filename`. `setup_context()` does not NULL-check `PyUnicode_FromString("<sys>")`, and the resulting NULL is later decref'd either by `do_warn()` (success path) or by `setup_context()`'s own `handle_error:` label (which uses `Py_DECREF`, not `Py_XDECREF`).

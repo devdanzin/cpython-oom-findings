@@ -1,6 +1,8 @@
-# Fatal: `_Py_Dealloc: Deallocator of type 'Context' cleared the current exception` — `context_tp_dealloc` (`Python/context.c`) does not preserve the pending exception under OOM
+# Fatal: `context_tp_dealloc` clears the pending exception (`context.c:535`)
 
-_AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
+*Under OOM a `Context` is freed with an in-flight `MemoryError`; `context_tp_dealloc` runs its `context_tp_clear` decref cascade without saving/restoring `tstate->current_exception`, clearing it and tripping the gh-89373 `_Py_Dealloc` invariant.*
+
+_AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
 ## Crash report
 
