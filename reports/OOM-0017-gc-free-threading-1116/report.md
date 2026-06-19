@@ -10,27 +10,31 @@ A dense OOM sweep that repeatedly drives `socket.recv_fds()` (which does `import
 
 ## Reproducer
 
-The crash is sensitive to allocation alignment, so the reproducer keeps the fuzzer boilerplate (to fix the allocation-count baseline) and reduces the fuzz body to a single OOM sweep over `socket.recv_fds`. See `repro.py`. Core of it:
+Minimal, stdlib-only (shrinkray-reduced from the socket fuzz vehicle). Requires a
+free-threaded debug build (`PYTHON_GIL=0`); reliable (~75%/run, aborts within a couple of
+runs). See `repro.py`:
 
 ```python
-_OOM_MAX_START = 1000
-def oom_call(func, *args, **kwargs):
-    for _start in range(_OOM_MAX_START):
-        _set_nomemory(_start, 0)          # fail every allocation from #_start
-        try:
-            try:
-                func(*args, **kwargs)
-            finally:
-                _remove_mem_hooks()
-        except MemoryError:
-            pass
+import socket
+from _testcapi import set_nomemory, remove_mem_hooks
 
-# socket.recv_fds -> `import array; array.array("i")` -> recvmsg, under OOM
-oom_call(socket.recv_fds, b"\x3A\x9A\xC7\x40\x80\xA6\xFB", -42.65,
-         tuple[weird_classes['weird_object']], '/etc/machine-id')
+for start in range(259):
+    set_nomemory(start)
+    try:
+        try:
+            socket.recv_fds(0, 0, 0)   # internally: import array; array.array("i")
+        finally:
+            remove_mem_hooks()
+    except:
+        pass
 ```
 
-A pure stdlib `import array` / `array.array("i")` sweep in isolation does *not* reproduce; the boilerplate's allocation baseline is load-bearing. Hence minimization is **partial** (vehicle-derived).
+The abort fires during interpreter *shutdown* GC, after the loop completes. shrinkray
+**disproved** the earlier belief that the fuzzer boilerplate's allocation baseline was
+load-bearing: the bare `socket.recv_fds(0, 0, 0)` sweep reproduces on its own (a pure
+`array.array("i")` sweep still does not — the corrupting path is specifically `recv_fds`'s
+construct-array-then-fail under OOM). Minimization **complete**; the full vehicle is
+preserved as `vehicle_source.py`.
 
 ## Backtrace
 
