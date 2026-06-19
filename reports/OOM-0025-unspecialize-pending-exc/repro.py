@@ -1,29 +1,35 @@
-"""OOM-0025: LOAD_GLOBAL specialization leaves a MemoryError pending -> unspecialize
-asserts. Python/specialize.c:378 `assert(!PyErr_Occurred())`.
+"""OOM-0025 minimal reproducer (stdlib only) — reduced from the fuzzer vehicle with shrinkray.
 
-PARTIAL minimization: this exercises the LOAD_GLOBAL specialize -> keys-version ->
-backoff path under OOM, but does not deterministically hit the exact window. The
-fuzzing vehicle (python-7/sys-assertion) reproduces reliably. Needs a debug build
-(the assert is compiled out under NDEBUG).
+`unspecialize` opens with `assert(!PyErr_Occurred())`, on the theory that inline-cache
+specialization is exception-neutral. Under OOM that invariant breaks: a hot `LOAD_GLOBAL`
+is specialized while memory allocation is failing, the keys-version helper leaves a
+`MemoryError` pending, and the `goto fail -> unspecialize(instr)` backoff path then trips
+the assert (Python/specialize.c:378). Debug-only (the assert is compiled out under NDEBUG).
+
+Two elements shrinkray isolated as load-bearing (each verified necessary — see report.md):
+  * the call form is `func(*args)` (a specialized CALL), NOT a plain `func()`;
+  * the `finally:` body is a bare *undefined* global (`undefined_name`), which compiles to
+    a `LOAD_GLOBAL` — the very instruction specialized at the crash — and forces the
+    not-found lookup that computes both the globals and builtins keys-versions (the
+    allocation that fails under OOM). A *defined* name short-circuits and does not reproduce.
+
+Needs a debug build (PYTHON_GIL=1). Deterministic: aborts on every run (20/20 observed).
 """
-from _testcapi import set_nomemory, remove_mem_hooks
+from _testcapi import set_nomemory
+import sys
 
-g = {}
-exec(compile("def f():\n    return len(x)\n", "<f>", "exec"), g)
-f = g["f"]
-g["x"] = "abc"
 
-for _ in range(300):            # warm up adaptive specialization of the LOAD_GLOBALs
-    f()
-
-for start in range(1, 6000):
-    set_nomemory(start, 0)
-    try:
+def oom_call(func, *args):
+    for start in range(40):
+        set_nomemory(start)
         try:
-            g["k%d" % (start & 15)] = start   # churn globals -> keys-version realloc under OOM
-            for _ in range(40):
-                f()
-        finally:
-            remove_mem_hooks()
-    except BaseException:
-        pass
+            try:
+                func(*args)
+            finally:
+                undefined_name  # LOAD_GLOBAL of an undefined name: pending exc + specializable
+        except:
+            pass
+
+
+oom_call(sys._baserepl)
+print("done, no crash")
