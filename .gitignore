@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+
+# fusil OOM repro sources drop arg-named artifact files when run with this repo as CWD
+0.[0-9]*
+weird_*
+*.crash.out
