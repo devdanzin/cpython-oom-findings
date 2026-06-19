@@ -5,3 +5,5 @@ __pycache__/
 0.[0-9]*
 weird_*
 *.crash.out
+.shrinkray/
+*.bak
