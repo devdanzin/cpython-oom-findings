@@ -1,6 +1,4 @@
-# Title
-
-Segfault / negative-refcount: a module import under OOM over-decrefs a `sys.path` entry — `PyType_IsSubtype` (`Objects/typeobject.c:2931`) reads a freed entry's garbage type, or `list_ass_slice` (`Objects/listobject.c:1030`) decrefs it again
+# Segfault / negative-refcount: a module import under OOM over-decrefs a `sys.path` entry — `PyType_IsSubtype` (`Objects/typeobject.c:2931`) reads a freed entry's garbage type, or `list_ass_slice` (`Objects/listobject.c:1030`) decrefs it again
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

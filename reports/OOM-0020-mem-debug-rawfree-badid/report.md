@@ -1,6 +1,4 @@
-# Title
-
-Fatal error: `_PyMem_DebugRawFree: bad ID` in `free_threadstate` (`Python/pystate.c`) when sub-interpreter thread-state setup fails under MemoryError
+# Fatal error: `_PyMem_DebugRawFree: bad ID` in `free_threadstate` (`Python/pystate.c`) when sub-interpreter thread-state setup fails under MemoryError
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

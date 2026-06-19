@@ -1,6 +1,4 @@
-# Title
-
-Abort/Segfault: corrupted per-thread object freelist under MemoryError — `assert(freelist->size == 0 || freelist->size == -1)` in `clear_freelist` (`Objects/object.c:909`), surfacing as a use-after-free `free_list_items` in `PyList_New` (free-threaded build)
+# Abort/Segfault: corrupted per-thread object freelist under MemoryError — `assert(freelist->size == 0 || freelist->size == -1)` in `clear_freelist` (`Objects/object.c:909`), surfacing as a use-after-free `free_list_items` in `PyList_New` (free-threaded build)
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

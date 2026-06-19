@@ -1,6 +1,4 @@
-# Title
-
-Fatal: `_Py_CheckFunctionResult: a function returned NULL without setting an exception` for `_symtable.symtable()` (`Objects/call.c`) when the pegen parser's error-recovery pass loses a `MemoryError` under OOM
+# Fatal: `_Py_CheckFunctionResult: a function returned NULL without setting an exception` for `_symtable.symtable()` (`Objects/call.c`) when the pegen parser's error-recovery pass loses a `MemoryError` under OOM
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

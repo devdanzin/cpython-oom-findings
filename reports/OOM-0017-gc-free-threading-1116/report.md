@@ -1,6 +1,4 @@
-# Title
-
-Abort: `assert(gc_get_refs(op) >= 0)` "refcount is too small" in `validate_gc_objects` (`Python/gc_free_threading.c:1116`) during finalization GC, after an OOM sweep over `socket.recv_fds` corrupts the deferred refcount of the `array.array` type
+# Abort: `assert(gc_get_refs(op) >= 0)` "refcount is too small" in `validate_gc_objects` (`Python/gc_free_threading.c:1116`) during finalization GC, after an OOM sweep over `socket.recv_fds` corrupts the deferred refcount of the `array.array` type
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

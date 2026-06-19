@@ -1,6 +1,4 @@
-# Title
-
-Abort: `assert(!PyErr_Occurred())` in `unspecialize` (`Python/specialize.c:378`) — LOAD_GLOBAL specialization's de-opt backoff runs with a *pre-existing* `MemoryError` pending under OOM
+# Abort: `assert(!PyErr_Occurred())` in `unspecialize` (`Python/specialize.c:378`) — LOAD_GLOBAL specialization's de-opt backoff runs with a *pre-existing* `MemoryError` pending under OOM
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

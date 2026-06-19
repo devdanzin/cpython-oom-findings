@@ -1,6 +1,4 @@
-# Title
-
-Abort: `_interpchannels.create()` desyncs its integer error code from the exception state under OOM — both `handle_channel_error` asserts fire (`Modules/_interpchannelsmodule.c:398` / `:443`)
+# Abort: `_interpchannels.create()` desyncs its integer error code from the exception state under OOM — both `handle_channel_error` asserts fire (`Modules/_interpchannelsmodule.c:398` / `:443`)
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

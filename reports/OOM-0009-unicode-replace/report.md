@@ -1,6 +1,4 @@
-# Title
-
-Abort: `assert(release1 == (buf1 != PyUnicode_DATA(str1)))` in `replace` (`Objects/unicodeobject.c`) when a kind-widening allocation fails under MemoryError
+# Abort: `assert(release1 == (buf1 != PyUnicode_DATA(str1)))` in `replace` (`Objects/unicodeobject.c`) when a kind-widening allocation fails under MemoryError
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

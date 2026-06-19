@@ -1,6 +1,4 @@
-# Title
-
-Fatal: `_Py_Dealloc: Deallocator of type 'X' cleared the current exception` for ordinary stdlib instances (`_StoreAction`, `UnknownHandler`/`ProxyHandler`, `LogRecord`) — generic `subtype_dealloc` (`Objects/typeobject.c`) does not preserve the pending exception under OOM
+# Fatal: `_Py_Dealloc: Deallocator of type 'X' cleared the current exception` for ordinary stdlib instances (`_StoreAction`, `UnknownHandler`/`ProxyHandler`, `LogRecord`) — generic `subtype_dealloc` (`Objects/typeobject.c`) does not preserve the pending exception under OOM
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

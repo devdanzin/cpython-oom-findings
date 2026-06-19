@@ -22,21 +22,32 @@ import argparse
 import json
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 REPORTS = ROOT / "reports"
 GIST_FILES = ("report.md", "repro.py", "backtrace.txt")
 
 
-def gh_gist_create(files, desc, dry):
-    cmd = ["gh", "gist", "create", "--public", "--desc", desc] + [str(f) for f in files]
+def gh_gist_create(oid, files, desc, dry):
+    # gh uses each file's basename as the gist filename; copy to <id>-<name> in a tempdir
+    # first so a downloaded gist file is self-identifying (OOM-0002-report.md, ...).
+    names = [f"{oid}-{f.name}" for f in files]
     if dry:
         print("    would run:", " ".join(["gh", "gist", "create", "--public",
-                                          "--desc", repr(desc), *[f.name for f in files]]))
+                                          "--desc", repr(desc), *names]))
         return None
-    out = subprocess.run(cmd, capture_output=True, text=True)
+    with tempfile.TemporaryDirectory() as td:
+        copies = []
+        for f, name in zip(files, names):
+            dst = pathlib.Path(td) / name
+            shutil.copy(f, dst)
+            copies.append(str(dst))
+        cmd = ["gh", "gist", "create", "--public", "--desc", desc] + copies
+        out = subprocess.run(cmd, capture_output=True, text=True)
     if out.returncode != 0:
         print("    ERROR:", out.stderr.strip(), file=sys.stderr)
         return None
@@ -85,7 +96,7 @@ def main():
             continue
         desc = f"{oid}: {d.get('title', '')}".strip()[:250]
         print(f"{oid}: {desc[:78]}")
-        url = gh_gist_create(files, desc, args.dry_run)
+        url = gh_gist_create(oid, files, desc, args.dry_run)
         if args.dry_run:
             would += 1
             continue

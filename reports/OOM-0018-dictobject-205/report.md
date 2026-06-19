@@ -1,6 +1,4 @@
-# Title
-
-Abort: `assert(_Py_IsOwnedByCurrentThread(mp) || IS_DICT_SHARED(mp))` in `set_keys` (`Objects/dictobject.c:205`) from `PyObject_ClearManagedDict`'s OOM-recovery branch under MemoryError
+# Abort: `assert(_Py_IsOwnedByCurrentThread(mp) || IS_DICT_SHARED(mp))` in `set_keys` (`Objects/dictobject.c:205`) from `PyObject_ClearManagedDict`'s OOM-recovery branch under MemoryError
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

@@ -1,6 +1,4 @@
-# Title
-
-Abort: a warning emitted under memory pressure enters `warn_explicit` message-normalization with a pending exception — debug assert `!_PyErr_Occurred(tstate)` in `type_call` (`Objects/typeobject.c:2441`) / `PyObject_Str` (`Objects/object.c:818`)
+# Abort: a warning emitted under memory pressure enters `warn_explicit` message-normalization with a pending exception — debug assert `!_PyErr_Occurred(tstate)` in `type_call` (`Objects/typeobject.c:2441`) / `PyObject_Str` (`Objects/object.c:818`)
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

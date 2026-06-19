@@ -7,7 +7,7 @@ Crash:      SIGSEGV in Py_DECREF(tok) with tok == NULL, Python/context.c:367.
 Requires:   a build exposing _testcapi.set_nomemory (debug/test builds).
 
 Run:
-    python repro_contextvar_set_oom_minimal.py
+    python repro.py
     # exits via SIGSEGV (rc 139, or rc 1 under ASan)
 
 Backtrace (gdb):

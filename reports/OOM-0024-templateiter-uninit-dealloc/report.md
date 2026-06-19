@@ -1,6 +1,4 @@
-# Title
-
-Segfault: `iter()` on a t-string `Template` frees a partially-initialized iterator under OOM — `template_iter` (`Objects/templateobject.c`) leaves `stringsiter`/`interpolationsiter` uninitialized before the error-path `Py_DECREF`
+# Segfault: `iter()` on a t-string `Template` frees a partially-initialized iterator under OOM — `template_iter` (`Objects/templateobject.c`) leaves `stringsiter`/`interpolationsiter` uninitialized before the error-path `Py_DECREF`
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

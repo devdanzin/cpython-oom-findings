@@ -1,6 +1,4 @@
-# Title
-
-Abort: `assert(!PyErr_Occurred())` in `_PyType_LookupStackRefAndVersion` (`Objects/typeobject.c:6343`) when a prior `LOAD_ATTR` left a `MemoryError` pending under OOM
+# Abort: `assert(!PyErr_Occurred())` in `_PyType_LookupStackRefAndVersion` (`Objects/typeobject.c:6343`) when a prior `LOAD_ATTR` left a `MemoryError` pending under OOM
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

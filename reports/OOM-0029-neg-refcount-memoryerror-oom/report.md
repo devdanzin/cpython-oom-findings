@@ -1,6 +1,4 @@
-# Title
-
-Abort: negative refcount on a `MemoryError` under OOM — an OOM error path over-decrefs a `MemoryError`, tripping `_Py_NegativeRefcount` later during a dealloc cascade
+# Abort: negative refcount on a `MemoryError` under OOM — an OOM error path over-decrefs a `MemoryError`, tripping `_Py_NegativeRefcount` later during a dealloc cascade
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 
