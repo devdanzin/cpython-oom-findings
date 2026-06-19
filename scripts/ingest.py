@@ -50,6 +50,27 @@ GENERIC_FATAL = ("_PyObject_AssertFailed", "_Py_NegativeRefcount")
 SYM = re.compile(r', at ([A-Za-z_]\w+)\+0x')
 SKIP = re.compile(r'^(___?interceptor\w*|__sanitizer\w*|__asan\w*|_Py_DumpStack|faulthandler\w*|_PyEval_EvalFrameDefault|_PyEval_Vector|PyEval_EvalCode|Py_RunMain|Py_BytesMain|pymain_\w+|_start|__libc_start\w*)$')
 FRAME = re.compile(r'([A-Za-z_]\w+)@([\w./+-]+\.(?:c|h)):(\d+)')
+# ASan/sanitizer frame already in stdout: "#5 0x.. in func /abs/.../Python/foo.c:123:4".
+# Lets us read the real crash site off the crash's OWN backtrace -- no gdb re-run, so it's
+# deterministic (a re-run can miss under a fresh hash seed / thread timing).
+ASAN_FRAME = re.compile(r'#\d+\s+0x[0-9a-fA-F]+\s+in\s+(\w+)\s+\S*?'
+                        r'/((?:Objects|Python|Modules|Include|Parser)/[\w./+-]+\.(?:c|h)):(\d+)')
+NATIVE_SKIP = re.compile(r'^(fatal_error(_exit)?|_Py_FatalError\w*|_PyObject_AssertFailed'
+                         r'|_Py_NegativeRefcount|_Py_DumpStack|faulthandler\w*'
+                         r'|_Py_DumpExtensionModules)$')
+# inlined refcount/atomic helpers (these headers) mask the real .c caller of a
+# "DECREF a freed object" segv -- skip so the site is e.g. do_warn, not Py_DECREF.
+NATIVE_SKIP_FILE = re.compile(r'(?:^|/)(?:refcount|pyatomic\w*|object)\.h$')
+
+
+def extract_native_sites(text):
+    """Real CPython frames from a live ASan backtrace in stdout, innermost first."""
+    out = []
+    for m in ASAN_FRAME.finditer(text):
+        f = nf(m.group(2))
+        if not NATIVE_SKIP.match(m.group(1)) and not NATIVE_SKIP_FILE.search(f):
+            out.append("%s@%s:%s" % (m.group(1), f, m.group(3)))
+    return out
 
 
 def nf(f):
@@ -193,7 +214,10 @@ def main():
 
         chain = []
         if has_segv or generic or not asserts:
-            chain = resolve_chain(d, label, cache)
+            # Prefer the native backtrace already in stdout (ASan/debug build) -- the actual
+            # fault, deterministic, no re-run. Fall back to the cache / gdb re-run only when
+            # stdout carries no parseable native frames.
+            chain = extract_native_sites(text) or resolve_chain(d, label, cache)
             # Match only the resolved SITE (chain[0], innermost real frame). Deeper frames
             # are shared deallocator/eval plumbing that would over-match many bugs.
             if chain:
