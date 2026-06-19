@@ -9,11 +9,9 @@ OOM-0001	segv	line	Python/_warnings.c:1184
 OOM-0001	segv	line	Python/clinic/_warnings.c.h:161
 OOM-0002	segv	func	Python/context.c:PyContextVar_Set
 OOM-0002	segv	line	Python/context.c:367
-OOM-0003	abort	func	Include/refcount.h:Py_DECREF
 OOM-0003	abort	func	Objects/codeobject.c:_PyCode_New
 OOM-0003	abort	func	Objects/codeobject.c:code_dealloc
 OOM-0003	abort	func	Objects/object.c:_Py_Dealloc
-OOM-0003	abort	line	Include/refcount.h:359
 OOM-0003	abort	line	Objects/codeobject.c:2440
 OOM-0003	abort	line	Objects/codeobject.c:747
 OOM-0003	abort	line	Objects/object.c:3319
@@ -33,7 +31,6 @@ OOM-0005	abort	func	Python/ceval.c:clear_thread_frame
 OOM-0005	abort	func	Python/frame.c:_PyFrame_ClearExceptCode
 OOM-0005	abort	func	Python/frame.c:_PyFrame_ClearLocals
 OOM-0005	abort	line	Include/internal/pycore_stackref.h:726
-OOM-0005	abort	line	Objects/object.c:275
 OOM-0005	abort	line	Python/ceval.c:1954
 OOM-0005	abort	line	Python/frame.c:101
 OOM-0005	abort	line	Python/frame.c:126
@@ -184,17 +181,9 @@ OOM-0018	abort	line	Objects/dictobject.c:205
 OOM-0018	abort	line	Objects/dictobject.c:7896
 OOM-0018	abort	line	Objects/object.c:3319
 OOM-0018	abort	line	Objects/typeobject.c:2847
-OOM-0019	abort	assert	Include/refcount.h:failed: object has negative ref count
-OOM-0019	abort	func	Include/refcount.h:Py_DECREF
-OOM-0019	abort	func	Include/refcount.h:Py_XDECREF
-OOM-0019	abort	func	Include/refcount.h:_Py_NegativeRefcount
-OOM-0019	abort	func	Objects/object.c:_Py_NegativeRefcount
 OOM-0019	abort	func	Parser/pegen.h:RAISE_ERROR_KNOWN_LOCATION
 OOM-0019	abort	func	Parser/pegen_errors.c:_PyPegen_raise_error_known_location
 OOM-0019	abort	func	Parser/pegen_errors.c:_Pypegen_set_syntax_error
-OOM-0019	abort	line	Include/refcount.h:354
-OOM-0019	abort	line	Include/refcount.h:520
-OOM-0019	abort	line	Objects/object.c:275
 OOM-0019	abort	line	Parser/pegen.h:196
 OOM-0019	abort	line	Parser/pegen_errors.c:346
 OOM-0019	abort	line	Parser/pegen_errors.c:363
@@ -251,12 +240,10 @@ OOM-0023	fatal	line	Objects/typeobject.c:2840
 OOM-0023	fatal	line	Python/ceval.c:1954
 OOM-0023	fatal	line	Python/frame.c:101
 OOM-0023	fatal	msg	_Py_Dealloc: Deallocator of type '_StoreAction' cleared the 
-OOM-0024	segv	func	Include/refcount.h:Py_DECREF
 OOM-0024	segv	func	Objects/object.c:_Py_Dealloc
 OOM-0024	segv	func	Objects/templateobject.c:template_iter
 OOM-0024	segv	func	Objects/templateobject.c:templateiter_clear
 OOM-0024	segv	func	Objects/templateobject.c:templateiter_dealloc
-OOM-0024	segv	line	Include/refcount.h:345
 OOM-0024	segv	line	Objects/object.c:3319
 OOM-0024	segv	line	Objects/templateobject.c:232
 OOM-0024	segv	line	Objects/templateobject.c:45
@@ -297,16 +284,11 @@ OOM-0028	segv	line	Modules/clinic/posixmodule.c.h:2701
 OOM-0028	segv	line	Modules/posixmodule.c:6149
 OOM-0028	segv	line	Objects/unicodeobject.c:5681
 OOM-0028	segv	line	Python/ceval.c:841
-OOM-0029	abort	assert	Include/refcount.h:failed: object has negative ref count
-OOM-0029	abort	func	Include/refcount.h:_Py_NegativeRefcount
 OOM-0029	abort	func	Objects/listobject.c:list_dealloc
 OOM-0029	abort	func	Objects/object.c:_Py_Dealloc
-OOM-0029	abort	func	Objects/object.c:_Py_NegativeRefcount
 OOM-0029	abort	func	Objects/tupleobject.c:tuple_dealloc
 OOM-0029	abort	func	Objects/typeobject.c:subtype_dealloc
-OOM-0029	abort	line	Include/refcount.h:520
 OOM-0029	abort	line	Objects/listobject.c:567
-OOM-0029	abort	line	Objects/object.c:275
 OOM-0029	abort	line	Objects/object.c:3319
 OOM-0029	abort	line	Objects/tupleobject.c:277
 OOM-0029	abort	line	Objects/typeobject.c:2876
