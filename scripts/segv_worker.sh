@@ -11,7 +11,7 @@ SRC="$DIR/source.py"
 LABEL="$(basename "$(dirname "$DIR")")/$(basename "$DIR")"
 PY=~/projects/3.16_ft_debug_asan_cpython/python
 BT="$(mktemp)"
-ASAN_OPTIONS=detect_leaks=0:abort_on_error=0 timeout 180 gdb -q -batch \
+ASAN_OPTIONS=detect_leaks=0:abort_on_error=0 timeout "${WORKER_TIMEOUT:-180}" gdb -q -batch \
   -ex 'set pagination off' -ex 'set print frame-arguments none' \
   -ex 'set debuginfod enabled off' -ex run -ex 'bt 30' \
   --args "$PY" "$SRC" 2>&1 | grep -E 'Program received signal|^#[0-9]' \
