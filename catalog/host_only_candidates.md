@@ -36,6 +36,15 @@ to promote one to a full `OOM-####` report. OOM crash sites are binary/timing-sp
   finalizer re-entering eval mid-dealloc while `stackpointer` is unset — is eliminated by
   the new validity tracking). Not minting an OOM-#### report. To confirm decisively, build
   the host commit `65afcdd8dfb` with clang-22 (isolating commit from compiler) and re-run.
+- **Recurrence (2026-06-19):** a fresh host run reproduced HOC-1 **3 more times** in one
+  batch (`~/crashers/host_crashers/concurrent_interpreters-assertion-sigabrt-oomNEW{,-2,-4}`),
+  each byte-identical: same `ceval.c:1216` assert, same `concurrent.interpreters.list_all()`
+  trigger (Python frame `concurrent/interpreters/__init__.py:71`), same C-stack
+  (`_PyList_AppendTakeRefListResize -> _Py_Dealloc -> PyObject_CallFinalizerFromDealloc ->
+  PyObject_CallOneArg -> _PyEval_EvalFrameDefault`), host binary still the pre-`ad1513a263b`
+  build. So this is a **reliably reproducible host crash**, not a one-off — exactly what
+  would let the decisive confirmation build (above) settle the "fixed upstream" question.
+  Catalog ingest of those 6 host dirs: 3 -> HOC-1 (NEW, uncataloged), 3 -> OOM-0030 (known).
 - **General lesson:** when an OOM crasher doesn't reproduce on a newer build, diff the
   commit range first — a relevant `main` commit may have shifted/fixed it. This
   build-sensitivity is real and will bite anyone verifying OOM fixes.
