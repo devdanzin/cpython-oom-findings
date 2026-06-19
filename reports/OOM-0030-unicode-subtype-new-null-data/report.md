@@ -1,6 +1,4 @@
-# Title
-
-Abort: `str` subclass instantiation under OOM frees a unicode with NULL data — `unicode_subtype_new` (`Objects/unicodeobject.c`) `Py_DECREF`s a half-built `self` whose data pointer is NULL
+# Abort: `str` subclass instantiation under OOM frees a unicode with NULL data — `unicode_subtype_new` (`Objects/unicodeobject.c`) `Py_DECREF`s a half-built `self` whose data pointer is NULL
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

@@ -1,6 +1,4 @@
-# Title
-
-Abort: `assert((res != NULL) ^ (PyErr_Occurred() != NULL))` in `_Py_BuiltinCallFastWithKeywords_StackRef` (`Python/ceval.c`) when a builtin (`compile`) breaks the return/error contract under MemoryError
+# Abort: `assert((res != NULL) ^ (PyErr_Occurred() != NULL))` in `_Py_BuiltinCallFastWithKeywords_StackRef` (`Python/ceval.c`) when a builtin (`compile`) breaks the return/error contract under MemoryError
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

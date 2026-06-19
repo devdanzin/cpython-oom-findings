@@ -1,6 +1,4 @@
-# Title
-
-Abort/Segfault: `_PyObject_GC_UNTRACK` assert in `dictiter_dealloc` (`Objects/dictobject.c`) when `dictiter_new()` decref's an untracked item-iterator under MemoryError
+# Abort/Segfault: `_PyObject_GC_UNTRACK` assert in `dictiter_dealloc` (`Objects/dictobject.c`) when `dictiter_new()` decref's an untracked item-iterator under MemoryError
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

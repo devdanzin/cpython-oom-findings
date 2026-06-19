@@ -1,6 +1,4 @@
-# Title
-
-Abort: `assert(debug_check_sanity(interp, code))` in `get_tools_for_instruction` (`Python/instrumentation.c:1106`) when applying `sys.monitoring` instrumentation fails partway under MemoryError (segfaults on release builds)
+# Abort: `assert(debug_check_sanity(interp, code))` in `get_tools_for_instruction` (`Python/instrumentation.c:1106`) when applying `sys.monitoring` instrumentation fails partway under MemoryError (segfaults on release builds)
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

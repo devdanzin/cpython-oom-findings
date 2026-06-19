@@ -1,6 +1,4 @@
-# Title
-
-Abort: `assert(PyStackRef_BoolCheck(cond))` in `POP_JUMP_IF_FALSE` (`Python/generated_cases.c.h`) — the value stack holds a non-bool at a conditional jump under OOM
+# Abort: `assert(PyStackRef_BoolCheck(cond))` in `POP_JUMP_IF_FALSE` (`Python/generated_cases.c.h`) — the value stack holds a non-bool at a conditional jump under OOM
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

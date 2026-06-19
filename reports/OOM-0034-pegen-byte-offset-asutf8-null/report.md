@@ -1,6 +1,4 @@
-# Title
-
-Segfault: unchecked `PyUnicode_AsUTF8` in the tokenizer's column-offset helper — NULL dereference in `_PyPegen_byte_offset_to_character_offset_line` (`Parser/pegen.c:33`) under OOM
+# Segfault: unchecked `PyUnicode_AsUTF8` in the tokenizer's column-offset helper — NULL dereference in `_PyPegen_byte_offset_to_character_offset_line` (`Parser/pegen.c:33`) under OOM
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

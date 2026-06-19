@@ -1,6 +1,4 @@
-# Title
-
-Abort: `assert(co->_co_unique_id == _Py_INVALID_UNIQUE_ID)` in `code_dealloc` (`Objects/codeobject.c`) when `init_code()` fails under MemoryError
+# Abort: `assert(co->_co_unique_id == _Py_INVALID_UNIQUE_ID)` in `code_dealloc` (`Objects/codeobject.c`) when `init_code()` fails under MemoryError
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

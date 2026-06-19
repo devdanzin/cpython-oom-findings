@@ -1,6 +1,4 @@
-# Title
-
-Fatal: `_Py_CheckSlotResult`: "Slot __delitem__ of type dict succeeded with an exception set" in `reload_singlephase_extension` (`Python/import.c`) when `_modules_by_index_set()` fails under MemoryError
+# Fatal: `_Py_CheckSlotResult`: "Slot __delitem__ of type dict succeeded with an exception set" in `reload_singlephase_extension` (`Python/import.c`) when `_modules_by_index_set()` fails under MemoryError
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

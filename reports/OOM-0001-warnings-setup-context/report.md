@@ -1,6 +1,4 @@
-# Title
-
-Segfault: `Py_DECREF(NULL)` in `setup_context`/`do_warn` (`_warnings.c`) when emitting a warning under MemoryError
+# Segfault: `Py_DECREF(NULL)` in `setup_context`/`do_warn` (`_warnings.c`) when emitting a warning under MemoryError
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 ## Crash report

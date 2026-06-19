@@ -1,6 +1,4 @@
-# Title
-
-Abort: `_Py_NegativeRefcount` at `Include/refcount.h:520` (double-free of `error_line` in `_PyPegen_raise_error_known_location`, `Parser/pegen_errors.c`) when `Py_BuildValue` fails under MemoryError
+# Abort: `_Py_NegativeRefcount` at `Include/refcount.h:520` (double-free of `error_line` in `_PyPegen_raise_error_known_location`, `Parser/pegen_errors.c`) when `Py_BuildValue` fails under MemoryError
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

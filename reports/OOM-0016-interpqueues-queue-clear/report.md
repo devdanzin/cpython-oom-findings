@@ -1,6 +1,4 @@
-# Title
-
-Abort: `assert(!queue->alive)` in `_queue_clear` (`Modules/_interpqueuesmodule.c`) when `_queues_add()` fails under MemoryError in `queue_create`
+# Abort: `assert(!queue->alive)` in `_queue_clear` (`Modules/_interpqueuesmodule.c`) when `_queues_add()` fails under MemoryError in `queue_create`
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

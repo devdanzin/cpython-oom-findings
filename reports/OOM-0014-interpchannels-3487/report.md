@@ -1,6 +1,4 @@
-# Title
-
-Abort/Segfault: `assert(mod == self)` / `Py_DECREF(NULL)` in `channelsmod__channel_id` (`Modules/_interpchannelsmodule.c`) when `_get_current_module()` fails under MemoryError
+# Abort/Segfault: `assert(mod == self)` / `Py_DECREF(NULL)` in `channelsmod__channel_id` (`Modules/_interpchannelsmodule.c`) when `_get_current_module()` fails under MemoryError
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

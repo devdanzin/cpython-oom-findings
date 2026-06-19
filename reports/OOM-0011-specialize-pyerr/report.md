@@ -1,6 +1,4 @@
-# Title
-
-Abort: `assert(!PyErr_Occurred())` in `specialize` (`Python/specialize.c`) when `LOAD_ATTR` is specialized while a stale `MemoryError` is pending under OOM
+# Abort: `assert(!PyErr_Occurred())` in `specialize` (`Python/specialize.c`) when `LOAD_ATTR` is specialized while a stale `MemoryError` is pending under OOM
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 

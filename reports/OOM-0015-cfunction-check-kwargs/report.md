@@ -1,6 +1,4 @@
-# Title
-
-Abort: `assert(!_PyErr_Occurred(tstate))` in `cfunction_check_kwargs` (`Objects/methodobject.c:409`) because `sys._baserepl()` returns `None` with a `MemoryError` still pending under OOM
+# Abort: `assert(!_PyErr_Occurred(tstate))` in `cfunction_check_kwargs` (`Objects/methodobject.c:409`) because `sys._baserepl()` returns `None` with a `MemoryError` still pending under OOM
 
 _AI Disclaimer: this issue was drafted by Claude Code, which also generated the reduced reproducer._
 
