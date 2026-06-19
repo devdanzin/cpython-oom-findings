@@ -15,13 +15,30 @@ pressure, `unicode_subtype_new` jumps to `onError: Py_DECREF(self)` while
 
 ## Reproducer
 
-Vehicle (reliable): fuzzing `email._header_value_parser` (`_wsp_splitter`,
-`_non_token_end_matcher` — which build `str` subclasses) under the `set_nomemory` sweep;
-found independently by two fleet instances. `vehicle_source.py` reproduces
-deterministically on the debug builds. A 3-line reduction
-(`class S(str): pass; S("…")` under the sweep) exercises `unicode_subtype_new` but did
-**not** hit the exact allocation-failure window within budget — **minimization is partial
-(vehicle-confirmed)**.
+Minimal, stdlib-only (shrinkray-reduced from the vehicle; deterministic, re-verified 40×):
+
+```python
+import faulthandler, email._header_value_parser as hvp
+faulthandler.enable()
+from _testcapi import set_nomemory, remove_mem_hooks
+for start in range(0, 40):
+    try:
+        set_nomemory(start, 0)
+        try:
+            hvp.get_value("\x00")          # builds str-subclass tokens
+        finally:
+            remove_mem_hooks()
+    except BaseException:
+        pass
+    finally:
+        try: remove_mem_hooks()
+        except Exception: pass
+```
+
+Parsing a header value with a NUL byte instantiates a `str` subclass; under allocation
+failure it is freed with `self->data == NULL`. (An earlier hand reduction
+`class S(str): S("…")` exercised `unicode_subtype_new` but didn't hit the window; shrinkray
+found the `email.get_value` trigger.) The full fuzzer vehicle is preserved as `vehicle_source.py`.
 
 ## Backtrace
 

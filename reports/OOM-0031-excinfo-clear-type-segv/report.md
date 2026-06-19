@@ -15,11 +15,30 @@ build configurations (a wild-pointer dereference, not a debug-only assert).
 
 ## Reproducer
 
-Vehicle (reliable): fuzzing `_interpreters.exec` under the `set_nomemory` sweep
-(`vehicle_source.py`). A reduction (`_interpreters.create()` + `_interpreters.exec(iid,
-"raise ValueError")` under the sweep) exercises the path but did not hit the exact
-OOM window in budget — **minimization is partial (vehicle-confirmed)**. The vehicle
-SIGSEGVs deterministically on all four local builds.
+Minimal, stdlib-only (shrinkray-reduced from the vehicle; deterministic, re-verified 40×):
+
+```python
+import faulthandler, _interpreters
+faulthandler.enable()
+from _testcapi import set_nomemory, remove_mem_hooks
+for start in range(0, 40):
+    try:
+        set_nomemory(start, 0)
+        try:
+            _interpreters.capture_exception(Exception())
+        finally:
+            remove_mem_hooks()
+    except BaseException:
+        pass
+    finally:
+        try: remove_mem_hooks()
+        except Exception: pass
+```
+
+shrinkray reduced the original `_interpreters.exec` vehicle to a **simpler, more direct
+trigger**: `_interpreters.capture_exception(exc)` is the call that builds the
+`_PyXI_excinfo`, so it reaches the bug without running code in a subinterpreter. The full
+fuzzer vehicle is preserved as `vehicle_source.py`.
 
 ## Backtrace
 
