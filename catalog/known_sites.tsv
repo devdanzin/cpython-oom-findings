@@ -355,3 +355,12 @@ OOM-0034	segv	func	Python/Python-tokenize.c:tokenizeriter_next
 OOM-0034	segv	line	Parser/pegen.c:33
 OOM-0034	segv	line	Python/Python-tokenize.c:229
 OOM-0034	segv	line	Python/Python-tokenize.c:304
+OOM-0035	abort	assert	Objects/unicodeobject.c:failed: maxchar <= 0x10ffff
+OOM-0035	abort	func	Modules/_io/stringio.c:_io_StringIO___getstate___impl
+OOM-0035	abort	func	Modules/_io/stringio.c:_io_StringIO_getvalue_impl
+OOM-0035	abort	func	Objects/unicodeobject.c:_PyUnicode_CheckConsistency
+OOM-0035	abort	func	Objects/unicodeobject.c:_PyUnicode_FromUCS4
+OOM-0035	abort	line	Modules/_io/stringio.c:294
+OOM-0035	abort	line	Modules/_io/stringio.c:866
+OOM-0035	abort	line	Objects/unicodeobject.c:2228
+OOM-0035	abort	line	Objects/unicodeobject.c:673
