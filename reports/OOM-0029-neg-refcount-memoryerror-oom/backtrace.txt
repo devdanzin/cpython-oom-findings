@@ -1,0 +1,13 @@
+./Include/refcount.h:520: _Py_NegativeRefcount: Assertion failed: object has negative ref count
+Fatal Python error: _PyObject_AssertFailed: _PyObject_AssertFailed
+object type name: MemoryError        # the object whose refcount went negative
+
+Program received signal SIGABRT, Aborted.
+#8  _PyObject_AssertFailed    at Objects/object.c:3278
+#9  _Py_NegativeRefcount      at Objects/object.c:275      # detector: object has negative ref count
+#12 tuple_dealloc             at Objects/tupleobject.c:277  # Py_DECREF of a tuple item (the over-decref'd MemoryError)
+#13 subtype_dealloc           at Objects/typeobject.c:2876
+#14 _Py_Dealloc               at Objects/object.c:3319
+#17 list_dealloc              at Objects/listobject.c:567   # a list is being torn down
+# (the list->subtype->tuple dealloc cascade is incidental: it is merely where the
+#  already-corrupted MemoryError's refcount is next touched, not where it was over-decref'd)

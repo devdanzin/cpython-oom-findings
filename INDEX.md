@@ -4,7 +4,7 @@ Crashes found by allocation-failure fuzzing (`_testcapi.set_nomemory`) of CPytho
 
 **Pick anything to work on** — open a CPython issue if one doesn't exist, comment with the issue/PR, and the Status column will be updated. Reports are deduped by crash signature; one row = one underlying bug (vehicles listed in the report).
 
-_28 unique bug(s). Generated 2026-06-18._
+_29 unique bug(s). Generated 2026-06-19._
 
 _Found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode (fusil originally by Victor Stinner). Reports drafted by Claude Code; reproducers machine-generated._
 
@@ -43,6 +43,7 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 | [OOM-0025](reports/OOM-0025-unspecialize-pending-exc/report.md) | specialize_load_global_lock_held computes a dict keys-version (_PyDict_GetKeysVersionForCurrentState) that can set a MemoryError and return 0 under OOM; the code treats 0 as a benign backoff and goto fail -> unspecialize(instr), whose `assert(!PyErr_Occurred())` then aborts on debug builds. | ft_debug_asan,jit | draft |
 | [OOM-0026](reports/OOM-0026-interpchannels-error-desync/report.md) | The _interpchannels create path threads a hand-rolled int error code in parallel with PyErr; handle_channel_error asserts they agree (err==0 => !PyErr_Occurred() at L398; unhandled err<0 => PyErr_Occurred() at L443). Under OOM newchannelid() returns 0 with a MemoryError pending, or channel_create() returns -1 with no exception set, so one of the two asserts aborts. | ft_debug_asan,jit | draft |
 | [OOM-0027](reports/OOM-0027-pop-jump-boolcheck/report.md) | Conditional-jump opcodes assume TOS is already a strict bool (a TO_BOOL/compare precedes them) and only assert it. Under OOM an earlier opcode's allocation failure leaves a non-bool / dangling _PyStackRef on the value stack, so `assert(PyStackRef_BoolCheck(cond))` in POP_JUMP_IF_FALSE aborts on debug builds; on release the bad value is used as a branch condition. | ft_debug_asan,jit | draft |
+| [OOM-0029](reports/OOM-0029-neg-refcount-memoryerror-oom/report.md) | Under OOM a MemoryError is decref'd one time too many; the negative refcount is detected later by _Py_NegativeRefcount (Objects/object.c:275) when the object is freed again during an unrelated dealloc cascade (list_dealloc -> subtype_dealloc -> tuple_dealloc), aborting on debug builds. The dealloc cascade is the incidental detection site, not the defect. | ft_debug_asan,jit | draft |
 
 ## Fatal Python error
 
