@@ -12,30 +12,35 @@ This is the largest crash group in the run (8+ vehicles, all converging on the s
 
 ## Reproducer
 
-`repro.py` keeps the vehicle's heavy module-level setup (it shifts heap/refcount layout so this underflow fires first) and then runs the two crashing OOM sweeps:
+Minimal, stdlib-only (shrinkray-reduced from the `xml.dom.minidom` vehicle, then
+hand-cleaned). Deterministic — aborts on every run (20/20 with `PYTHON_GIL=1`, 8/8 with
+`PYTHON_GIL=0`); requires a debug build. See `repro.py`:
 
 ```python
-import multiprocessing.spawn as sp
-from _testcapi import set_nomemory as _set_nomemory, remove_mem_hooks as _remove_mem_hooks
+import xml.dom.minidom
+from _testcapi import set_nomemory, remove_mem_hooks
 
-def oom_call(func, *args, **kwargs):
-    for _start in range(1000):
-        _set_nomemory(_start, 0)
+for start in range(100):
+    set_nomemory(start, 0)
+    try:
         try:
-            try:
-                func(*args, **kwargs)
-            finally:
-                _remove_mem_hooks()
-        except MemoryError:
-            pass
-
-oom_call(sp._fixup_main_from_name, weird_classes['weird_bytes'])
-oom_call(sp._fixup_main_from_path, b"\xF3\xF6\x8B\x4A\xFF\x52\xEC")  # -> runpy.run_path -> OOM unwind
+            xml.dom.minidom.parse(0)
+        finally:
+            remove_mem_hooks()
+    except:
+        pass
 ```
 
-`_fixup_main_from_path(bad-bytes)` calls `runpy.run_path()`, which raises `MemoryError` deep in the import/runpy machinery; the exception unwinds frames whose operand stack still holds a now-dead stackref. Reproduces 3/3 on `ft_debug_asan` (SIGABRT) and segfaults on the release builds.
+`xml.dom.minidom.parse(0)` fails with `MemoryError` partway through under the sweep; the
+exception unwinds a frame whose operand stack still holds a now-dead stackref, and
+`_PyFrame_ClearLocals` closes it -> refcount underflow on the `MemoryError` instance.
 
-**Minimization: PARTIAL.** Reducing to a bare `runpy.run_path()` / `_fixup_main_from_path()` call instead trips a *sibling* OOM assert first -- `Objects/codeobject.c:2440` `_co_unique_id == _Py_INVALID_UNIQUE_ID` in `code_dealloc` -- a separate finding. Which teardown assert fires first is sensitive to heap/refcount layout, so the full setup is retained. A clean stdlib-only snippet that deterministically drives *this* stackref underflow was not found; the underlying defect is in the eval-loop/opcode error-cleanup, not in any stdlib module.
+shrinkray reduced the 511-line vehicle but could not delete the fuzzer's `weird_classes`
+setup because the final call's argument referenced it; substituting a trivial argument (`0`)
+freed that setup for removal. Unlike the older multiprocessing.spawn/runpy reduction — which
+tripped a *sibling* `code_dealloc` assert first (hence the previous "partial" status, see
+Notes) — the `xml.dom.minidom` path deterministically hits *this* stackref underflow.
+Minimization **complete**.
 
 ## Backtrace
 
