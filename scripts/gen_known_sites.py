@@ -34,9 +34,39 @@ FATAL = re.compile(r'Fatal Python error:\s*([^\n]+)')
 # PyStackRef_BoolCheck(cond), ...) still get assert keys.
 GENERIC_ASSERTS = {"!PyErr_Occurred()", "!_PyErr_Occurred(tstate)"}
 
+# The negative-refcount / assert-failed DETECTOR. `_Py_NegativeRefcount` and
+# `_PyObject_AssertFailed` *catch* the corruption; their own frames (Objects/object.c:275 /
+# :3278) and the "negative ref count" assert appear in EVERY negrefcount abort, so emitting
+# them as keys collides the whole family (OOM-0005 stackref, OOM-0019 pegen, OOM-0029
+# dealloc-cascade all share object.c:_Py_NegativeRefcount + object.c:275 + that assert -- so a
+# negrefcount crash matches them all and decide()'s sorted()[0] tiebreak picks the lowest id).
+# They are detectors, not the defect: skip their func/line/assert keys; each bug keeps its own
+# real site keys (the dealloc cascade, the pegen frames, PyStackRef_XCLOSE@pycore_stackref.h:726
+# from its signature). Mirrors oom_dedup._BT_SKIP, which already drops these frames when
+# resolving a live backtrace.
+GENERIC_DETECTOR_FUNCS = {"_Py_NegativeRefcount", "_PyObject_AssertFailed"}
+
+# Inlined refcount/atomic helper headers: Py_DECREF / Py_XDECREF / _Py_atomic_* expand here,
+# so a frame in one of these files (e.g. refcount.h:520, the negrefcount-detecting Py_DECREF)
+# is the generic macro body, not the bug -- it appears in every negrefcount abort and is never
+# discriminative. Skip ALL keys for them, mirroring oom_dedup._BT_SKIP_FILE so the snapshot and
+# the live-backtrace resolver agree on what counts as a real site.
+DETECTOR_FILE = re.compile(r'(?:^|/)(?:refcount|pyatomic\w*|object)\.h$')
+
 
 def norm_file(f):
     return f.lstrip("./")
+
+
+def _skip_keys(file, func):
+    """A frame whose func is a detector or whose file is an inlined macro header -> emit no keys."""
+    return func in GENERIC_DETECTOR_FUNCS or bool(DETECTOR_FILE.search(norm_file(file)))
+
+
+def _generic_assert(expr):
+    """True if this assertion is non-discriminative across bugs (skip its file:expr key)."""
+    e = expr.strip()
+    return e in GENERIC_ASSERTS or "negative ref count" in e
 
 
 def collect():
@@ -51,6 +81,8 @@ def collect():
             m = FRAME.match(fr)
             if m:
                 func, f, ln = m.group(1), norm_file(m.group(2)), m.group(3)
+                if _skip_keys(f, func):              # detector func / inlined-macro header
+                    continue
                 rows.add((oid, kind, "func", f"{f}:{func}"))
                 rows.add((oid, kind, "line", f"{f}:{ln}"))
         # func + line from the "<file> <func>:<line>" sites[] strings (note: file and
@@ -59,11 +91,16 @@ def collect():
             m = SITE.match(s.strip())
             if m:
                 f = norm_file(m.group(1))
+                if _skip_keys(f, m.group(2)):        # detector func / inlined-macro header
+                    continue
                 rows.add((oid, kind, "func", f"{f}:{m.group(2)}"))
                 rows.add((oid, kind, "line", f"{f}:{m.group(3)}"))
-            else:
+            elif not any(g in s for g in GENERIC_DETECTOR_FUNCS):  # not a detector site string
                 for fm in FILELINE.finditer(s):
-                    rows.add((oid, kind, "line", f"{norm_file(fm.group(1))}:{fm.group(2)}"))
+                    f = norm_file(fm.group(1))
+                    if DETECTOR_FILE.search(f):      # inlined-macro header line -> not a site
+                        continue
+                    rows.add((oid, kind, "line", f"{f}:{fm.group(2)}"))
         # assertion expressions + fatal messages from the report's backtrace.txt.
         # assert keys are FILE-SCOPED (file:expr) so a common assertion like
         # `!PyErr_Occurred()` in a *different* file is not mistaken for this bug.
@@ -73,15 +110,17 @@ def collect():
             seen_assert_lines = set()
             for f, ln, func, expr in ASSERT.findall(txt):
                 fn = norm_file(f)
-                if expr.strip() not in GENERIC_ASSERTS:
+                seen_assert_lines.add((fn, expr.strip()))
+                if _skip_keys(fn, func):             # detector line -> skip all of its keys
+                    continue
+                if not _generic_assert(expr):
                     rows.add((oid, kind, "assert", f"{fn}:{expr.strip()}"))
                 rows.add((oid, kind, "func", f"{fn}:{func}"))
                 rows.add((oid, kind, "line", f"{fn}:{ln}"))
-                seen_assert_lines.add((fn, expr.strip()))
             for f, ln, expr in ASSERT_NOFUNC.findall(txt):  # catch lines w/o a parseable func
                 fn = norm_file(f)
-                if (fn, expr.strip()) not in seen_assert_lines:
-                    if expr.strip() not in GENERIC_ASSERTS:
+                if (fn, expr.strip()) not in seen_assert_lines and not DETECTOR_FILE.search(fn):
+                    if not _generic_assert(expr):
                         rows.add((oid, kind, "assert", f"{fn}:{expr.strip()}"))
                     rows.add((oid, kind, "line", f"{fn}:{ln}"))
             for f in FATAL.findall(txt):
