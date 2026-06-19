@@ -1,0 +1,25 @@
+OOM-0035 — StringIO.getvalue() builds a str with an invalid maxchar from a buffer
+left uninitialized by a write-under-OOM
+==================================================================================
+
+ft_debug_asan, SIGABRT. The StringIO's internal Py_UCS4 buffer (grown over many
+writes under intermittent OOM) holds an uninitialized value > 0x10ffff inside
+[0, string_size); getvalue() scans it, derives a bad maxchar, and the new str fails
+its consistency check.
+
+Objects/unicodeobject.c:673: _PyUnicode_CheckConsistency: Assertion failed: maxchar <= 0x10ffff
+Fatal Python error: _PyObject_AssertFailed: _PyObject_AssertFailed
+
+#9  _PyUnicode_CheckConsistency     Objects/unicodeobject.c:673   # CHECK(maxchar <= MAX_UNICODE) -- detector
+#10 _PyUnicode_FromUCS4 (u=..., size=32830)  Objects/unicodeobject.c:2228   # max_char = ucs4lib_find_max_char(u, u+size); reads garbage
+#11 _io_StringIO_getvalue_impl      Modules/_io/stringio.c:294    # PyUnicode_FromKindAndData(4BYTE, self->buf, self->string_size)
+#12 _io_StringIO___getstate___impl  Modules/_io/stringio.c:866
+#13 _io_StringIO___getstate__       Modules/_io/clinic/stringio.c.h:451
+#14 cfunction_vectorcall_NOARGS     Objects/methodobject.c:508
+
+The real crash SITE is _PyUnicode_FromUCS4 (unicodeobject.c:2228) reading the StringIO
+buffer; _PyUnicode_CheckConsistency:673 is the generic debug detector (reached by many
+unicode ops), kept only for in-loop stdout matching.
+
+Matrix: ft_debug_asan=abort, jit=segv, ft_release=no-crash, upstream=no-crash
+(debug consistency assert; on release the malformed str survives, sometimes segvs on jit).
