@@ -1,18 +1,21 @@
 # Next steps
 
-State: 23 unique bugs (OOM-0001..0023) committed. 882 crash dirs → 38 clusters via
-`scripts/cluster_stdout.py`; abort/fatal clusters drafted. SEGV phase + publishing remain.
+State: 24 unique bugs (OOM-0001..0024) committed. SEGV phase DONE; publishing remains.
 
-## 1. Segv phase (~255 dirs)
-`cluster_stdout.py` clusters segv only coarsely (by C symbol; the stdout C-stack is
-mostly raw offsets). Refine with gdb:
-- `C:PyContextVar_Set` (57) → **OOM-0002** vehicles (merge in; don't re-draft)
-- `C:PyErr_WarnEx` (26) + much of `C:__libc_start_main` (40) → **OOM-0001** vehicles
-- `C:_Py_Dealloc` (90), `C:PyObject_CallOneArg` (33), `C:PyErr_ResourceWarning` (6),
-  + singletons → need gdb backtraces to split/dedup; expect ~5–10 NEW segv bugs.
-Approach: a drafting Workflow like `oom-draft-clusters`, but each agent first gdb's a
-representative to get the real crash site, then dedups vs OOM-0001/0002 before minting
-an id (OOM-0024+).
+## 1. Segv phase (254 dirs) — DONE (2026-06-18)
+Resolved via a **site-centric sweep** instead of stdout clustering: the stdout C-stack
+reflects the *host* crash and OOM sites are nondeterministic across binaries, so stdout
+signatures are not bug keys (verified). But a vehicle's **local re-run is deterministic**.
+Tooling: `scripts/segv_sweep.sh` + `segv_worker.sh` (gdb the true innermost CPython
+frame under ft_debug_asan, skipping fatal/assert plumbing) → `bin_sites.py` (bin +
+cross-ref the catalog). Full writeup + attribution table: `catalog/segv_sweep.md`;
+raw data `catalog/segv_sites_raw.tsv`.
+Result: **254 vehicles → 1 NEW bug (OOM-0024, t-string `template_iter` uninit-field
+dealloc), 208 attributed to 10 existing bugs (OOM-0001/0002/0003/0004/0005/0006/0008/
+0013/0020/0022), 46 host-only NOREPRO.** The earlier "~5–10 new segv bugs" estimate was
+high — most segv vehicles are just OOM-0001/0002 seen through different caller frames.
+Optional low-yield follow-up: the 46 NOREPRO (need a wider sweep / different build to
+get a stable local repro; not reportable as-is).
 
 ## 2. Deferred abort singletons
 `specialize.c:378`, `_interpchannelsmodule.c:443`, `generated_cases.c.h:10539` (1 each).

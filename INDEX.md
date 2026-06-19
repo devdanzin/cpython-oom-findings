@@ -4,7 +4,7 @@ Crashes found by allocation-failure fuzzing (`_testcapi.set_nomemory`) of CPytho
 
 **Pick anything to work on** — open a CPython issue if one doesn't exist, comment with the issue/PR, and the Status column will be updated. Reports are deduped by crash signature; one row = one underlying bug (vehicles listed in the report).
 
-_23 unique bug(s). Generated 2026-06-18._
+_24 unique bug(s). Generated 2026-06-18._
 
 _Found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode (fusil originally by Victor Stinner). Reports drafted by Claude Code; reproducers machine-generated._
 
@@ -17,6 +17,7 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 |---|---|---|---|
 | [OOM-0001](reports/OOM-0001-warnings-setup-context/report.md) | `_warnings.c`: NULL `filename` Py_DECREF in warnings setup/teardown under OOM (unchecked `PyUnicode_FromString("<sys>")`) | ft_debug_asan,ft_release,jit,upstream | draft |
 | [OOM-0002](reports/OOM-0002-contextvar-set/report.md) | `Python/context.c`: unchecked `token_new()` NULL -> `Py_DECREF(tok)` on the `contextvar_set()` failure path under OOM | ft_debug_asan,ft_release,jit,upstream | draft |
+| [OOM-0024](reports/OOM-0024-templateiter-uninit-dealloc/report.md) | `template_iter` (Objects/templateobject.c) allocates the iterator with PyObject_GC_New (no zero-init) and only sets `stringsiter`/`interpolationsiter` after two PyObject_GetIter calls; either GetIter failing under OOM runs Py_DECREF(iter) on the error path, so templateiter_dealloc -> templateiter_clear -> Py_CLEAR() dereferences uninitialized memory. | ft_debug_asan,jit | draft |
 
 ## Assertion / abort
 

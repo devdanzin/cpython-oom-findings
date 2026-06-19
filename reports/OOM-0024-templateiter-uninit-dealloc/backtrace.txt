@@ -1,0 +1,13 @@
+Program received signal SIGSEGV, Segmentation fault.
+#0  0x0000555555cb070c in _Py_atomic_load_uint32_relaxed (obj=...) at ./Include/cpython/pyatomic_gcc.h:367
+#1  Py_DECREF (lineno=..., op=..., filename=...) at ./Include/refcount.h:345
+#2  templateiter_clear (op=...) at Objects/templateobject.c:53
+#3  0x0000555555cb0564 in templateiter_dealloc (op=...) at Objects/templateobject.c:45
+#4  0x0000555555c34cd2 in _Py_Dealloc (op=...) at Objects/object.c:3319
+#5  0x0000555555cb2126 in Py_DECREF (lineno=..., op=..., filename=...) at ./Include/refcount.h:359
+#6  template_iter (op=...) at Objects/templateobject.c:232
+#7  0x0000555555a7923d in PyObject_GetIter (o=...) at Objects/abstract.c:2825
+#8  0x0000555555c23b5e in cfunction_vectorcall_FASTCALL (func=..., args=..., nargsf=..., kwnames=...) at Objects/methodobject.c:449
+#9  0x0000555555ad5c00 in _PyObject_VectorcallTstate (tstate=..., callable=..., args=..., nargsf=..., kwnames=...) at ./Include/internal/pycore_call.h:144
+#10 0x0000555555ebeaeb in _Py_VectorCallInstrumentation_StackRefSteal (callable=..., arguments=..., total_args=..., kwnames=..., call_instrumentation=..., frame=..., this_instr=..., tstate=...) at Python/ceval.c:768
+#11 0x0000555555f0922b in _PyEval_EvalFrameDefault (tstate=..., frame=..., throwflag=...) at Python/generated_cases.c.h:1906

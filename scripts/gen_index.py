@@ -63,7 +63,8 @@ def main():
         out.append("| Report | Description | Builds | Status |")
         out.append("|---|---|---|---|")
         for d in rows:
-            builds = ",".join(k for k, v in d.get("matrix", {}).items() if v not in (None, "n/a"))
+            builds = ",".join(k for k, v in d.get("matrix", {}).items()
+                              if v not in (None, "n/a", "no-repro"))
             out.append(f"| {report_link(d)} | {d['description']} | {builds} | {status_cell(d)} |")
 
     (ROOT / "INDEX.md").write_text("\n".join(out) + "\n")
