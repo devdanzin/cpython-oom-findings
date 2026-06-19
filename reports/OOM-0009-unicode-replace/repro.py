@@ -10,9 +10,6 @@ Crash:      SIGABRT, Objects/unicodeobject.c:10783
             Assertion `release1 == (buf1 != PyUnicode_DATA(str1))' failed.
 Requires:   a build exposing _testcapi.set_nomemory.
 
-Run:
-    python repro.py            # aborts (rc 134) on FT debug+ASan / JIT debug
-
 Backtrace (gdb):
     #8  replace               Objects/unicodeobject.c:10783 (assert release1 ...)
     #9  unicode_replace_impl   Objects/unicodeobject.c:12586 (str.replace)
@@ -50,20 +47,51 @@ kind) must be widened to 2-byte kind via unicode_askind. Failing that very
 first allocation (start=0) hits the desync.
 
 Observed crash at start=0 on the FT debug+ASan and JIT debug builds.
+
+Self-sweeping: `python repro.py` runs the trigger under set_nomemory(N, 0) for N in a
+sweep, each in a FRESH subprocess (a fresh process avoids cache warm-up shifting the OOM
+window), and stops at the first N that crashes. Needs a debug build (the check is compiled
+out under NDEBUG). Bare trigger (fixed N=0):
+    import _testcapi
+    s = "轘" * 4
+    _testcapi.set_nomemory(0, 0)
+    s.replace("&", "&amp;")
 """
+import os
 import sys
+import subprocess
+
+TRIGGER = r"""
 import _testcapi
 import faulthandler
-
 faulthandler.enable()
 
 # A UCS-2 (2-byte kind) string: forces the ASCII "&" substring to be widened
 # inside replace() via unicode_askind() (a PyMem_New allocation).
 s = "轘" * 4
 
-_testcapi.set_nomemory(0, 0)   # fail every allocation from #0 onward
+_testcapi.set_nomemory({n}, 0)   # fail every allocation from #N onward
 try:
-    s.replace("&", "&amp;")    # unicode_askind(str1) fails -> buf1=NULL, release1=0
-                               # -> goto error -> assert release1 == ... -> SIGABRT
+    s.replace("&", "&amp;")      # unicode_askind(str1) fails -> buf1=NULL, release1=0
+                                 # -> goto error -> assert release1 == ... -> SIGABRT
 finally:
     _testcapi.remove_mem_hooks()
+"""
+
+SIGNATURE = "release1 == (buf1 != PyUnicode_DATA(str1))"
+
+def main():
+    env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=0"}
+    # env["PYTHON_GIL"] = "0"   # ONLY if this bug is free-threading-only (it is not)
+    for n in range(80):
+        out = subprocess.run([sys.executable, "-c", TRIGGER.format(n=n)],
+                             capture_output=True, text=True, env=env)
+        if SIGNATURE in out.stdout + out.stderr:
+            print("reproduced at set_nomemory(%d, 0):" % n)
+            sys.stdout.write(out.stderr or out.stdout)
+            return 1
+    print("no crash in range(80); widen it for your build")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

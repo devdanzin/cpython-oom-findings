@@ -12,10 +12,6 @@ Crash:      SIGABRT on debug builds (ft_debug_asan, jit):
             lookup at L3486 (see Notes).
 Requires:   a build exposing _testcapi.set_nomemory.
 
-Run:
-    python repro.py
-    # aborts (rc 134) on a debug build; segfaults (rc 139) on a release build.
-
 Backtrace (gdb, ft_debug_asan):
     #8  channelsmod__channel_id   _interpchannelsmodule.c:3487  (assert mod == self)
     #9  cfunction_call            Objects/methodobject.c:564
@@ -59,20 +55,49 @@ Likely fix: check the return value instead of asserting, e.g.
     }
     assert(mod == self);   // keep the invariant only once mod is known non-NULL
     Py_DECREF(mod);
+
+Self-sweeping: `python repro.py` runs the trigger under set_nomemory(N, 0) for N in a
+sweep, each in a FRESH subprocess (a fresh process avoids cache warm-up shifting the OOM
+window), and stops at the first N that crashes. Needs a debug build (the check is compiled
+out under NDEBUG). Bare trigger (fixed N=0):
+    import _interpchannels, _testcapi
+    _testcapi.set_nomemory(0, 0)
+    _interpchannels._channel_id(0)
 """
+import os
+import sys
+import subprocess
+
+TRIGGER = r"""
 import _interpchannels
 import _testcapi
 import faulthandler
-
 faulthandler.enable()
-
-# Fail every allocation from #0 onward. The first allocation _channel_id makes
-# is PyUnicode_FromString(MODULE_NAME_STR) inside _get_current_module(), so it
-# returns NULL and the unchecked `assert(mod == self)` / `Py_DECREF(mod)` fire.
-_testcapi.set_nomemory(0, 0)
+_testcapi.set_nomemory({n}, 0)
 try:
     _interpchannels._channel_id(0)   # -> get_module_from_owned_type -> NULL
                                      #    -> assert mod == self (SIGABRT, debug)
                                      #    -> Py_DECREF(NULL)     (SIGSEGV, release)
 finally:
     _testcapi.remove_mem_hooks()
+"""
+
+SIGNATURE = "_interpchannelsmodule.c:3487: PyObject *channelsmod__channel_id"
+
+
+def main():
+    env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=0"}
+    # This bug is build-agnostic (not free-threading-only); GIL=1 works.
+    for n in range(80):
+        out = subprocess.run([sys.executable, "-c", TRIGGER.format(n=n)],
+                             capture_output=True, text=True, env=env)
+        if SIGNATURE in out.stdout + out.stderr:
+            print("reproduced at set_nomemory(%d, 0):" % n)
+            sys.stdout.write(out.stderr or out.stdout)
+            return 1
+    print("no crash in range(80); widen it for your build")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

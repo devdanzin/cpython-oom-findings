@@ -11,9 +11,6 @@ Crash:      SIGABRT, Objects/typeobject.c:6343
             Assertion `!PyErr_Occurred()' failed.
 Requires:   a debug build exposing _testcapi.set_nomemory.
 
-Run:
-    python repro.py        # aborts (rc 134) on the FT debug+ASan / JIT debug builds.
-
 Backtrace (gdb):
     #8  _PyType_LookupStackRefAndVersion  Objects/typeobject.c:6343  (assert !PyErr_Occurred())
     #9  _PyObject_GenericGetAttrWithDict   Objects/object.c:1919
@@ -51,7 +48,25 @@ NULL (no pending error) to None.
 
 Original fuzzer vehicle: ~/crashers/python-4/gettext-assertion (gettext._as_int2
 walked frames via f.f_back to compute a DeprecationWarning stacklevel under OOM).
+
+Self-sweeping: `python repro.py` runs the trigger under set_nomemory(N, 0) for N in a
+sweep, each in a FRESH subprocess (a fresh process avoids cache warm-up shifting the OOM
+window), and stops at the first N that crashes. Needs a debug build (the check is compiled
+out under NDEBUG). Bare trigger (fixed N=1):
+    import sys, _testcapi
+    def walk():
+        f = sys._getframe()
+        while f is not None:
+            f = f.f_back
+    _testcapi.set_nomemory(1, 0)
+    walk()
+    x = sys.maxsize       # next LOAD_ATTR trips assert(!PyErr_Occurred())
 """
+import os
+import sys
+import subprocess
+
+TRIGGER = r"""
 import sys
 import _testcapi
 import faulthandler
@@ -66,7 +81,7 @@ def walk():
                               # MemoryError is set but f.f_back returns None
 
 
-_testcapi.set_nomemory(1, 0)  # fail every allocation from #1 onward
+_testcapi.set_nomemory({n}, 0)  # fail every allocation from #{n} onward
 try:
     try:
         walk()                # returns with a pending MemoryError after yielding None
@@ -76,3 +91,24 @@ try:
         _testcapi.remove_mem_hooks()
 except MemoryError:
     pass
+"""
+
+SIGNATURE = "Assertion `!PyErr_Occurred()' failed."
+
+
+def main():
+    env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=0"}
+    # env["PYTHON_GIL"] = "0"   # ONLY if this bug is free-threading-only
+    for n in range(80):
+        out = subprocess.run([sys.executable, "-c", TRIGGER.format(n=n)],
+                             capture_output=True, text=True, env=env)
+        if SIGNATURE in out.stdout + out.stderr:
+            print("reproduced at set_nomemory(%d, 0):" % n)
+            sys.stdout.write(out.stderr or out.stdout)
+            return 1
+    print("no crash in range(80); widen it for your build")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

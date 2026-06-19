@@ -6,11 +6,6 @@ Affected:   CPython 3.16.0a0 (seen on a free-threaded debug+ASan build; the defe
 Crash:      SIGSEGV in Py_DECREF(filename) with filename == NULL.
 Requires:   a build exposing _testcapi.set_nomemory (debug/test builds).
 
-Run:
-    python repro_warnings_oom_minimal.py
-    # exits via SIGSEGV (ASan: "SEGV on unknown address"; faulthandler prints
-    #  "File ... in warn" / the warnings.warn() call site)
-
 Authoritative backtrace (gdb, debug build):
     #0 _Py_atomic_load_uint32_relaxed   Include/cpython/pyatomic_gcc.h:367
     #1 Py_DECREF                        Include/refcount.h:345
@@ -44,16 +39,43 @@ This single defect accounts for 8 of the 13 "segfault" crashers in this run
 importlib._bootstrap_external via do_warn:1139; multiprocessing.resource_tracker
 via setup_context:1087). The various stdlib modules are only vehicles that emit a
 warning under OOM.
-"""
-import _testcapi
-import warnings
-import faulthandler
 
+Self-sweeping: `python repro.py` runs the trigger under set_nomemory(N, 0) for N in a
+sweep, each in a FRESH subprocess (a fresh process avoids cache warm-up shifting the OOM
+window), and stops at the first N that crashes. Needs a debug build (the check is compiled
+out under NDEBUG). Bare trigger (fixed N=0):
+    import _testcapi, warnings, faulthandler
+    faulthandler.enable()
+    warnings.simplefilter("always")
+    _testcapi.set_nomemory(0, 0)   # fail every allocation from here on
+    warnings.warn("boom")          # -> do_warn()/setup_context() Py_DECREF(NULL) -> SIGSEGV
+"""
+import os
+import sys
+import subprocess
+
+TRIGGER = r"""
+import _testcapi, warnings, faulthandler
 faulthandler.enable()
 warnings.simplefilter("always")   # make sure warn() runs its full path every time
-
-_testcapi.set_nomemory(0, 0)      # fail every allocation from this point on
+_testcapi.set_nomemory({n}, 0)    # fail every allocation from this point on
 warnings.warn("boom")             # -> do_warn()/setup_context() Py_DECREF(NULL) -> SIGSEGV
+"""
 
-# Not reached. If the interpreter is ever fixed, remove the hook here:
-_testcapi.remove_mem_hooks()
+SIGNATURE = "do_warn"
+
+def main():
+    env = {**os.environ, "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=0"}
+    # env["PYTHON_GIL"] = "0"   # ONLY if this bug is free-threading-only (this one is not)
+    for n in range(80):
+        out = subprocess.run([sys.executable, "-c", TRIGGER.format(n=n)],
+                             capture_output=True, text=True, env=env)
+        if SIGNATURE in out.stdout + out.stderr:
+            print("reproduced at set_nomemory(%d, 0):" % n)
+            sys.stdout.write(out.stderr or out.stdout)
+            return 1
+    print("no crash in range(80); widen it for your build")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())
