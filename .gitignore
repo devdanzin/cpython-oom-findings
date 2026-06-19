@@ -2,8 +2,19 @@ __pycache__/
 *.pyc
 
 # fusil OOM repro sources drop arg-named artifact files when run with this repo as CWD
+# (the arg generator writes 0-byte files named after the args it builds)
 0.[0-9]*
 weird_*
+tricky_*
 *.crash.out
-.shrinkray/
 *.bak
+
+# minimization / reduction tool scratch
+.shrinkray/
+*.orig          # creduce / patch backups
+creduce.*       # creduce work dirs
+cand*.py        # shrinkray in-place candidates (when reducing inside the repo, not /tmp)
+
+# editor / OS junk
+*~
+.DS_Store
