@@ -1,0 +1,30 @@
+{
+  "id": "OOM-0034",
+  "slug": "pegen-byte-offset-asutf8-null",
+  "title": "Unchecked PyUnicode_AsUTF8 in the tokenizer column-offset helper — NULL deref in _PyPegen_byte_offset_to_character_offset_line (Parser/pegen.c:33) under OOM",
+  "description": "Tokenizing a line that contains a non-ASCII character calls _get_col_offsets (Python/Python-tokenize.c) -> _PyPegen_byte_offset_to_character_offset_line(line, ...). That function does `data = PyUnicode_AsUTF8(line)` (pegen.c:29) and then indexes `data[col_offset]` (pegen.c:33) without checking data for NULL. Under allocation failure PyUnicode_AsUTF8 cannot build/cache the UTF-8 form and returns NULL, so data[col_offset] dereferences NULL -> SIGSEGV on all build configurations. The non-ASCII char is required: _get_col_offsets only runs when a token's byte offset differs from its character offset.",
+  "crash_kind": "segv",
+  "sites": [
+    "Parser/pegen.c _PyPegen_byte_offset_to_character_offset_line:33",
+    "Python/Python-tokenize.c _get_col_offsets:229",
+    "Python/Python-tokenize.c tokenizeriter_next:304"
+  ],
+  "signature": {
+    "site_frame": "_PyPegen_byte_offset_to_character_offset_line@Parser/pegen.c:33",
+    "top_frames": [
+      "_PyPegen_byte_offset_to_character_offset_line@Parser/pegen.c:33",
+      "_get_col_offsets@Python/Python-tokenize.c:229",
+      "tokenizeriter_next@Python/Python-tokenize.c:304"
+    ]
+  },
+  "vehicles": ["fleet inst-01 python-7 _pyrepl__module_completer-exitcode1-oomNEW"],
+  "matrix": {"ft_debug_asan": "segv", "ft_release": "segv", "jit": "segv", "upstream": "segv"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-19",
+  "confirmed_commit": "15d7406",
+  "notes": "Clean, fully root-caused unchecked-allocation NULL deref. `line` is a valid unicode (gdb-confirmed); only data==NULL. Deterministic minimal stdlib repro (4/4): `list(tokenize.generate_tokens(io.StringIO('ü\\n').readline))` under the set_nomemory sweep -> segv at pegen.c:33 on all four builds. Found by the LOCAL fleet via the NEW Phase-2 class fuzzing: an `oc5` CONSTRUCTOR sweep of `_pyrepl._module_completer.ImportParser`, which tokenizes import text -> the C tokenizer column-offset path. First bug attributable to OOM Phase 2 (constructor/method coverage). Distinct from the other pegen bugs OOM-0019 (pegen_errors.c raise_error_known_location) and OOM-0021 (pegen.c _PyPegen_run_parser / set_syntax_error_metadata) -- different function, segv vs abort/fatal. Fix: NULL-check the PyUnicode_AsUTF8 result in _PyPegen_byte_offset_to_character_offset_line and propagate the error (or have _get_col_offsets handle it)."
+}
