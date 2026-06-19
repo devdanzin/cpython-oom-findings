@@ -1,0 +1,27 @@
+{
+  "id": "OOM-0028",
+  "slug": "normpath-encodefs-null",
+  "title": "os._path_normpath(bytes) NULL-derefs under OOM: unchecked PyUnicode_From* result passed to PyUnicode_EncodeFSDefault — Modules/posixmodule.c:6149",
+  "description": "os__path_normpath_impl builds `result` with PyUnicode_FromOrdinal/PyUnicode_FromWideChar (either NULL under OOM) and, for a bytes input, re-encodes via Py_SETREF(result, PyUnicode_EncodeFSDefault(result)) without a NULL check; EncodeFSDefault(NULL) -> unicode_encode_utf8(NULL) -> PyUnicode_Check(NULL)->ob_type segfault. Reproduces on all builds.",
+  "crash_kind": "segv",
+  "sites": ["Modules/posixmodule.c os__path_normpath_impl:6149", "Objects/unicodeobject.c unicode_encode_utf8:5681"],
+  "signature": {
+    "site_frame": "unicode_encode_utf8@Objects/unicodeobject.c:5681",
+    "top_frames": [
+      "unicode_encode_utf8@Objects/unicodeobject.c:5681",
+      "os__path_normpath_impl@Modules/posixmodule.c:6149",
+      "os__path_normpath@Modules/clinic/posixmodule.c.h:2701",
+      "_Py_BuiltinCallFastWithKeywords_StackRef@Python/ceval.c:841"
+    ]
+  },
+  "vehicles": ["python-7/profiling_sampling_cli-segmentation_fault"],
+  "matrix": {"ft_debug_asan": "segv", "ft_release": "segv", "jit": "segv", "upstream": "segv"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Clean NULL deref, reproduces on ALL four builds (not debug/ASan-only). result from PyUnicode_FromOrdinal('.')/PyUnicode_FromWideChar can be NULL under OOM and is passed unchecked to PyUnicode_EncodeFSDefault on the PyBytes_Check(path->object) branch. Fix: `if (result != NULL && PyBytes_Check(...))` (function already returns result==NULL to propagate the error). 3-line minimal repro: posix._path_normpath(b\"...\") under set_nomemory sweep (bytes arg required for the re-encode branch). Surfaced by scripts/ingest.py as a NEW site (unicode_encode_utf8) on the python-4..7 corpus -- distinct from OOM-0009 (unicodeobject.c replace:10783). First bug found by the dedupe-ingest pipeline."
+}

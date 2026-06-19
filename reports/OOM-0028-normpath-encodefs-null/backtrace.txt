@@ -1,0 +1,13 @@
+Program received signal SIGSEGV, Segmentation fault.
+#0  unicode_encode_utf8 (unicode=..., error_handler=..., errors=...) at Objects/unicodeobject.c:5681
+#1  0x00005555561cee6f in os__path_normpath_impl (module=..., path=...) at ./Modules/posixmodule.c:6149
+#2  os__path_normpath (module=..., args=..., nargs=..., kwnames=...) at ./Modules/clinic/posixmodule.c.h:2701
+#3  0x0000555555ebf987 in _Py_BuiltinCallFastWithKeywords_StackRef (callable=..., arguments=..., total_args=...) at Python/ceval.c:841
+#4  0x0000555555ee2a44 in _PyEval_EvalFrameDefault (tstate=..., frame=..., throwflag=...) at Python/generated_cases.c.h:2603
+#5  0x0000555555ebd9b4 in _PyEval_EvalFrame (tstate=..., frame=..., throwflag=...) at ./Include/internal/pycore_ceval.h:122
+#6  _PyEval_Vector (tstate=..., func=..., locals=..., args=..., argcount=..., kwnames=...) at Python/ceval.c:2141
+#7  0x0000555555ebcd8b in PyEval_EvalCode (co=..., globals=..., locals=...) at Python/ceval.c:679
+#8  0x00005555560fd210 in run_eval_code_obj (tstate=..., co=..., globals=..., locals=...) at Python/pythonrun.c:1369
+#9  0x00005555560fc895 in run_mod (mod=..., filename=..., globals=..., locals=..., flags=..., arena=..., interactive_src=..., generate_new_source=...) at Python/pythonrun.c:1472
+#10 0x00005555560f662d in pyrun_file (fp=..., filename=..., start=..., globals=..., locals=..., closeit=..., flags=...) at Python/pythonrun.c:1296
+#11 0x00005555560f4031 in _PyRun_SimpleFileObject (fp=..., filename=..., closeit=..., flags=...) at Python/pythonrun.c:518
