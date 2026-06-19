@@ -1,0 +1,27 @@
+{
+  "id": "OOM-0031",
+  "slug": "excinfo-clear-type-segv",
+  "title": "_interpreters.exec under OOM frees an invalid cross-interpreter excinfo — _excinfo_clear_type segfault (Python/crossinterp.c:1319)",
+  "description": "_interpreters.exec captures a subinterpreter exception into a _PyXI_excinfo; under OOM the capture fails partway and the cleanup path _PyXI_FreeExcInfo -> _PyXI_excinfo_clear -> _excinfo_clear_type runs on an uninitialized/dangling info, dereferencing info->builtin at crossinterp.c:1319 -> SIGSEGV on all builds.",
+  "crash_kind": "segv",
+  "sites": ["Python/crossinterp.c _excinfo_clear_type:1319", "Python/crossinterp.c _PyXI_excinfo_clear:1374", "Python/crossinterp.c _PyXI_FreeExcInfo:1712"],
+  "signature": {
+    "site_frame": "_excinfo_clear_type@Python/crossinterp.c:1319",
+    "top_frames": [
+      "_excinfo_clear_type@Python/crossinterp.c:1319",
+      "_PyXI_excinfo_clear@Python/crossinterp.c:1374",
+      "_PyXI_FreeExcInfo@Python/crossinterp.c:1712",
+      "cfunction_vectorcall_FASTCALL_KEYWORDS@Objects/methodobject.c:465"
+    ]
+  },
+  "vehicles": ["fleet inst-04 _interpreters-segmentation_fault-exitcode1-oomNEW"],
+  "matrix": {"ft_debug_asan": "segv", "ft_release": "segv", "jit": "segv", "upstream": "segv"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-19",
+  "confirmed_commit": "15d7406",
+  "notes": "Wild-pointer deref: _excinfo_clear_type reads info->builtin (crossinterp.c:1319) on a _PyXI_excinfo that an OOM during _interpreters.exec's exception capture left invalid (or unzeroed garbage), yet _PyXI_FreeExcInfo was still called on it. Reproduces on ALL four builds (not assert-gated). Distinct from OOM-0014/0016 (_interpchannels/_interpqueues) and OOM-0026 (handle_channel_error) -- this is crossinterp.c excinfo cleanup. Same free/clear-partially-initialized-struct-under-OOM theme as OOM-0024/0030. Fix: zero-init the _PyXI_excinfo + don't FreeExcInfo a not-fully-initialized struct on the exec failure path. Minimization PARTIAL/vehicle-confirmed (vehicle_source.py segvs deterministically; the _interpreters.create+exec reduction didn't hit the window). Found by the LOCAL systemd fleet against the current 29-bug catalog."
+}

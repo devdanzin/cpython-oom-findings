@@ -1,0 +1,28 @@
+{
+  "id": "OOM-0030",
+  "slug": "unicode-subtype-new-null-data",
+  "title": "str subclass instantiation under OOM frees a unicode with NULL data — unicode_subtype_new (Objects/unicodeobject.c:13986)",
+  "description": "unicode_subtype_new allocates the str-subclass instance `self` then its data buffer; if a later allocation fails under OOM it jumps to onError: Py_DECREF(self) while _PyUnicode_DATA_ANY(self) is still NULL, so unicode_dealloc -> unicode_is_singleton -> _PyUnicode_NONCOMPACT_DATA asserts data != NULL and aborts.",
+  "crash_kind": "abort",
+  "sites": ["Objects/unicodeobject.c unicode_subtype_new:13986", "Objects/unicodeobject.c unicode_is_singleton:1723", "Objects/unicodeobject.c unicode_dealloc:1629", "Include/cpython/unicodeobject.h _PyUnicode_NONCOMPACT_DATA:272"],
+  "signature": {
+    "site_frame": "unicode_is_singleton@Objects/unicodeobject.c:1723",
+    "top_frames": [
+      "unicode_is_singleton@Objects/unicodeobject.c:1723",
+      "unicode_dealloc@Objects/unicodeobject.c:1629",
+      "subtype_dealloc@Objects/typeobject.c:2876",
+      "unicode_subtype_new@Objects/unicodeobject.c:13986",
+      "unicode_new_impl@Objects/unicodeobject.c:13849"
+    ]
+  },
+  "vehicles": ["fleet inst-03 email__header_value_parser-assertion-sigabrt-oomNEW", "fleet inst-04 email__header_value_parser-assertion-sigabrt-oomNEW"],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort", "upstream": "n/a"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-19",
+  "confirmed_commit": "15d7406",
+  "notes": "Assertion `data != NULL' in _PyUnicode_NONCOMPACT_DATA (unicodeobject.h:272), reached via unicode_dealloc->unicode_is_singleton when a str-subclass `self` is freed on unicode_subtype_new's onError path with self->data still NULL. Same partially-constructed-object-freed-on-OOM class as OOM-0024 (template_iter); distinct from OOM-0009 (replace). Debug-only assert (Py_DEBUG); release dereferences the NULL data (segfault/UAF risk). Found by 2 fleet instances via email._header_value_parser str-subclass construction. Fix: leave the subtype in a dealloc-safe (empty/valid data) state right after tp_alloc, or make unicode_is_singleton/unicode_dealloc tolerate NULL data. Minimization PARTIAL/vehicle-confirmed (vehicle_source.py reproduces deterministically; the class S(str) reduction didn't hit the window). First bugs found by the LOCAL systemd fleet against the current 29-bug catalog."
+}

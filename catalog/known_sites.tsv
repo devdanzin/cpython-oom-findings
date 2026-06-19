@@ -304,3 +304,24 @@ OOM-0029	abort	line	Objects/object.c:275
 OOM-0029	abort	line	Objects/object.c:3319
 OOM-0029	abort	line	Objects/tupleobject.c:277
 OOM-0029	abort	line	Objects/typeobject.c:2876
+OOM-0030	abort	assert	Include/cpython/unicodeobject.h:data != NULL
+OOM-0030	abort	func	Include/cpython/unicodeobject.h:_PyUnicode_NONCOMPACT_DATA
+OOM-0030	abort	func	Objects/typeobject.c:subtype_dealloc
+OOM-0030	abort	func	Objects/unicodeobject.c:unicode_dealloc
+OOM-0030	abort	func	Objects/unicodeobject.c:unicode_is_singleton
+OOM-0030	abort	func	Objects/unicodeobject.c:unicode_new_impl
+OOM-0030	abort	func	Objects/unicodeobject.c:unicode_subtype_new
+OOM-0030	abort	line	Include/cpython/unicodeobject.h:272
+OOM-0030	abort	line	Objects/typeobject.c:2876
+OOM-0030	abort	line	Objects/unicodeobject.c:13849
+OOM-0030	abort	line	Objects/unicodeobject.c:13986
+OOM-0030	abort	line	Objects/unicodeobject.c:1629
+OOM-0030	abort	line	Objects/unicodeobject.c:1723
+OOM-0031	segv	func	Objects/methodobject.c:cfunction_vectorcall_FASTCALL_KEYWORDS
+OOM-0031	segv	func	Python/crossinterp.c:_PyXI_FreeExcInfo
+OOM-0031	segv	func	Python/crossinterp.c:_PyXI_excinfo_clear
+OOM-0031	segv	func	Python/crossinterp.c:_excinfo_clear_type
+OOM-0031	segv	line	Objects/methodobject.c:465
+OOM-0031	segv	line	Python/crossinterp.c:1319
+OOM-0031	segv	line	Python/crossinterp.c:1374
+OOM-0031	segv	line	Python/crossinterp.c:1712

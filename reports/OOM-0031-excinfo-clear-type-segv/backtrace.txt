@@ -1,0 +1,6 @@
+Program received signal SIGSEGV, Segmentation fault.
+#0  _excinfo_clear_type   at Python/crossinterp.c:1319   # reads info->builtin on an invalid/uninitialized info
+#1  _PyXI_excinfo_clear   at Python/crossinterp.c:1374
+#2  _PyXI_FreeExcInfo     at Python/crossinterp.c:1712
+#5  cfunction_vectorcall_FASTCALL_KEYWORDS at Objects/methodobject.c:465   # _interpreters.exec
+#7  _PyEval_EvalFrameDefault at Python/generated_cases.c.h:2831

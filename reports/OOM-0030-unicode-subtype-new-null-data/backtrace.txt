@@ -1,0 +1,9 @@
+./Include/cpython/unicodeobject.h:272: void *_PyUnicode_NONCOMPACT_DATA(PyObject *): Assertion `data != NULL' failed.
+Fatal Python error: Aborted
+
+#11 unicode_is_singleton   at Objects/unicodeobject.c:1723   # _PyUnicode_NONCOMPACT_DATA(self): data == NULL
+#12 unicode_dealloc        at Objects/unicodeobject.c:1629
+#13 subtype_dealloc        at Objects/typeobject.c:2876
+#14 _Py_Dealloc            at Objects/object.c:3319
+#16 unicode_subtype_new    at Objects/unicodeobject.c:13986   # onError: Py_DECREF(self) -- self->data still NULL
+#17 unicode_new_impl       at Objects/unicodeobject.c:13849   # str-subclass __new__
