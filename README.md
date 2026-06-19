@@ -6,6 +6,12 @@ and tracked from a single **umbrella issue** (modelled on python/cpython#146102)
 so developers can pick work without polluting the issue tracker with reports that
 may not be actionable.
 
+**State: 35 unique bugs (OOM-0001..0035), all with a minimal reproducer.** Discovery,
+triage and minimization are done; publishing is the remaining (gated) work — see
+`reports/NEXT_STEPS.md`. **`CLAUDE.md` is the operational hub** (workflow, dedup-key
+rules, build matrix, lessons); `docs/MINIMIZATION.md` and `docs/DEDUP_PIPELINE.md` go
+deep on those two areas.
+
 ## Layout
 
 ```
@@ -26,12 +32,16 @@ are listed in each report's `meta.json`.
 
 ## Dedupe
 
-Compare crashes by the **gdb backtrace**, never by the directory's signal label
-(assert-on-debug and segv-on-release can be the same bug) nor the ASan re-raise pc.
-`scripts/signature.py` skips generic refcount/abort/eval plumbing and keys on the
-first project-specific frame (the crash SITE). `scripts/dedupe.py` matches a new
-backtrace against known bugs. The build matrix and its reading (ASan SEGV → rc 1
-vs non-ASan rc 139) live in the triage memory / `scripts/triage_matrix.sh`.
+Compare crashes by the **faulting frame** (the crash SITE), never by the directory's
+signal label (assert-on-debug and segv-on-release can be the same bug) nor the ASan
+re-raise pc. The current pipeline is a **single-writer read-only snapshot**: triage
+writes `reports/*/meta.json`; `scripts/gen_known_sites.py` derives the flat
+`catalog/known_sites.tsv`; the fuzzer dedupes in-loop against it and `scripts/ingest.py`
+reconciles batches of run-dirs — see `docs/DEDUP_PIPELINE.md`. Detector/plumbing frames
+(the assert machinery, `refcount.h` macros) must never be discriminating keys — see the
+dedup-key rule in `CLAUDE.md`. (`scripts/signature.py`/`dedupe.py` are the earlier
+single-crash matchers, still present.) Build matrix + exit-code reading: `CLAUDE.md` /
+`scripts/triage_matrix.sh`.
 
 ## Workflow
 

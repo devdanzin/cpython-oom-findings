@@ -30,7 +30,26 @@ python3 scripts/gen_known_sites.py     # reports/*/meta.json (+ backtrace.txt) -
 ```
 Emits keys per bug: `func` (`file:func`, stable across line drift), `line` (`file:line`,
 near-matched within ±12), `assert` (`file:expr`, disambiguates same-function eval
-asserts), `msg` (fatal-message prefix). Run it whenever the catalog changes.
+asserts), `msg` (fatal-message prefix). Run it whenever the catalog changes — it also
+**validates every `meta.json`** (the fastest catch for a malformed-JSON note).
+
+**Key curation — generic detector/plumbing keys must never be discriminators.** The
+deduper matches a crash against ALL keys and, on a tie, `decide()` picks the lowest id
+(`sorted(matched)[0]`). So a key shared by several bugs mislabels a crash to the
+lowest-numbered one. `gen_known_sites.py` therefore *skips* the generic catchers:
+
+- `GENERIC_ASSERTS` — `!PyErr_Occurred()` / `!_PyErr_Occurred(tstate)` (the "no exception
+  pending" invariant, asserted in many functions). Fixed the OOM-0011↔0025 mislabel.
+- `GENERIC_DETECTOR_FUNCS` (`_Py_NegativeRefcount`, `_PyObject_AssertFailed`) +
+  `DETECTOR_FILE` (`refcount`/`pyatomic*`/`object`.h inlined macros) + `_generic_assert()`
+  (the `object has negative ref count` message) — the negrefcount/assert *detector*,
+  shared by the whole negrefcount family. Fixed the OOM-0029↔0019 mislabel. Mirrors
+  `oom_dedup._BT_SKIP` / `_BT_SKIP_FILE` so the snapshot and the live-backtrace resolver
+  agree on what counts as a real site.
+
+These detectors *catch* corruption; they are never the defect. The real discriminator is
+the bug's own site (the dealloc cascade, the parser frame, the specific assert).
+**After adding a bug, grep its keys and prune any generic/shared frame before committing.**
 
 ### `ingest.py` — dedupe a pile of run-dirs, surface only new sites
 ```
