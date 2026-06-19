@@ -26,6 +26,14 @@ ASSERT = re.compile(r"([\w./+-]+\.(?:c|h)):(\d+):.*?\b(\w+)\s*(?:\([^)]*\))?\s*:
 ASSERT_NOFUNC = re.compile(r"([\w./+-]+\.(?:c|h)):(\d+):.*?Assertion[ `\"]+([^`'\"\n\t]*)")
 FATAL = re.compile(r'Fatal Python error:\s*([^\n]+)')
 
+# Non-discriminative "no exception pending" invariant asserts: they appear in many
+# functions, so a FILE-scoped assert key (file:expr) collides when one file has two such
+# bugs (e.g. specialize.c has specialize@364 = OOM-0011 AND unspecialize@378 = OOM-0025,
+# both asserting !PyErr_Occurred()). Skip the assert key for these -- the func + line keys
+# are the real discriminators. Discriminative asserts (data != NULL, gc_get_refs(op) >= 0,
+# PyStackRef_BoolCheck(cond), ...) still get assert keys.
+GENERIC_ASSERTS = {"!PyErr_Occurred()", "!_PyErr_Occurred(tstate)"}
+
 
 def norm_file(f):
     return f.lstrip("./")
@@ -65,14 +73,16 @@ def collect():
             seen_assert_lines = set()
             for f, ln, func, expr in ASSERT.findall(txt):
                 fn = norm_file(f)
-                rows.add((oid, kind, "assert", f"{fn}:{expr.strip()}"))
+                if expr.strip() not in GENERIC_ASSERTS:
+                    rows.add((oid, kind, "assert", f"{fn}:{expr.strip()}"))
                 rows.add((oid, kind, "func", f"{fn}:{func}"))
                 rows.add((oid, kind, "line", f"{fn}:{ln}"))
                 seen_assert_lines.add((fn, expr.strip()))
             for f, ln, expr in ASSERT_NOFUNC.findall(txt):  # catch lines w/o a parseable func
                 fn = norm_file(f)
                 if (fn, expr.strip()) not in seen_assert_lines:
-                    rows.add((oid, kind, "assert", f"{fn}:{expr.strip()}"))
+                    if expr.strip() not in GENERIC_ASSERTS:
+                        rows.add((oid, kind, "assert", f"{fn}:{expr.strip()}"))
                     rows.add((oid, kind, "line", f"{fn}:{ln}"))
             for f in FATAL.findall(txt):
                 msg = f.strip()

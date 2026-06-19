@@ -57,7 +57,6 @@ OOM-0007	fatal	line	Python/context.c:535
 OOM-0007	fatal	line	Python/context.c:543
 OOM-0007	fatal	line	Python/frame.c:101
 OOM-0007	fatal	msg	_Py_Dealloc: Deallocator of type 'Context' cleared the curre
-OOM-0008	abort	assert	Objects/typeobject.c:!PyErr_Occurred()
 OOM-0008	abort	func	Objects/frameobject.c:PyFrame_GetBack
 OOM-0008	abort	func	Objects/frameobject.c:frame_back_get_impl
 OOM-0008	abort	func	Objects/object.c:_PyObject_GenericGetAttrWithDict
@@ -262,7 +261,6 @@ OOM-0024	segv	line	Objects/object.c:3319
 OOM-0024	segv	line	Objects/templateobject.c:232
 OOM-0024	segv	line	Objects/templateobject.c:45
 OOM-0024	segv	line	Objects/templateobject.c:53
-OOM-0025	abort	assert	Python/specialize.c:!PyErr_Occurred()
 OOM-0025	abort	func	Python/generated_cases.c.h:_PyEval_EvalFrameDefault
 OOM-0025	abort	func	Python/specialize.c:_Py_Specialize_LoadGlobal
 OOM-0025	abort	func	Python/specialize.c:specialize_load_global_lock_held
@@ -271,7 +269,6 @@ OOM-0025	abort	line	Python/generated_cases.c.h:10142
 OOM-0025	abort	line	Python/specialize.c:1441
 OOM-0025	abort	line	Python/specialize.c:1450
 OOM-0025	abort	line	Python/specialize.c:378
-OOM-0026	abort	assert	Modules/_interpchannelsmodule.c:!PyErr_Occurred()
 OOM-0026	abort	assert	Modules/_interpchannelsmodule.c:PyErr_Occurred()
 OOM-0026	abort	func	Modules/_interpchannelsmodule.c:channelsmod_create
 OOM-0026	abort	func	Modules/_interpchannelsmodule.c:handle_channel_error
@@ -334,7 +331,6 @@ OOM-0031	segv	line	Objects/methodobject.c:465
 OOM-0031	segv	line	Python/crossinterp.c:1319
 OOM-0031	segv	line	Python/crossinterp.c:1374
 OOM-0031	segv	line	Python/crossinterp.c:1712
-OOM-0032	abort	assert	Objects/typeobject.c:!_PyErr_Occurred(tstate)
 OOM-0032	abort	func	Objects/typeobject.c:type_call
 OOM-0032	abort	func	Python/_warnings.c:warn_explicit
 OOM-0032	abort	line	Objects/object.c:818
