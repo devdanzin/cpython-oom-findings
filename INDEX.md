@@ -4,7 +4,7 @@ Crashes found by allocation-failure fuzzing (`_testcapi.set_nomemory`) of CPytho
 
 **Pick anything to work on** — open a CPython issue if one doesn't exist, comment with the issue/PR, and the Status column will be updated. Reports are deduped by crash signature; one row = one underlying bug (vehicles listed in the report).
 
-_31 unique bug(s). Generated 2026-06-19._
+_32 unique bug(s). Generated 2026-06-19._
 
 _Found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode (fusil originally by Victor Stinner). Reports drafted by Claude Code; reproducers machine-generated._
 
@@ -46,6 +46,7 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 | [OOM-0027](reports/OOM-0027-pop-jump-boolcheck/report.md) | Conditional-jump opcodes assume TOS is already a strict bool (a TO_BOOL/compare precedes them) and only assert it. Under OOM an earlier opcode's allocation failure leaves a non-bool / dangling _PyStackRef on the value stack, so `assert(PyStackRef_BoolCheck(cond))` in POP_JUMP_IF_FALSE aborts on debug builds; on release the bad value is used as a branch condition. | ft_debug_asan,jit | draft |
 | [OOM-0029](reports/OOM-0029-neg-refcount-memoryerror-oom/report.md) | Under OOM a MemoryError is decref'd one time too many; the negative refcount is detected later by _Py_NegativeRefcount (Objects/object.c:275) when the object is freed again during an unrelated dealloc cascade (list_dealloc -> subtype_dealloc -> tuple_dealloc), aborting on debug builds. The dealloc cascade is the incidental detection site, not the defect. | ft_debug_asan,jit | draft |
 | [OOM-0030](reports/OOM-0030-unicode-subtype-new-null-data/report.md) | unicode_subtype_new allocates the str-subclass instance `self` then its data buffer; if a later allocation fails under OOM it jumps to onError: Py_DECREF(self) while _PyUnicode_DATA_ANY(self) is still NULL, so unicode_dealloc -> unicode_is_singleton -> _PyUnicode_NONCOMPACT_DATA asserts data != NULL and aborts. | ft_debug_asan,jit | draft |
+| [OOM-0032](reports/OOM-0032-warn-explicit-pending-exc/report.md) | When a warning is emitted while an allocation failure is active, the warnings C path (do_warn -> warn_explicit) reaches message normalization with a MemoryError already pending. warn_explicit then normalizes the message with an exception set: PyObject_CallOneArg(category, message) -> type_call (typeobject.c:2441) for a plain-string message, or PyObject_Str(message) (object.c:818) for a Warning-instance message. Both trip the debug-only invariant assert `!_PyErr_Occurred(tstate)` -> SIGABRT on debug builds. The assert is #ifdef Py_DEBUG, so release builds compile it out and silently lose the exception (latent invariant violation). | ft_debug_asan,ft_release,jit,upstream | draft |
 
 ## Fatal Python error
 
