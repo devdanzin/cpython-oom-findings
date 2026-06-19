@@ -10,25 +10,23 @@ Under memory pressure, a `contextvars.Context` can be deallocated while an excep
 
 ## Reproducer
 
-Confirmed via the fuzzing vehicles (`importlib.metadata.entry_points()` under the `set_nomemory` sweep). A self-contained stdlib-only reduction is included but did **not** reproduce within the swept budget — the bug needs the precise OOM timing where the `Context` is the last decref while `tstate->current_exception` holds a raw (un-normalized) exception and a stored value's teardown clears it. See `repro.py`; minimization is **partial** (vehicle-confirmed, no minimal trigger found).
-
-Vehicle (reliable, `~/crashers/python-4/importlib_metadata-fatal_python_error/source.py`):
+Minimal, stdlib-only (shrinkray-reduced from the vehicle, then cleaned; deterministic,
+re-verified). A Context is deallocated with a pending exception under OOM.
 
 ```python
-import importlib.metadata
-from _testcapi import set_nomemory, remove_mem_hooks
-for start in range(1000):                 # dense OOM sweep
-    set_nomemory(start, 0)
+import faulthandler, importlib.metadata
+faulthandler.enable()
+from _testcapi import set_nomemory
+for start in range(40):
+    set_nomemory(start)
     try:
-        try:
-            importlib.metadata.entry_points()   # -> distributions() -> Context freed mid-unwind
-        finally:
-            remove_mem_hooks()
-    except MemoryError:
+        importlib.metadata.metadata("f")
+    except BaseException:
         pass
+print("done, no crash")
 ```
 
-Crashes on the FT debug+ASan and JIT (debug) builds.
+The full fuzzer vehicle is preserved as `vehicle_source.py`.
 
 ## Backtrace
 

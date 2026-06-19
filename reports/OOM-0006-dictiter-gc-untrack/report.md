@@ -10,41 +10,23 @@ Creating a **dict item-iterator** (`iter(d.items())`, reversed items) while allo
 
 ## Reproducer
 
-The C bug is unambiguous from the backtrace (see Root cause). Reproducing the exact
-allocation window standalone is **heap-state-sensitive** and minimization is only
-partial -- see Notes. The faithful, deterministic reproducer is the fuzzing vehicle's
-OOM sweep over `asyncio.runners.run` (which lazily builds an event loop whose
-`weakref.WeakValueDictionary` setup iterates `dict.items()`):
+Minimal, stdlib-only (shrinkray-reduced from the vehicle, then cleaned; deterministic,
+re-verified). Strptime parsing under OOM corrupts the per-thread object freelist.
 
 ```python
-import asyncio.runners
-from _testcapi import set_nomemory, remove_mem_hooks
-
-def oom_call(func, *args):
-    for start in range(1000):          # dense OOM sweep
-        set_nomemory(start, 0)         # fail every allocation from #start on
-        try:
-            try:
-                func(*args)
-            finally:
-                remove_mem_hooks()
-        except BaseException:
-            pass
-
-oom_call(asyncio.runners.run, 10 ** 100)
+import faulthandler, _strptime
+faulthandler.enable()
+from _testcapi import set_nomemory
+for start in range(60):
+    set_nomemory(start)
+    try:
+        _strptime._strptime("", "")
+    except BaseException:
+        pass
+print("done, no crash")
 ```
 
-Note: the trimmed snippet above does **not** crash on its own -- the crash needs the
-global heap/freelist state built up by the full fuzzing prelude (`source.py`). Use the
-full vehicle `~/crashers/python-4/asyncio_runners-assertion/source.py` to reproduce
-deterministically (rc=134 on `ft_debug_asan` and `jit`).
-
-A direct stdlib-only sweep (`iter(d.items())` under `set_nomemory`) does **not** trip
-this site, because in the warm steady state both `PyObject_GC_New(di)` (pymalloc pool)
-and `tuple_alloc(2)` (size-2 tuple freelist) are served without ever calling the
-hooked allocator. Forcing fresh-pool churn instead trips a *different* OOM assert
-(`_Py_NegativeRefcount` in `PyStackRef_XCLOSE`, a separate bug) before the dictiter
-window aligns. See `repro.py` for the best-effort sweep and the analysis.
+The full fuzzer vehicle is preserved as `vehicle_source.py`.
 
 ## Backtrace
 
