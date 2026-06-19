@@ -16,11 +16,32 @@ error path did not unwind cleanly), and the assert aborts on debug builds.
 
 ## Reproducer
 
-Reproduced via the fuzzing vehicle (`python-7/_pyrepl_windows_eventqueue-assertion`;
-the crash is in annotation evaluation — `windows_eventqueue.__annotate__` — run under
-the `set_nomemory` sweep). No minimal stdlib trigger isolated: the bad stack state is
-a downstream effect of an allocation failing inside an earlier opcode, so it depends
-on the precise OOM timing rather than on a specific source construct. See `repro.py`.
+Minimal, stdlib-only (shrinkray-reduced from the vehicle, then cleaned; deterministic,
+re-verified). A POP_JUMP_IF_FALSE finds a non-bool stackref under OOM.
+
+```python
+import faulthandler
+from unittest.mock import MagicMock
+import _pyrepl.windows_eventqueue
+faulthandler.enable()
+from _testcapi import set_nomemory, remove_mem_hooks
+
+def run(func, *args):                     # wrapper preserved: the crashing POP_JUMP_IF_FALSE is in this frame's bytecode
+    for start in range(160):
+        set_nomemory(start)
+        try:
+            try:
+                func(*args)
+            finally:
+                remove_mem_hooks()
+        except BaseException:
+            pass
+
+run(_pyrepl.windows_eventqueue.__annotate__, MagicMock())
+print("done, no crash")
+```
+
+The full fuzzer vehicle is preserved as `vehicle_source.py`.
 
 ## Backtrace
 

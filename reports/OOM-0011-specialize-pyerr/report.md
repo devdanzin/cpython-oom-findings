@@ -10,30 +10,23 @@ The adaptive `LOAD_ATTR` specializer runs at the *start* of the opcode (`_SPECIA
 
 ## Reproducer
 
+Minimal, stdlib-only (shrinkray-reduced from the vehicle, then cleaned; deterministic,
+re-verified). LOAD_ATTR specialization under OOM leaves a pending exception.
+
 ```python
-import _testcapi, faulthandler, gettext, warnings
+import faulthandler, asyncio, optparse   # the asyncio import is load-bearing (shrinkray kept it)
 faulthandler.enable()
-warnings.simplefilter("ignore")          # don't build warning machinery under OOM
-
-# non-int `n` -> gettext._as_int2(n) -> `n.__class__.__name__` and module-level
-# LOAD_ATTRs that are still unspecialized. Warm the path once outside OOM.
-try:
-    gettext.npgettext("ctx", "a", "b", "not-an-int")
-except Exception:
-    pass
-
-for start in range(1, 260):              # sweep the failing-allocation index
-    _testcapi.set_nomemory(start, 0)
+from _testcapi import set_nomemory
+for start in range(120):
+    set_nomemory(start)
     try:
-        try:
-            gettext.npgettext("ctx", "a", "b", "not-an-int")
-        finally:
-            _testcapi.remove_mem_hooks()
+        optparse.ngettext(0.0, 0, "")
     except BaseException:
         pass
+print("done, no crash")
 ```
 
-Aborts within the sweep (crashing `start` ~54) on the free-threaded debug+ASan build and on the JIT build. The OOM budget must be large enough for the gettext call to run but small enough that an allocation fails while the still-cold `LOAD_ATTR` is hot enough to specialize. `warnings` is pre-imported (and silenced) so the budget is not consumed building warning machinery, which would otherwise trip the unrelated OOM-0003 `code_dealloc` assert.
+The full fuzzer vehicle is preserved as `vehicle_source.py`.
 
 ## Backtrace
 

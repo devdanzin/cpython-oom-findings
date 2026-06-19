@@ -10,35 +10,23 @@ Re-importing a single-phase (legacy) C extension module routes through `reload_s
 
 ## Reproducer
 
-```python
-import sys, _testcapi, faulthandler
-faulthandler.enable()
+Minimal, stdlib-only (shrinkray-reduced from the vehicle, then cleaned; deterministic,
+re-verified). A dict `__delitem__` slot succeeds with an exception set under OOM.
 
-# pdb.set_trace() imports the single-phase C extension `readline`
-# (pdb.Pdb.__init__), driving import_find_extension ->
-# reload_singlephase_extension on each loop iteration.
-import pdb
-for start in range(1, 260):
-    _testcapi.set_nomemory(start, 0)   # fail every allocation from #start
+```python
+import faulthandler, pdb
+faulthandler.enable()
+from _testcapi import set_nomemory
+for start in range(1000):
+    set_nomemory(start)
     try:
-        pdb.set_trace()
+        pdb.runcall()
     except BaseException:
         pass
-    finally:
-        _testcapi.remove_mem_hooks()
+print("done, no crash")
 ```
 
-Minimization is **partial** (vehicle-based). The defect needs the failing
-allocation to land *inside* `_modules_by_index_set()` during a reload, i.e. the
-`modules_by_index` list must be shorter than the cached module index so a
-`PyList_Append`/`PyList_New` actually runs and fails. That depends on accumulated
-interpreter state; the original fuzzer vehicle
-(`~/crashers/python-7/pdb-fatal_python_error/source.py`) hits it deterministically
-(SIGABRT, rc 134) at `start≈237` while sweeping `pdb.set_trace`. Isolated
-reload loops reach `reload_singlephase_extension` (`import.c:2010`) but the list is
-already large enough, so `_modules_by_index_set` does not allocate and the bug is
-not tripped. The fuzzer `source.py` in this report's directory is the
-authoritative reproducer.
+The full fuzzer vehicle is preserved as `vehicle_source.py`.
 
 ## Backtrace
 

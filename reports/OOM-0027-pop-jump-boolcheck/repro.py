@@ -1,28 +1,23 @@
-"""OOM-0027: a conditional-jump opcode (POP_JUMP_IF_FALSE) finds a non-bool on the
-value stack under OOM -> assert(PyStackRef_BoolCheck(cond)) aborts
-(Python/generated_cases.c.h).
+"""OOM-0027 minimal reproducer (stdlib only) — shrinkray-reduced from the vehicle, then cleaned.
 
-Reproduced via the fuzzing vehicle python-7/_pyrepl_windows_eventqueue-assertion
-(annotation evaluation under the set_nomemory sweep). The bad stack value is a
-downstream effect of an allocation failing inside an EARLIER opcode, so reproduction
-depends on precise OOM timing rather than a specific construct -- no minimal stdlib
-trigger was isolated. Needs a debug build (assert stripped under NDEBUG).
+Trigger: _pyrepl.windows_eventqueue.__annotate__(MagicMock()) (the function wrapper is load-bearing — the crashing POP_JUMP_IF_FALSE is in its frame) under the set_nomemory sweep. Deterministic (re-verified).
+"""
+import faulthandler
+from unittest.mock import MagicMock
+import _pyrepl.windows_eventqueue
+faulthandler.enable()
+from _testcapi import set_nomemory, remove_mem_hooks
 
-The vehicle's effective shape is: import a module whose body evaluates a boolean
-expression (here a deferred __annotate__), inside a dense set_nomemory sweep:
-
-    from _testcapi import set_nomemory, remove_mem_hooks
-    for start in range(1, 4000):
-        set_nomemory(start, 0)
+def run(func, *args):                     # wrapper preserved: the crashing POP_JUMP_IF_FALSE is in this frame's bytecode
+    for start in range(160):
+        set_nomemory(start)
         try:
             try:
-                <evaluate code containing `if <expr>:` / boolean branches>
+                func(*args)
             finally:
                 remove_mem_hooks()
         except BaseException:
             pass
 
-See reports/OOM-0027-pop-jump-boolcheck/backtrace.txt and the vehicle source
-(~/crashers/python-7/_pyrepl_windows_eventqueue-assertion/source.py) for the exact
-reproducer.
-"""
+run(_pyrepl.windows_eventqueue.__annotate__, MagicMock())
+print("done, no crash")
