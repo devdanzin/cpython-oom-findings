@@ -5,12 +5,12 @@ single-writer merge step: instances (or a batch) feed their crash dirs in; known
 vehicles are tallied and prunable, new sites are flagged for a report. No shared mutable
 state -- it only READS the snapshot.
 
-Tiered resolution (cheap -> expensive):
-  1. stdout (no execution): aborts carry an exact `file:line: func(): Assertion ...`;
-     fatals carry a `Fatal Python error: <msg>`. Both dedupe build-stably.
-  2. segvs have no reliable C site in stdout -> resolve via --sites-cache <tsv>
-     (precomputed by segv_sweep.sh, or by an in-loop hook) or --gdb (segv_worker.sh).
-     Without either, segvs are grouped coarsely and flagged needs-gdb.
+Matching considers EVERY signal a crash offers and calls it known if ANY matches: all
+assertions in stdout (glibc `Assertion `expr'` and CPython `Assertion "expr"` forms), a
+specific `Fatal Python error: <msg>`, and -- for segvs / generic-assert fatals -- every
+real CPython frame in the gdb backtrace (via --sites-cache or --gdb). Checking all signals
+avoids false "new" labels when the resolved frame is a secondary/cascade site but an
+earlier assertion or a deeper frame is a known bug. (Mirrors fusil's in-loop oom_dedup.)
 
 Usage:
   ingest.py [globs...] [--snapshot F] [--sites-cache F] [--gdb] [--keep N] [--json F]
@@ -39,11 +39,14 @@ globs = [a for a in args if not a.startswith("--")] or [
     os.path.expanduser("~/crashers/python-*/*"), os.path.expanduser("~/crashers/*/")]
 
 # ---- stdout classification ----
-ASSERT = re.compile(r"([\w./+-]+\.(?:c|h)):(\d+):[^\n]*?\b(\w+)\s*\([^)]*\)\s*:\s*Assertion `([^']*)' failed")
-ASSERT2 = re.compile(r"([\w./+-]+\.(?:c|h)):(\d+):[^\n]*?Assertion `([^']*)' failed")
+# "<file>:<line>: [ret] <func>[(args)]: Assertion <q>expr<q>" -- glibc backticks OR CPython
+# double-quotes, optional (args) list.
+ASSERT = re.compile(r"([\w./+-]+\.(?:c|h)):(\d+):.*?\b(\w+)\s*(?:\([^)]*\))?\s*:\s*Assertion[ `\"]+([^`'\"\n\t]*)")
+ASSERT2 = re.compile(r"([\w./+-]+\.(?:c|h)):(\d+):.*?Assertion[ `\"]+([^`'\"\n\t]*)")  # func-less fallback
 FATAL = re.compile(r'Fatal Python error:\s*([^\n]+)')
 SEGV = re.compile(r'AddressSanitizer: SEGV|Fatal Python error: Segmentation fault|Segmentation fault')
 IMPORTERR = re.compile(r'(ModuleNotFoundError|ImportError):')
+GENERIC_FATAL = ("_PyObject_AssertFailed", "_Py_NegativeRefcount")
 SYM = re.compile(r', at ([A-Za-z_]\w+)\+0x')
 SKIP = re.compile(r'^(___?interceptor\w*|__sanitizer\w*|__asan\w*|_Py_DumpStack|faulthandler\w*|_PyEval_EvalFrameDefault|_PyEval_Vector|PyEval_EvalCode|Py_RunMain|Py_BytesMain|pymain_\w+|_start|__libc_start\w*)$')
 FRAME = re.compile(r'([A-Za-z_]\w+)@([\w./+-]+\.(?:c|h)):(\d+)')
@@ -53,43 +56,26 @@ def nf(f):
     return f.lstrip("./")
 
 
-def classify(text):
-    """-> dict(kind, file, line, func, assert_expr, fatal_msg, chain) or kind=clean/import."""
-    m = ASSERT.search(text) or ASSERT2.search(text)
-    if m:
-        g = m.groups()
-        if len(g) == 4:
-            f, ln, func, expr = g
-        else:
-            f, ln, expr = g; func = None
-        return dict(kind="abort", file=nf(f), line=int(ln), func=func, assert_expr=expr.strip(),
-                    fatal_msg=None, chain=None)
-    fa = FATAL.search(text)
-    if fa and not SEGV.search(text):
-        msg = fa.group(1).strip()
-        # generic assert wrappers carry no site in stdout -> resolve via gdb/cache,
-        # don't trust the non-discriminative message.
-        if msg.startswith(("_PyObject_AssertFailed", "_Py_NegativeRefcount")):
-            return dict(kind="segv", file=None, line=None, func=None, assert_expr=None,
-                        fatal_msg=None, chain=msg[:50])
-        return dict(kind="fatal", file=None, line=None, func=None, assert_expr=None,
-                    fatal_msg=msg[:60], chain=None)
-    if SEGV.search(text):
-        chain = [s for s in SYM.findall(text) if not SKIP.match(s)][:3]
-        return dict(kind="segv", file=None, line=None, func=None, assert_expr=None,
-                    fatal_msg=None, chain=" <- ".join(chain) or "(no-sym)")
-    if IMPORTERR.search(text):
-        return dict(kind="import", chain=None)
-    return dict(kind="clean", chain=None)
+def all_asserts(text):
+    """Every assertion in stdout as a list of (file, line, func|None, expr)."""
+    out, seen = [], set()
+    for m in ASSERT.finditer(text):
+        key = (nf(m.group(1)), int(m.group(2)))
+        out.append((key[0], key[1], m.group(3), m.group(4).strip()))
+        seen.add(key)
+    for m in ASSERT2.finditer(text):
+        key = (nf(m.group(1)), int(m.group(2)))
+        if key not in seen:
+            out.append((key[0], key[1], None, m.group(3).strip()))
+            seen.add(key)
+    return out
 
 
 # ---- snapshot matcher ----
 def load_snapshot(path):
-    by_func, by_assert = {}, {}
-    by_line = {}
+    by_func, by_assert, by_line = {}, {}, {}
     per_file_lines = collections.defaultdict(list)
-    by_msg = []
-    kind_of = {}
+    by_msg, kind_of = [], {}
     for line in pathlib.Path(path).read_text().splitlines():
         if line.startswith("#") or not line.strip():
             continue
@@ -110,7 +96,7 @@ def load_snapshot(path):
 
 
 def match(c, snap):
-    """Return (set(oom_ids), how) or (empty, 'NEW')."""
+    """Match ONE candidate dict -> (set(oom_ids), how) or (empty, 'NEW')."""
     if c.get("assert_expr") and c.get("file"):
         hit = snap["assert_"].get(f"{c['file']}:{c['assert_expr']}")
         if hit:
@@ -129,40 +115,42 @@ def match(c, snap):
             return hit, "line"
         for ln, oid in snap["fl"].get(c["file"], ()):
             if abs(ln - c["line"]) <= 12:
-                return {oid}, f"near({c['line']-ln:+d})"
+                return {oid}, "near"
     return set(), "NEW"
 
 
-# ---- sites cache (precomputed local segv sites) ----
+def frame_to_cand(site):
+    m = FRAME.match(site)
+    return dict(file=nf(m.group(2)), func=m.group(1), line=int(m.group(3)),
+                assert_expr=None, fatal_msg=None) if m else None
+
+
+# ---- sites cache (precomputed local segv sites: label -> (signal, site, fingerprint)) ----
 def load_cache(path):
     cache = {}
     if path and os.path.exists(path):
         for line in open(path):
             f = line.rstrip("\n").split("\t")
             if len(f) >= 3:
-                cache[f[0]] = (f[1], f[2])   # label -> (signal, site)
+                cache[f[0]] = (f[1], f[2], f[3] if len(f) > 3 else "")
     return cache
 
 
-def resolve_segv(crash_dir, label, cache):
-    """Fill file/func/line for a segv via cache or gdb; returns updated classify dict."""
-    site = None
+def resolve_chain(crash_dir, label, cache):
+    """Return the gdb chain ['func@file:line', ...] for a segv, via cache or --gdb."""
+    fp = None
     if label in cache:
-        site = cache[label][1]
+        fp = cache[label][2] or cache[label][1]   # fingerprint, else single site
     elif USE_GDB:
         try:
             out = subprocess.run(["bash", str(HERE / "segv_worker.sh"), crash_dir],
                                  capture_output=True, text=True, timeout=240).stdout
             parts = out.strip().split("\t")
-            if len(parts) >= 3:
-                site = parts[2]
+            if len(parts) >= 4:
+                fp = parts[3] or parts[2]
         except Exception:
-            site = None
-    if site:
-        m = FRAME.match(site)
-        if m:
-            return dict(file=nf(m.group(2)), func=m.group(1), line=int(m.group(3)))
-    return None
+            fp = None
+    return [s for s in (fp.split(";") if fp else []) if FRAME.match(s)]
 
 
 # ---- main ----
@@ -176,10 +164,10 @@ def main():
                 dirs.append(p)
     dirs = sorted(set(dirs))
 
-    known = collections.defaultdict(list)     # oom_id -> [labels]
+    known = collections.defaultdict(list)
     ambiguous = collections.defaultdict(list)
-    new_sites = collections.defaultdict(list)  # (kind, key) -> [labels]
-    needs_gdb = collections.defaultdict(list)  # coarse chain -> [labels]
+    new_sites = collections.defaultdict(list)
+    needs_gdb = collections.defaultdict(list)
     other = collections.Counter()
 
     for d in dirs:
@@ -188,31 +176,52 @@ def main():
             text = open(os.path.join(d, "stdout"), errors="replace").read()
         except OSError:
             continue
-        c = classify(text)
-        if c["kind"] in ("clean", "import"):
-            other[c["kind"]] += 1
+        asserts = all_asserts(text)
+        fa = FATAL.search(text)
+        fmsg = fa.group(1).strip() if fa else None
+        has_segv = bool(SEGV.search(text))
+        generic = bool(fmsg) and fmsg.startswith(GENERIC_FATAL)
+
+        if not asserts and not has_segv and not fmsg:
+            other["import" if IMPORTERR.search(text) else "clean"] += 1
             continue
-        if c["kind"] == "segv":
-            r = resolve_segv(d, label, cache)
-            if r:
-                c.update(r)
-            else:
-                needs_gdb[c["chain"]].append(label)
-                continue
-        hit, how = match(c, snap)
-        if not hit:
-            key = (c["assert_expr"] and f"{c['file']}:{c['assert_expr']}") or \
-                  (c.get("func") and f"{c['file']}:{c['func']}") or \
-                  c.get("fatal_msg") or c.get("chain") or "?"
-            new_sites[(c["kind"], key)].append(label)
-        elif len(hit) == 1:
-            known[next(iter(hit))].append(label)
+
+        candidates = [dict(file=f, line=ln, func=fn, assert_expr=expr, fatal_msg=None)
+                      for (f, ln, fn, expr) in asserts]
+        if fmsg and not generic and not fmsg.lower().startswith(("segmentation", "aborted")):
+            candidates.append(dict(file=None, line=None, func=None, assert_expr=None, fatal_msg=fmsg[:60]))
+
+        chain = []
+        if has_segv or generic or not asserts:
+            chain = resolve_chain(d, label, cache)
+            # Match only the resolved SITE (chain[0], innermost real frame). Deeper frames
+            # are shared deallocator/eval plumbing that would over-match many bugs.
+            if chain:
+                cand = frame_to_cand(chain[0])
+                if cand:
+                    candidates.append(cand)
+
+        matched = set()
+        for c in candidates:
+            matched |= match(c, snap)[0]
+
+        if matched:
+            (known if len(matched) == 1 else ambiguous)[
+                next(iter(matched)) if len(matched) == 1 else "|".join(sorted(matched))].append(label)
+        elif (has_segv or generic) and not chain:
+            coarse = (" <- ".join([s for s in SYM.findall(text) if not SKIP.match(s)][:3])
+                      or (fmsg[:50] if fmsg else "(no-sym)"))
+            needs_gdb[coarse].append(label)
         else:
-            ambiguous["|".join(sorted(hit))].append(label)
+            prim = candidates[0] if candidates else {}
+            key = (prim.get("assert_expr") and f"{prim['file']}:{prim['assert_expr']}") or \
+                  (prim.get("func") and f"{prim['file']}:{prim['func']}") or \
+                  prim.get("fatal_msg") or (chain[0] if chain else "?")
+            kind = "abort" if asserts else ("segv" if has_segv else "fatal")
+            new_sites[(kind, key)].append(label)
 
     # ---- report ----
-    nd = len(dirs)
-    print(f"# ingested {nd} run-dirs | snapshot={SNAP.name} cache={'yes' if cache else 'no'} gdb={USE_GDB}\n")
+    print(f"# ingested {len(dirs)} run-dirs | snapshot={SNAP.name} cache={'yes' if cache else 'no'} gdb={USE_GDB}\n")
     print("## NEW crash sites (need a report) " + "-" * 30)
     if not new_sites:
         print("  (none -- every resolved crash matched the catalog)")

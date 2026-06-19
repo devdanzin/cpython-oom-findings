@@ -23,8 +23,8 @@ sig="$(grep -oE 'signal SIG[A-Z]+' "$BT" | head -1 | sed 's/signal //')"
 # Skip the fatal/assert-reporting plumbing so frames[0] is the real crash/assert site.
 mapfile -t frames < <(grep -oP '^#\d+\s+(?:0x[0-9a-fA-F]+ in )?\K[A-Za-z_]\w+ at (?:Objects|Python|Modules|Include|Parser)/\S+' "$BT" \
                       | sed -E 's/ at /@/' \
-                      | grep -vE '^(fatal_error(_exit)?|_Py_FatalError\w*|_PyObject_AssertFailed|_Py_DumpStack|faulthandler\w*|_Py_DumpExtensionModules)@')
+                      | grep -vE '^(fatal_error(_exit)?|_Py_FatalError\w*|_PyObject_AssertFailed|_Py_NegativeRefcount|_Py_DumpStack|faulthandler\w*|_Py_DumpExtensionModules)@')
 site="${frames[0]:-?}"
-fp="$(printf '%s;' "${frames[@]:0:3}")"
+fp="$(printf '%s;' "${frames[@]:0:6}")"   # top frames for chain-aware dedupe in ingest.py
 printf '%s\t%s\t%s\t%s\n' "$LABEL" "$sig" "$site" "$fp"
 rm -f "$BT"

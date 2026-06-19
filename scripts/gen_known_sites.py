@@ -20,9 +20,10 @@ OUT = ROOT / "catalog" / "known_sites.tsv"
 FRAME = re.compile(r'([A-Za-z_]\w+)@([\w./+-]+\.(?:c|h)):(\d+)')      # func@file:line
 FILELINE = re.compile(r'([\w./+-]+\.(?:c|h)):(\d+)')                   # file:line
 SITE = re.compile(r'(\S+\.(?:c|h))\s+(\S+).*?:(\d+)(?:-\d+)?$')        # "<file> <func..>:<line[-range]>"
-# assertion line: "<file>:<line>: <ret> <func>(...): Assertion `<expr>' failed"
-ASSERT = re.compile(r"([\w./+-]+\.(?:c|h)):(\d+):[^\n]*?\b(\w+)\s*\([^)]*\)\s*:\s*Assertion `([^']*)' failed")
-ASSERT_NOFUNC = re.compile(r"([\w./+-]+\.(?:c|h)):(\d+):[^\n]*?Assertion `([^']*)' failed")
+# assertion line: "<file>:<line>: [ret] <func>[(args)]: Assertion <q>expr<q>" -- handles
+# glibc backticks AND CPython double-quotes, and an optional (args) list.
+ASSERT = re.compile(r"([\w./+-]+\.(?:c|h)):(\d+):.*?\b(\w+)\s*(?:\([^)]*\))?\s*:\s*Assertion[ `\"]+([^`'\"\n\t]*)")
+ASSERT_NOFUNC = re.compile(r"([\w./+-]+\.(?:c|h)):(\d+):.*?Assertion[ `\"]+([^`'\"\n\t]*)")
 FATAL = re.compile(r'Fatal Python error:\s*([^\n]+)')
 
 

@@ -153,9 +153,12 @@ OOM-0016	abort	line	Modules/_interpqueuesmodule.c:1104
 OOM-0016	abort	line	Modules/_interpqueuesmodule.c:1529
 OOM-0016	abort	line	Modules/_interpqueuesmodule.c:559
 OOM-0016	abort	line	Modules/clinic/_interpqueuesmodule.c.h:100
+OOM-0017	abort	assert	Python/gc.c:gc_get_refs(g) > 0
+OOM-0017	abort	assert	Python/gc_free_threading.c:gc_get_refs(op) >= 0
 OOM-0017	abort	func	Modules/arraymodule.c:array_dealloc
 OOM-0017	abort	func	Modules/arraymodule.c:newarrayobject
 OOM-0017	abort	func	Objects/mimalloc/heap.c:_mi_heap_area_visit_blocks
+OOM-0017	abort	func	Python/gc.c:gc_decref
 OOM-0017	abort	func	Python/gc_free_threading.c:PyGC_Collect
 OOM-0017	abort	func	Python/gc_free_threading.c:deduce_unreachable_heap
 OOM-0017	abort	func	Python/gc_free_threading.c:gc_collect_main
@@ -165,6 +168,7 @@ OOM-0017	abort	func	Python/pylifecycle.c:_Py_Finalize
 OOM-0017	abort	line	Modules/arraymodule.c:784
 OOM-0017	abort	line	Modules/arraymodule.c:848
 OOM-0017	abort	line	Objects/mimalloc/heap.c:569
+OOM-0017	abort	line	Python/gc.c:96
 OOM-0017	abort	line	Python/gc_free_threading.c:1115
 OOM-0017	abort	line	Python/gc_free_threading.c:1116
 OOM-0017	abort	line	Python/gc_free_threading.c:1452
@@ -181,8 +185,10 @@ OOM-0018	abort	line	Objects/dictobject.c:205
 OOM-0018	abort	line	Objects/dictobject.c:7896
 OOM-0018	abort	line	Objects/object.c:3319
 OOM-0018	abort	line	Objects/typeobject.c:2847
+OOM-0019	abort	assert	Include/refcount.h:failed: object has negative ref count
 OOM-0019	abort	func	Include/refcount.h:Py_DECREF
 OOM-0019	abort	func	Include/refcount.h:Py_XDECREF
+OOM-0019	abort	func	Include/refcount.h:_Py_NegativeRefcount
 OOM-0019	abort	func	Objects/object.c:_Py_NegativeRefcount
 OOM-0019	abort	func	Parser/pegen.h:RAISE_ERROR_KNOWN_LOCATION
 OOM-0019	abort	func	Parser/pegen_errors.c:_PyPegen_raise_error_known_location
@@ -294,11 +300,14 @@ OOM-0028	segv	line	Modules/clinic/posixmodule.c.h:2701
 OOM-0028	segv	line	Modules/posixmodule.c:6149
 OOM-0028	segv	line	Objects/unicodeobject.c:5681
 OOM-0028	segv	line	Python/ceval.c:841
+OOM-0029	abort	assert	Include/refcount.h:failed: object has negative ref count
+OOM-0029	abort	func	Include/refcount.h:_Py_NegativeRefcount
 OOM-0029	abort	func	Objects/listobject.c:list_dealloc
 OOM-0029	abort	func	Objects/object.c:_Py_Dealloc
 OOM-0029	abort	func	Objects/object.c:_Py_NegativeRefcount
 OOM-0029	abort	func	Objects/tupleobject.c:tuple_dealloc
 OOM-0029	abort	func	Objects/typeobject.c:subtype_dealloc
+OOM-0029	abort	line	Include/refcount.h:520
 OOM-0029	abort	line	Objects/listobject.c:567
 OOM-0029	abort	line	Objects/object.c:275
 OOM-0029	abort	line	Objects/object.c:3319
