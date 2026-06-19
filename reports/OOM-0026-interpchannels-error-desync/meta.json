@@ -1,0 +1,27 @@
+{
+  "id": "OOM-0026",
+  "slug": "interpchannels-error-desync",
+  "title": "_interpchannels.create() desyncs its int error code from the exception state under OOM — handle_channel_error asserts (Modules/_interpchannelsmodule.c:398/443)",
+  "description": "The _interpchannels create path threads a hand-rolled int error code in parallel with PyErr; handle_channel_error asserts they agree (err==0 => !PyErr_Occurred() at L398; unhandled err<0 => PyErr_Occurred() at L443). Under OOM newchannelid() returns 0 with a MemoryError pending, or channel_create() returns -1 with no exception set, so one of the two asserts aborts.",
+  "crash_kind": "abort",
+  "sites": ["Modules/_interpchannelsmodule.c handle_channel_error:398", "Modules/_interpchannelsmodule.c handle_channel_error:443", "Modules/_interpchannelsmodule.c channelsmod_create:2955", "Modules/_interpchannelsmodule.c channelsmod_create:2941"],
+  "signature": {
+    "site_frame": "handle_channel_error@Modules/_interpchannelsmodule.c:398",
+    "top_frames": [
+      "handle_channel_error@Modules/_interpchannelsmodule.c:398",
+      "channelsmod_create@Modules/_interpchannelsmodule.c:2955",
+      "cfunction_call@Objects/methodobject.c:564",
+      "_PyObject_MakeTpCall@Objects/call.c:242"
+    ]
+  },
+  "vehicles": ["python-7/_interpchannels-assertion-sigabrt", "python-7/_interpchannels-assertion"],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort", "upstream": "n/a"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Two faces of one defect: minimal repro (import _interpchannels; create(1) under set_nomemory sweep) deterministically hits L398 `!PyErr_Occurred()` (newchannelid returns 0 with MemoryError pending); vehicle hits L443 `PyErr_Occurred()` (channel_create returns -1 without setting an exception). Root cause = int error code vs PyErr desync in channel_create/newchannelid under OOM. Fix at the producers: channel_create must set an exception on every <0 return; newchannelid must return <0 whenever it leaves one set. Debug-only asserts (NDEBUG strips them). Distinct from OOM-0014 (channelsmod__channel_id, :3487). Exception-state-under-OOM family. Minimal repro reproduces deterministically (L398 form). One of 3 deferred abort singletons triaged 2026-06-18."
+}

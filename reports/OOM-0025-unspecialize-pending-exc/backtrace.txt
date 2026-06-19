@@ -1,0 +1,9 @@
+python: Python/specialize.c:378: void unspecialize(_Py_CODEUNIT *): Assertion `!PyErr_Occurred()' failed.
+Fatal Python error: Aborted
+
+Program received signal SIGABRT, Aborted.
+#7  __assert_fail (assertion=..., file=..., line=..., function=...) at ./assert/assert.c:37
+#8  unspecialize (instr=...) at Python/specialize.c:378
+#9  specialize_load_global_lock_held (globals=..., builtins=..., instr=..., name=...) at Python/specialize.c:1441
+#10 _Py_Specialize_LoadGlobal (globals=..., builtins=..., instr=..., name=...) at Python/specialize.c:1450
+#11 _PyEval_EvalFrameDefault (tstate=..., frame=..., throwflag=...) at Python/generated_cases.c.h:10142  # LOAD_GLOBAL specialization

@@ -1,0 +1,15 @@
+python: Python/generated_cases.c.h:11120: PyObject *_PyEval_EvalFrameDefault(PyThreadState *, _PyInterpreterFrame *, int): Assertion `PyStackRef_BoolCheck(cond)' failed.
+Fatal Python error: Aborted
+
+Stack (most recent call first):
+  File ".../Lib/_pyrepl/windows_eventqueue.py", line 1 in __annotate__   # annotation eval under OOM
+
+Program received signal SIGABRT, Aborted.
+#7  __assert_fail (assertion=..., file=..., line=..., function=...) at ./assert/assert.c:37
+#8  _PyEval_EvalFrameDefault (tstate=..., frame=..., throwflag=...) at Python/generated_cases.c.h:11120   # TARGET(POP_JUMP_IF_FALSE): assert(PyStackRef_BoolCheck(cond))
+#9  _PyEval_EvalFrame (tstate=..., frame=..., throwflag=...) at ./Include/internal/pycore_ceval.h:122
+#10 _PyEval_Vector (tstate=..., func=..., locals=..., args=..., argcount=..., kwnames=...) at Python/ceval.c:2141
+#11 PyEval_EvalCode (co=..., globals=..., locals=...) at Python/ceval.c:679
+
+# Note: saved host stdout shows the same assertion at generated_cases.c.h:10539
+# (host build at a slightly different commit); local debug build (15d7406) is line 11120.

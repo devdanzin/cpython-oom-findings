@@ -17,8 +17,11 @@ high — most segv vehicles are just OOM-0001/0002 seen through different caller
 Optional low-yield follow-up: the 46 NOREPRO (need a wider sweep / different build to
 get a stable local repro; not reportable as-is).
 
-## 2. Deferred abort singletons
-`specialize.c:378`, `_interpchannelsmodule.c:443`, `generated_cases.c.h:10539` (1 each).
+## 2. Deferred abort singletons — DONE (2026-06-18)
+Triaged to 3 distinct new bugs (all debug-only exception/value-state asserts under OOM):
+- `specialize.c:378` `unspecialize` `!PyErr_Occurred()` → **OOM-0025** (LOAD_GLOBAL specialize leaks MemoryError).
+- `_interpchannelsmodule.c:398/443` `handle_channel_error` → **OOM-0026** (int error code vs PyErr desync; minimal repro).
+- `generated_cases.c.h:11120` `POP_JUMP_IF_FALSE` `PyStackRef_BoolCheck(cond)` → **OOM-0027** (non-bool on stack; root cause partial).
 
 ## 3. Publishing (outward-facing — confirm with the user; review reports first)
 - Build `scripts/publish_gists.py`: per report, `gh gist create --public report.md

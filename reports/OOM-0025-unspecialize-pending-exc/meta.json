@@ -1,0 +1,27 @@
+{
+  "id": "OOM-0025",
+  "slug": "unspecialize-pending-exc",
+  "title": "unspecialize asserts !PyErr_Occurred() but LOAD_GLOBAL specialization leaves a MemoryError pending under OOM — Python/specialize.c:378",
+  "description": "specialize_load_global_lock_held computes a dict keys-version (_PyDict_GetKeysVersionForCurrentState) that can set a MemoryError and return 0 under OOM; the code treats 0 as a benign backoff and goto fail -> unspecialize(instr), whose `assert(!PyErr_Occurred())` then aborts on debug builds.",
+  "crash_kind": "abort",
+  "sites": ["Python/specialize.c unspecialize:378", "Python/specialize.c specialize_load_global_lock_held:1441", "Python/specialize.c _Py_Specialize_LoadGlobal:1450"],
+  "signature": {
+    "site_frame": "unspecialize@Python/specialize.c:378",
+    "top_frames": [
+      "unspecialize@Python/specialize.c:378",
+      "specialize_load_global_lock_held@Python/specialize.c:1441",
+      "_Py_Specialize_LoadGlobal@Python/specialize.c:1450",
+      "_PyEval_EvalFrameDefault@Python/generated_cases.c.h:10142"
+    ]
+  },
+  "vehicles": ["python-7/sys-assertion"],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort", "upstream": "n/a"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Assertion `!PyErr_Occurred()' in unspecialize. Specialization is supposed to be exception-neutral; _PyDict_GetKeysVersionForCurrentState returning 0 under OOM leaves a MemoryError that survives into the unspecialize backoff. Debug-only assert (NDEBUG strips it; release builds de-opt with a stray exception). Exception-state-under-OOM family (cf OOM-0008/0010/0011/0015); distinct from OOM-0011 (specialize LoadAttr at specialize.c:364). Fix: make the keys-version helper exception-neutral, or PyErr_Clear() before unspecialize. Minimization PARTIAL (vehicle-confirmed; focused repro exercises the path but is timing-sensitive). One of 3 deferred abort singletons triaged 2026-06-18."
+}

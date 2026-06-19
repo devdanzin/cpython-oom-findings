@@ -1,0 +1,15 @@
+# Minimal repro (success-branch form): newchannelid() returns 0 with a MemoryError pending
+python: ./Modules/_interpchannelsmodule.c:398: int handle_channel_error(int, PyObject *, int64_t): Assertion `!PyErr_Occurred()' failed.
+Fatal Python error: Aborted
+
+Program received signal SIGABRT, Aborted.
+#7  __assert_fail (assertion=..., file=..., line=..., function=...) at ./assert/assert.c:37
+#8  handle_channel_error (err=0, mod=..., cid=...) at ./Modules/_interpchannelsmodule.c:398   # if (err==0) assert(!PyErr_Occurred())
+#9  channelsmod_create (self=..., args=..., kwds=...) at ./Modules/_interpchannelsmodule.c:2955   # handle_channel_error(newchannelid(...))
+#10 cfunction_call (func=..., args=..., kwargs=...) at Objects/methodobject.c:564
+#11 _PyObject_MakeTpCall (...) at Objects/call.c:242
+
+# Fuzzing vehicle (failure-branch form): channel_create() returns -1 with NO exception set
+./Modules/_interpchannelsmodule.c:443: int handle_channel_error(int, PyObject *, int64_t): Assertion `PyErr_Occurred()' failed.
+#8  handle_channel_error  ./Modules/_interpchannelsmodule.c:443   # else { assert(PyErr_Occurred()) }
+#9  channelsmod_create    ./Modules/_interpchannelsmodule.c:2941   # handle_channel_error(-1, self, cid) when cid < 0

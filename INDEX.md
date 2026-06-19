@@ -4,7 +4,7 @@ Crashes found by allocation-failure fuzzing (`_testcapi.set_nomemory`) of CPytho
 
 **Pick anything to work on** — open a CPython issue if one doesn't exist, comment with the issue/PR, and the Status column will be updated. Reports are deduped by crash signature; one row = one underlying bug (vehicles listed in the report).
 
-_24 unique bug(s). Generated 2026-06-18._
+_27 unique bug(s). Generated 2026-06-18._
 
 _Found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode (fusil originally by Victor Stinner). Reports drafted by Claude Code; reproducers machine-generated._
 
@@ -39,6 +39,9 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 | [OOM-0017](reports/OOM-0017-gc-free-threading-1116/report.md) | Under a dense OOM sweep, `socket.recv_fds` repeatedly fails `array.array("i")` construction; the interaction between the deferred reference `tp_alloc` takes on the `array.array` type and the unconditional `Py_DECREF(tp)` in `array_dealloc` (`arraymodule.c:848`) leaves the **type** object's refcount smaller than the live references to it. At shutdown, the free-threaded cyclic GC's `update_refs`/`visit_decref` tally drives `gc_refs` below zero and the debug assertion `gc_get_refs(op) >= 0` in `validate_gc_objects` aborts. | ft_debug_asan,jit | draft |
 | [OOM-0018](reports/OOM-0018-dictobject-205/report.md) | `Objects/dictobject.c`: when `detach_dict_from_object()` fails under OOM, `PyObject_ClearManagedDict`'s recovery branch calls `set_keys(dict, Py_EMPTY_KEYS)` (L7896) without first marking the dict shared. If the managed-dict object is owned by one thread but freed on another (biased refcounting), `set_keys`'s free-threaded ownership assert fires and aborts. | ft_debug_asan | draft |
 | [OOM-0019](reports/OOM-0019-refcount-520/report.md) | `Parser/pegen_errors.c`: `_PyPegen_raise_error_known_location` passes `error_line` to `Py_BuildValue` via the reference-stealing `N` format (L346). `Py_BuildValue` consumes the `N` arg even on failure, but the `error:` path still runs `Py_XDECREF(error_line)` (L363) -- a double-free. On `Py_REF_DEBUG` builds the second decref drives the refcount negative and aborts at `Include/refcount.h:520`. | ft_debug_asan,jit | draft |
+| [OOM-0025](reports/OOM-0025-unspecialize-pending-exc/report.md) | specialize_load_global_lock_held computes a dict keys-version (_PyDict_GetKeysVersionForCurrentState) that can set a MemoryError and return 0 under OOM; the code treats 0 as a benign backoff and goto fail -> unspecialize(instr), whose `assert(!PyErr_Occurred())` then aborts on debug builds. | ft_debug_asan,jit | draft |
+| [OOM-0026](reports/OOM-0026-interpchannels-error-desync/report.md) | The _interpchannels create path threads a hand-rolled int error code in parallel with PyErr; handle_channel_error asserts they agree (err==0 => !PyErr_Occurred() at L398; unhandled err<0 => PyErr_Occurred() at L443). Under OOM newchannelid() returns 0 with a MemoryError pending, or channel_create() returns -1 with no exception set, so one of the two asserts aborts. | ft_debug_asan,jit | draft |
+| [OOM-0027](reports/OOM-0027-pop-jump-boolcheck/report.md) | Conditional-jump opcodes assume TOS is already a strict bool (a TO_BOOL/compare precedes them) and only assert it. Under OOM an earlier opcode's allocation failure leaves a non-bool / dangling _PyStackRef on the value stack, so `assert(PyStackRef_BoolCheck(cond))` in POP_JUMP_IF_FALSE aborts on debug builds; on release the bad value is used as a branch condition. | ft_debug_asan,jit | draft |
 
 ## Fatal Python error
 

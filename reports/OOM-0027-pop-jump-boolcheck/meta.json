@@ -1,0 +1,27 @@
+{
+  "id": "OOM-0027",
+  "slug": "pop-jump-boolcheck",
+  "title": "POP_JUMP_IF_FALSE finds a non-bool on the value stack under OOM — assert(PyStackRef_BoolCheck(cond)) (Python/generated_cases.c.h)",
+  "description": "Conditional-jump opcodes assume TOS is already a strict bool (a TO_BOOL/compare precedes them) and only assert it. Under OOM an earlier opcode's allocation failure leaves a non-bool / dangling _PyStackRef on the value stack, so `assert(PyStackRef_BoolCheck(cond))` in POP_JUMP_IF_FALSE aborts on debug builds; on release the bad value is used as a branch condition.",
+  "crash_kind": "abort",
+  "sites": ["Python/generated_cases.c.h _PyEval_EvalFrameDefault POP_JUMP_IF_FALSE:11120"],
+  "signature": {
+    "site_frame": "_PyEval_EvalFrameDefault@Python/generated_cases.c.h:11120",
+    "top_frames": [
+      "_PyEval_EvalFrameDefault@Python/generated_cases.c.h:11120",
+      "_PyEval_EvalFrame@Include/internal/pycore_ceval.h:122",
+      "_PyEval_Vector@Python/ceval.c:2141",
+      "PyEval_EvalCode@Python/ceval.c:679"
+    ]
+  },
+  "vehicles": ["python-7/_pyrepl_windows_eventqueue-assertion"],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort", "upstream": "n/a"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-18",
+  "confirmed_commit": "15d7406",
+  "notes": "Assertion `PyStackRef_BoolCheck(cond)' in TARGET(POP_JUMP_IF_FALSE). Consumer-side SYMPTOM: an earlier opcode failing to allocate under OOM leaves a non-bool/dangling stackref where the conditional jump expects Py_True/Py_False. Root cause PARTIAL -- the producing instruction was not isolated from this single vehicle (would need the preceding-opcode recorded at abort). Debug-only assert (NDEBUG strips it; release uses the bad value as a branch condition = silent control-flow corruption). Distinct from OOM-0010 (generic LABEL(error) assert at generated_cases.c.h:13106). Host stdout shows the same assert at line 10539 (different commit); local 15d7406 = line 11120. One of 3 deferred abort singletons triaged 2026-06-18."
+}
