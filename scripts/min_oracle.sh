@@ -12,6 +12,10 @@
 #                                 '_PyUnicode_NONCOMPACT_DATA' or '_excinfo_clear_type')
 #   OOM_N    runs per candidate  (default: 20; use ~5 for deterministic vehicles, 30-50 for flaky)
 #   OOM_T    per-run timeout sec (default: 60)
+#   OOM_ASAN ASAN_OPTIONS value  (default: detect_leaks=0:abort_on_error=0). Set
+#            'detect_leaks=0:abort_on_error=0:handle_abort=1' to make ASan print a
+#            SYMBOLIZED C backtrace on abort -- lets OOM_SIG pin a specific dealloc-cascade
+#            frame (e.g. 'tuple_dealloc.*tupleobject\.c:277') without gdb.
 #
 # Usage (shrinkray --input-type arg):  min_oracle.sh <candidate.py>
 set -u
@@ -21,12 +25,13 @@ GIL="${OOM_GIL:-1}"
 SIG="${OOM_SIG:?set OOM_SIG to the signature regex}"
 N="${OOM_N:-20}"
 T="${OOM_T:-60}"
+ASAN="${OOM_ASAN:-detect_leaks=0:abort_on_error=0}"
 
 # Fast-reject syntactically-broken reductions (cheap, avoids N wasted runs).
 "$PY" -c "compile(open('$CAND','rb').read(), '$CAND', 'exec')" 2>/dev/null || exit 1
 
 for _ in $(seq 1 "$N"); do
-    out=$(PYTHON_GIL="$GIL" ASAN_OPTIONS=detect_leaks=0:abort_on_error=0 \
+    out=$(PYTHON_GIL="$GIL" ASAN_OPTIONS="$ASAN" \
           timeout "$T" "$PY" -u "$CAND" 2>&1)
     printf '%s' "$out" | grep -qaE "$SIG" && exit 0
 done

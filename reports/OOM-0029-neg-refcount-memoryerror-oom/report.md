@@ -16,13 +16,31 @@ touched, not where the unbalanced decref happened.
 
 ## Reproducer
 
-Vehicle: fuzzing `_pyrepl.utils` (`gen_colors_from_token_stream`, `iter_display_chars`,
-`_ascii_control_repr`, …) under the `set_nomemory` sweep
-(`~/crashers/_pyrepl_utils-sigabrt-assertion-oomNEW/source.py`). Reproduces
-deterministically on the debug builds (same `_Py_NegativeRefcount` ← `tuple_dealloc`
-chain across runs). **No minimal stdlib trigger isolated** — the defect is an unbalanced
-`MemoryError` decref on an OOM error path, and pinning the exact site needs the precise
-allocation-failure timing; minimization is therefore vehicle-only.
+Minimal, stdlib-only (shrinkray-reduced from the `_pyrepl.utils` vehicle). **Deterministic**
+— aborts on every run (30/30); requires a debug build (`PYTHON_GIL=1`):
+
+```python
+import _pyrepl.utils
+from _testcapi import set_nomemory
+
+for start in range(150):
+    set_nomemory(start, 0)
+    try:
+        _pyrepl.utils.disp_str("\x004\x8A\xD5\x03")
+    except MemoryError:
+        pass
+```
+
+`disp_str` computes display widths; the argument is **load-bearing** — it mixes NUL/control
+bytes and high bytes (`\x00 4 \x8a \xd5 \x03`), exercising the control-char / wide-char path.
+Every simpler argument tested fails (`"\x00"`, `"\x8a"`, `"\x00\x8a"`, `"\x004\x03"` without a
+high byte, and even `"4\x8a\xd5\x03"` without the leading NUL — all 0/20), so the specific
+mix is required. This narrows the over-decref to `disp_str`'s OOM handling of this string,
+though the exact unbalanced-decref **line** is still not pinned (root cause PARTIAL).
+
+The crash-time backtrace is obtained without gdb via `ASAN_OPTIONS=...:handle_abort=1`, which
+makes ASan print a symbolized C backtrace on the abort; the `tuple_dealloc -> subtype_dealloc
+-> list_dealloc` cascade is byte-identical on every run.
 
 ## Backtrace
 
@@ -67,8 +85,12 @@ OOM-0019 (`Py_XDECREF` in `_PyPegen_raise_error_known_location`, the parser) —
 subsystem and a different (incidental) detection chain. The shared theme is an unbalanced
 decref under OOM; these may or may not share a root. Debug-only: the `_Py_NegativeRefcount`
 check is `Py_DEBUG`-gated, so it aborts on `ft_debug_asan`/`jit` and is compiled out on the
-release builds (where the negative refcount is a silent use-after-free risk). Root cause:
-PARTIAL (symptom; over-decref site unisolated).
+release builds (where the negative refcount is a silent use-after-free risk). Minimization
+DONE (2026-06-19): deterministic 8-line stdlib repro (`disp_str("\x004\x8A\xD5\x03")` under
+the sweep, 30/30) — shrinkray-reduced, oracle pinned to the `tuple_dealloc@tupleobject.c:277`
+cascade via the ASan `handle_abort=1` symbolized backtrace (no gdb). Root cause still PARTIAL
+(the trigger is minimal, but the exact unbalanced-decref line inside disp_str's OOM path is
+not pinned — that needs a refcount watchpoint on the `MemoryError`).
 
 ## Versions
 

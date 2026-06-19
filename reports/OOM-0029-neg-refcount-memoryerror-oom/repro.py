@@ -1,28 +1,28 @@
-"""OOM-0029: negative refcount on a MemoryError under OOM (over-decref).
+"""OOM-0029 minimal reproducer (stdlib only) — reduced from the _pyrepl.utils fuzz vehicle with shrinkray.
 
-A MemoryError is decref'd one time too many on an allocation-failure path; the
-negative refcount is detected later by _Py_NegativeRefcount (Objects/object.c:275)
-when the object is freed again during an unrelated dealloc cascade
-(list_dealloc -> subtype_dealloc -> tuple_dealloc) -> abort on debug builds.
+Under a dense allocation-failure sweep, `_pyrepl.utils.disp_str(<mixed control/high string>)`
+over-decrefs a `MemoryError` on an OOM error path. The corruption is silent until that
+already-negative-refcount `MemoryError` is `Py_DECREF`'d again during an unrelated dealloc
+cascade (`list_dealloc -> subtype_dealloc -> tuple_dealloc`), where `_Py_NegativeRefcount`
+(Objects/object.c:275, reported at the caller `tuple_dealloc` Objects/tupleobject.c:277) fires
+and aborts. Debug-only detector (Py_DEBUG); on release the negative refcount is a silent UAF.
 
-NOT minimized: the defect is an unbalanced MemoryError decref whose exact site isn't
-isolated from one vehicle. Reproduce via the fuzzing vehicle
-(~/crashers/_pyrepl_utils-sigabrt-assertion-oomNEW/source.py): it fuzzes _pyrepl.utils
-functions (gen_colors_from_token_stream, iter_display_chars, _ascii_control_repr, ...)
-inside a dense _testcapi.set_nomemory sweep. Deterministic abort on a debug build
-(ft_debug_asan / jit); the _Py_NegativeRefcount detector is compiled out on release.
+Deterministic: aborts on every run (30/30, GIL=1). Requires a debug build. The crash-time
+backtrace is symbolized with `ASAN_OPTIONS=...:handle_abort=1` (no gdb needed); the
+`tuple_dealloc -> subtype_dealloc -> list_dealloc` cascade is identical on every run.
 
-Shape of the vehicle:
-
-    from _testcapi import set_nomemory, remove_mem_hooks
-    import _pyrepl.utils as m
-    for start in range(1000):
-        set_nomemory(start, 0)
-        try:
-            try:
-                <call m.<func>(...) -- see the vehicle's oom_call() wrappers>
-            finally:
-                remove_mem_hooks()
-        except BaseException:
-            pass
+The argument is load-bearing: it mixes NUL/control bytes and high bytes
+(`\x00`, `4`, `\x8a`, `\xd5`, `\x03`), exercising disp_str's control-char / wide-char display
+path; a single character (`"\x00"`, `"\x8a"`) does not reproduce. The over-decref site itself
+is not pinned to a single line (root cause PARTIAL); the full vehicle is preserved as
+`vehicle_source.py`.
 """
+import _pyrepl.utils
+from _testcapi import set_nomemory
+
+for start in range(150):
+    set_nomemory(start, 0)
+    try:
+        _pyrepl.utils.disp_str("\x004\x8A\xD5\x03")
+    except MemoryError:
+        pass
