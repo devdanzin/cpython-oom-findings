@@ -1,29 +1,36 @@
-"""OOM-0030: str-subclass instantiation under OOM frees a unicode with NULL data.
+"""OOM-0030 minimal reproducer (stdlib only) — reduced from the fuzzer vehicle with shrinkray.
 
-unicode_subtype_new (Objects/unicodeobject.c) allocates the subclass instance `self`
-first, then allocates its data buffer; if a later allocation fails under OOM it jumps to
-`onError: Py_DECREF(self)` while self->data is still NULL -> unicode_dealloc ->
-unicode_is_singleton -> _PyUnicode_NONCOMPACT_DATA asserts `data != NULL` -> abort
-(debug builds; NULL deref on release).
+Parsing an email header value containing a NUL byte under allocation failure instantiates a
+`str` subclass whose data buffer was not allocated; freeing it trips the unicode consistency
+check:
 
-Minimization PARTIAL/vehicle-confirmed: this reduction exercises unicode_subtype_new but
-did not hit the exact allocation-failure window in budget. Reliable reproducer is
-`vehicle_source.py` (fusil fuzzing email._header_value_parser, which builds str
-subclasses, under the set_nomemory sweep) -- deterministic abort on ft_debug_asan / jit.
+  email._header_value_parser.get_value("\\x00")  under the set_nomemory sweep
+    -> a str-subclass token is created with NULL data, then deallocated
+    -> unicode_dealloc -> unicode_is_singleton -> _PyUnicode_NONCOMPACT_DATA asserts
+       `data != NULL` (Objects/unicodeobject.c) -> SIGABRT (debug) / NULL deref (release).
+
+Same "partially-constructed object freed on the OOM error path" class as OOM-0024/0035;
+here via str-subclass instantiation (unicode_subtype_new). Deterministic (re-verified 40x).
 """
+import faulthandler
+import email._header_value_parser as hvp
+faulthandler.enable()
 from _testcapi import set_nomemory, remove_mem_hooks
 
-
-class S(str):
-    pass
-
-
-for start in range(1, 3000):
-    set_nomemory(start, 0)
+for start in range(0, 40):
     try:
+        set_nomemory(start, 0)
         try:
-            S("abcdefghij")          # str.__new__ for a subclass -> unicode_subtype_new
+            hvp.get_value("\x00")
         finally:
             remove_mem_hooks()
+    except MemoryError:
+        pass
     except BaseException:
         pass
+    finally:
+        try:
+            remove_mem_hooks()
+        except Exception:
+            pass
+print("done, no crash")

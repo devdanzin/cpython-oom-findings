@@ -50,20 +50,20 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0027 | `POP_JUMP_IF_FALSE` non-bool stackref assert | abort | ASan/jit | no | `generated_cases.c.h:_PyEval_EvalFrameDefault` |
 | OOM-0028 | `os._path_normpath(bytes)` → unchecked encode → NULL deref | segv | release | yes | `unicodeobject.c:unicode_encode_utf8` |
 | OOM-0029 | negative refcount (over-decref) on `MemoryError` path | abort | ASan/jit | no | `tupleobject.c:tuple_dealloc` |
-| OOM-0030 | `str` subclass instantiation frees a unicode with NULL data | abort | ASan/jit | no | `unicodeobject.c:unicode_is_singleton` |
-| OOM-0031 | `_interpreters.exec` frees an invalid cross-interp excinfo → UAF | segv | release | no | `crossinterp.c:_excinfo_clear_type` |
+| OOM-0030 | `str` subclass instantiation frees a unicode with NULL data | abort | ASan/jit | yes | `unicodeobject.c:unicode_is_singleton` |
+| OOM-0031 | `_interpreters.capture_exception` frees an invalid cross-interp excinfo → UAF | segv | release | yes | `crossinterp.c:_excinfo_clear_type` |
 | OOM-0032 | warning emitted with a pending exception (`!_PyErr_Occurred`) | abort | ASan/jit | yes | `typeobject.c:type_call` / `object.c:PyObject_Str` |
 | OOM-0033 | import over-decrefs a `sys.path` entry → freed-obj `isinstance` | segv | release | yes | `typeobject.c:PyType_IsSubtype` |
 | OOM-0034 | tokenizer col-offset: unchecked `PyUnicode_AsUTF8` → NULL deref | segv | release | yes | `pegen.c:_PyPegen_byte_offset_to_character_offset_line` |
 | OOM-0035 | `StringIO.getvalue()` scans uninitialized buffer → bad `maxchar` | abort | ASan/jit | yes | `unicodeobject.c:_PyUnicode_FromUCS4` |
 
-**Totals:** 35 bugs — 7 segv, 23 abort, 5 fatal · 11 reproduce on a **release** build · 23 have a minimal
-reproducer, 12 vehicle-confirmed.
+**Totals:** 35 bugs — 7 segv, 23 abort, 5 fatal · 11 reproduce on a **release** build · 25 have a minimal
+reproducer, 10 vehicle-confirmed.
 
 **Upstream status** (issue-tracker check 2026-06-19, see `catalog/prior_art.md`): only **OOM-0001** is already filed — [#151673](https://github.com/python/cpython/issues/151673) (open). The other 34 have no matching python/cpython issue (appear novel).
 
 **Suggested starting points** — crashes a release build **and** has a minimal reproducer (highest
-confidence, lowest effort to verify): **OOM-0001, 0002, 0012, 0014, 0020, 0028, 0033, 0034**. Of these,
+confidence, lowest effort to verify): **OOM-0001, 0002, 0012, 0014, 0020, 0028, 0031, 0033, 0034**. Of these,
 **OOM-0034** and **OOM-0028** are the cleanest single-defect unchecked-allocation NULL derefs (≈one-line fixes).
 
 Notes:
