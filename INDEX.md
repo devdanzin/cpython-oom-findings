@@ -4,7 +4,7 @@ Crashes found by allocation-failure fuzzing (`_testcapi.set_nomemory`) of CPytho
 
 **Pick anything to work on** — open a CPython issue if one doesn't exist, comment with the issue/PR, and the Status column will be updated. Reports are deduped by crash signature; one row = one underlying bug (vehicles listed in the report).
 
-_32 unique bug(s). Generated 2026-06-19._
+_33 unique bug(s). Generated 2026-06-19._
 
 _Found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode (fusil originally by Victor Stinner). Reports drafted by Claude Code; reproducers machine-generated._
 
@@ -20,6 +20,7 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 | [OOM-0024](reports/OOM-0024-templateiter-uninit-dealloc/report.md) | `template_iter` (Objects/templateobject.c) allocates the iterator with PyObject_GC_New (no zero-init) and only sets `stringsiter`/`interpolationsiter` after two PyObject_GetIter calls; either GetIter failing under OOM runs Py_DECREF(iter) on the error path, so templateiter_dealloc -> templateiter_clear -> Py_CLEAR() dereferences uninitialized memory. | ft_debug_asan,jit | draft |
 | [OOM-0028](reports/OOM-0028-normpath-encodefs-null/report.md) | os__path_normpath_impl builds `result` with PyUnicode_FromOrdinal/PyUnicode_FromWideChar (either NULL under OOM) and, for a bytes input, re-encodes via Py_SETREF(result, PyUnicode_EncodeFSDefault(result)) without a NULL check; EncodeFSDefault(NULL) -> unicode_encode_utf8(NULL) -> PyUnicode_Check(NULL)->ob_type segfault. Reproduces on all builds. | ft_debug_asan,ft_release,jit,upstream | draft |
 | [OOM-0031](reports/OOM-0031-excinfo-clear-type-segv/report.md) | _interpreters.exec captures a subinterpreter exception into a _PyXI_excinfo; under OOM the capture fails partway and the cleanup path _PyXI_FreeExcInfo -> _PyXI_excinfo_clear -> _excinfo_clear_type runs on an uninitialized/dangling info, dereferencing info->builtin at crossinterp.c:1319 -> SIGSEGV on all builds. | ft_debug_asan,ft_release,jit,upstream | draft |
+| [OOM-0033](reports/OOM-0033-import-syspath-oom-over-decref/report.md) | When sys.path contains mortal entries and a module import runs under allocation failure, the path-based finder over-decrefs a sys.path entry. The freed/over-decreffed entry is then detected in one of two places: (segv) PathFinder._get_spec iterates sys.path and isinstance(entry, str) reads the entry's garbage ob_type -> PyType_IsSubtype derefs a->tp_mro on a bad pointer (typeobject.c:2931); or (abort) the next list slice-assignment decrefs the entry again as a recycled old element -> _Py_NegativeRefcount at list_ass_slice_lock_held (listobject.c:1030). Two faces of one over-decref. The vehicle reaches it via multiprocessing.forkserver._handle_preload, which does `sys.path[:] = sys_path` (a string -> a list of 1-char strings) then __import__ of each char. | ft_debug_asan,ft_release,jit,upstream | draft |
 
 ## Assertion / abort
 
