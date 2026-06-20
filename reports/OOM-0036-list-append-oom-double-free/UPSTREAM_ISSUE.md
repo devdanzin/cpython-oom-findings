@@ -122,11 +122,22 @@ the second, use-after-free decref are visible in the report.)
 
 ## Suggested fix
 
-`_CALL_LIST_APPEND` must not leave the stolen `arg` on the value stack on the error path:
-once `_PyList_AppendTakeRef` has consumed the reference, `arg` is dead and must be popped
-before unwinding (or `arg` should only be stolen once the append has succeeded). The same
-"steal an input, then take a non-popping error path" shape may be worth checking on the other
-specialized call uops.
+`_CALL_LIST_APPEND` must account for the consumed `arg` on the error path — once
+`_PyList_AppendTakeRef` has taken the reference, the `arg` stackref is dead and must not be
+left on the value stack for `exception_unwind` to close. The sibling ops already show the two
+correct idioms:
+
+- the comprehension element-adds (`LIST_APPEND`, `SET_ADD`, `MAP_ADD`) call the same kind of
+  steal/`*TakeRef` helper but use `ERROR_IF(...)`, so the codegen drops the consumed input on
+  the error path. Concretely, `[x for x in ...]` (`LIST_APPEND`, the *same*
+  `_PyList_AppendTakeRef` helper) does **not** crash where `lst.append(x)`
+  (`_CALL_LIST_APPEND`) does;
+- the consuming call ops (`_DO_CALL_FUNCTION_EX`, `_PY_FRAME_EX`) call `INPUTS_DEAD();
+  SYNC_SP();` before `ERROR_NO_POP()`.
+
+I audited the other specialized ops: `_CALL_LIST_APPEND` is the only one that steals a
+stack input and then takes a bare `ERROR_NO_POP()` without either form of accounting, which
+is why it is the lone op affected.
 
 ## Your environment
 
