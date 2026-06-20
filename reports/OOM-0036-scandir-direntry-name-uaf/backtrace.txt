@@ -1,0 +1,36 @@
+OOM-0036: use-after-free of an os.DirEntry name string under OOM.
+
+Build: ft_debug_asan (3.16.0a0, commit 15d7406), PYTHON_GIL=0, ASAN_OPTIONS=...:handle_abort=1.
+
+  ./Include/refcount.h:520: _Py_NegativeRefcount: Assertion failed: object has negative ref count
+  Fatal Python error: _PyObject_AssertFailed
+
+=== Face A: fleet crash (generator frame cleared during exception unwind) ===
+
+  #8  _PyObject_AssertFailed        Objects/object.c:3278
+  #9  _Py_NegativeRefcount          Objects/object.c:275            <- generic detector
+  #12 DirEntry_dealloc              Modules/posixmodule.c:16199     <- Py_XDECREF(entry->name); name already freed
+  #13 _Py_Dealloc                   Objects/object.c:3319
+  #16 _PyFrame_ClearLocals          Python/frame.c:101              (while (sp > locals) PyStackRef_XCLOSE(*sp))
+  #17 _PyFrame_ClearExceptCode      Python/frame.c:126
+  #18 clear_gen_frame               Python/ceval.c:1970             <- a generator frame being cleared
+  #19 _PyEval_FrameClearAndPop      Python/ceval.c:1987
+  #20 _PyEval_EvalFrameDefault      Python/generated_cases.c.h:13908
+
+=== Face B: same bug under gdb (perturbed teardown: MemoryError traceback -> frame_dealloc,
+    or the entries list closed via the frame stackref -> list_dealloc) ===
+
+  #9  _Py_NegativeRefcount          Objects/object.c:275
+  #12 DirEntry_dealloc              Modules/posixmodule.c:16200     <- Py_XDECREF(entry->name)
+  #13 _Py_Dealloc                   Objects/object.c:3319
+  #7  list_dealloc                  Objects/listobject.c:567        <- the `entries = list(os.scandir(d))` list
+  #..  PyStackRef_XCLOSE            Include/internal/pycore_stackref.h:726
+  #..  frame_dealloc                Objects/frameobject.c:1949      <- suspended generator frame freed
+  #..  tb_dealloc                   Python/traceback.c:246          <- via the MemoryError's traceback
+
+  (gdb) the negative-refcount object `op` = entry->name, in freed memory (debug deadbyte 0xdd):
+        op->ob_type unreadable ("Cannot access memory at 0xdddddddddddd...").
+
+Both faces are the same underlying bug: a DirEntry's `name` string is freed prematurely
+under OOM, and a later Py_XDECREF(entry->name) (during teardown of the entries list / its
+holding frame) hits the dangling pointer.

@@ -344,3 +344,5 @@ OOM-0035	abort	line	Modules/_io/stringio.c:294
 OOM-0035	abort	line	Modules/_io/stringio.c:866
 OOM-0035	abort	line	Objects/unicodeobject.c:2228
 OOM-0035	abort	line	Objects/unicodeobject.c:673
+OOM-0036	abort	func	Modules/posixmodule.c:DirEntry_dealloc
+OOM-0036	abort	line	Modules/posixmodule.c:16199
