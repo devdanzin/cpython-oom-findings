@@ -139,7 +139,7 @@ I audited the other specialized ops: `_CALL_LIST_APPEND` is the only one that st
 stack input and then takes a bare `ERROR_NO_POP()` without either form of accounting, which
 is why it is the lone op affected.
 
-## Your environment
+## Environment
 
 - CPython `main` (3.16.0a0); reproduced on `--with-pydebug` builds (abort) and release builds
   (segfault), both free-threaded and default GIL.
@@ -149,3 +149,27 @@ is why it is the lone op affected.
 
 *This report and the reduced reproducers were drafted with the assistance of Claude Code; I
 have reviewed and reproduced them.*
+
+---
+
+# Cross-reference comment (to post on #151818)
+
+Closely related to #151119 / #151538, but I believe this is a distinct defect rather than a
+duplicate.
+
+#151119 / #151538 fix the **missing eval-stack sync** before `_PyList_AppendTakeRef` — the
+`_Py_Dealloc` `stackpointer != NULL` assert, which fires when the appended item has no other
+reference and is deallocated immediately.
+
+This issue is the **double-free / use-after-free**: `_CALL_LIST_APPEND` steals `arg`,
+`_PyList_AppendTakeRef` decrefs it when `list_resize` fails, but the op then takes
+`ERROR_NO_POP()` and leaves the consumed `arg` on the value stack, so `exception_unwind`
+closes it a second time. It surfaces when the item has another live reference (so that first
+decref doesn't free it).
+
+#151538 marks the append ops `HAS_ESCAPES`, which also adds the SP-sync to `_CALL_LIST_APPEND`
+— but its `_CALL_LIST_APPEND` hunk *only* adds the sync; the error path still
+`JUMP_TO_ERROR()`s with `arg` on the stack, so the double-free survives that PR. Notably
+`_CALL_LIST_APPEND` is the only append op using `ERROR_NO_POP`; `LIST_APPEND` / `SET_ADD` /
+`MAP_ADD` use the codegen-accounted `ERROR_IF`, which drops the consumed input. So the fix
+here is to account for the stolen `arg` on the error path (and could be folded into #151538).
