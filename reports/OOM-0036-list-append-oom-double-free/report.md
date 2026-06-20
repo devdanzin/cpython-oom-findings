@@ -42,6 +42,26 @@ The warm-up `f()` is load-bearing: it specializes `out.append(e.a)` to `CALL_LIS
 (the bug is in that specialized form) and builds the code objects so the much more common
 `code_dealloc` crash ([OOM-0003]) doesn't fire first and mask this one.
 
+## Natural trigger (no `_testcapi`)
+
+`_CALL_LIST_APPEND`'s only error path is `list_resize` failing, which happens **only** on a
+genuine allocation failure — `set_nomemory` just makes it deterministic. So the bug is
+reachable under real memory pressure: a program that does `list.append(obj)` (with `obj`
+referenced elsewhere) while the list's grow allocation returns NULL gets a double-free / UAF
+**instead of a recoverable `MemoryError`**.
+
+Demonstrated with a real `RLIMIT_AS` address-space cap and no test API (`repro_natural.py`,
+run on a non-ASan release build):
+
+```
+$ PYTHON_GIL=1 ./python repro_natural.py
+Segmentation fault            # 3/3; faulthandler pins it to the `out.append(x)` line
+```
+
+Control: under the **same** cap, when the failing allocation is *not* a list-append grow
+(e.g. appending large `bytes`), Python raises a clean, catchable `MemoryError` and does not
+crash. So the segfault is specific to the buggy append path, not an `RLIMIT_AS` artifact.
+
 ## Root cause
 
 In the specialized append bytecode `_CALL_LIST_APPEND` (`Python/bytecodes.c`):
