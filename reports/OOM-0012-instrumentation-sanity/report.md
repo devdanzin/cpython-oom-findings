@@ -98,3 +98,7 @@ Nine fuzzer vehicles abort at the identical `instrumentation.c:1106` assertion: 
 ## Versions
 
 - main (3.16.0a0, commit 15d7406). `ft_debug_asan`: abort (`instrumentation.c:1106`). `jit`: abort (same assert). `ft_release`: segfault (`instrumentation.c:1119`). `upstream`: segfault (same site). The defect reproduces on all four builds.
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

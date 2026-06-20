@@ -92,3 +92,7 @@ All 13 are listed as vehicles because they share the catalog signature, but the 
 ## Versions
 
 - main (3.16.0a0, commit 15d7406); aborts on the free-threaded debug+ASan build at `start=5`. FT release / JIT / upstream builds: assert compiled out, condition surfaces as `MemoryError` (`n/a`).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

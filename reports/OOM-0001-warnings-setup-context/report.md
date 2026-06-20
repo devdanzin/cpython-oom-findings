@@ -65,3 +65,7 @@ and at `handle_error:` use `Py_XDECREF(*filename)` (since `*filename` may legiti
 ## Notes
 
 Found by OOM-injection fuzzing (`set_nomemory`). Same pattern as gh-146080 (`Py_DECREF(NULL)` in an `_ssl.c` error label). Code is long-standing, so 3.13–3.15 are likely affected as well (unverified).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

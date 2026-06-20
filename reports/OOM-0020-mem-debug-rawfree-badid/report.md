@@ -120,3 +120,7 @@ Six fuzzer vehicles (across `python-5` and `python-7`) all abort with the identi
 ## Versions
 
 - main (3.16.0a0, commit 15d7406); aborts (`bad ID`) on the free-threaded debug+ASan build, segfaults on the free-threaded release build. JIT/upstream are GIL-enabled, so the affected `Py_GIL_DISABLED` path is absent (`n/a`).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

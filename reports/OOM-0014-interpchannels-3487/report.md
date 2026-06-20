@@ -95,3 +95,7 @@ Six fuzzer vehicles across `python-5` and `python-7` all abort at the identical 
 ## Versions
 
 - main (3.16.0a0, commit 15d7406). Reproduces on all four builds: SIGABRT on the debug builds (`ft_debug_asan`, `jit`), SIGSEGV on the release builds (`ft_release`, `upstream`).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

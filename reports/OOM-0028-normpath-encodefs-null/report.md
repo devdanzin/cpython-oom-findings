@@ -103,3 +103,7 @@ it via an `os.path` operation on a bytes path; reduced to the 3-line trigger abo
 
 - main (3.16.0a0), commit 15d7406. Reproduces (SIGSEGV) on all four local builds
   (free-threaded debug+ASan, free-threaded release, JIT, upstream release).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

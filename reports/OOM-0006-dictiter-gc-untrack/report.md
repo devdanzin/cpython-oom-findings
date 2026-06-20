@@ -153,3 +153,7 @@ the GC-untracking dealloc:
   abort (assert), `jit` -> abort (assert), `upstream` (release+ASan) -> segv in
   `_Py_Dealloc`. `ft_release` -> no crash in this run (NDEBUG; assert stripped, segv did
   not manifest on that path). Long-standing code; 3.13-3.15 likely affected (unverified).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

@@ -129,3 +129,7 @@ never tripping this `warn_explicit` assert. Different function, different defect
 - main (3.16.0a0), commit `15d7406`. SIGABRT on both `Py_DEBUG` builds (`ft_debug_asan`
   and `jit`); the assert is compiled out on the release builds `ft_release` / `upstream`
   (latent — that vehicle segfaults via OOM-0001 there).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

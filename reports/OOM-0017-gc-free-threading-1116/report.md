@@ -106,3 +106,7 @@ Three fuzzer vehicles, all in the `socket` target driving `recv_fds`/`send_fds` 
 ## Versions
 
 - main (3.16.0a0, commit 15d7406); aborts on the free-threaded debug+ASan build at `gc_free_threading.c:1116` and on the jit debug build at `gc.c:96`. ft_release/upstream: assertion compiled out (`n/a`, clean exit).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

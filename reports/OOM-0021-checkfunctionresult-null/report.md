@@ -93,3 +93,7 @@ Four fuzzer vehicles (`python-5` once, `python-7` three times) all fatal at the 
 ## Versions
 
 - main (3.16.0a0, commit 15d7406); aborts on the free-threaded debug+ASan build and the JIT debug build at `start=4`. Release/upstream builds: `Py_FatalError` compiled out (`n/a`; survive the sweep with `MemoryError`/latent `SystemError`).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

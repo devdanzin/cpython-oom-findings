@@ -90,3 +90,7 @@ Three fuzzer vehicles (`python-4`, `python-5`, `python-7`, all `concurrent_inter
 ## Versions
 
 - main (3.16.0a0, commit 15d7406); aborts on the free-threaded debug+ASan build and the JIT build. Release/upstream builds: assertion compiled out, clean `MemoryError` (`n/a`).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

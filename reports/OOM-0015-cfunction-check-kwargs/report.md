@@ -79,3 +79,7 @@ Four fuzzer vehicles abort at the identical `Objects/methodobject.c:409` asserti
 ## Versions
 
 - main (3.16.0a0, commit 15d7406); aborts on the free-threaded debug+ASan build and the JIT build. FT-release / upstream builds: assert compiled out, clean `MemoryError` (`n/a`).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*
