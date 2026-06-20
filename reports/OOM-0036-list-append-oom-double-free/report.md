@@ -4,6 +4,8 @@
 
 _AI Disclaimer: this report was drafted by Claude Code, which also generated the reduced reproducer._
 
+**Filed upstream: [python/cpython#151818](https://github.com/python/cpython/issues/151818).**
+
 ## Crash report
 
 Appending a still-referenced object to a `list` while allocations are failing double-frees
