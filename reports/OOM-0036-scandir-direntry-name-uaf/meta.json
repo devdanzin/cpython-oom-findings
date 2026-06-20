@@ -1,0 +1,28 @@
+{
+  "id": "OOM-0036",
+  "slug": "scandir-direntry-name-uaf",
+  "title": "Use-after-free of an `os.DirEntry` `name` string under OOM (`DirEntry_dealloc`, `posixmodule.c:16199`)",
+  "description": "Recursively scanning a directory tree with os.scandir while allocations intermittently fail leaves an os.DirEntry whose name string has already been freed; the later DirEntry_dealloc Py_XDECREFs the dangling pointer (Modules/posixmodule.c:16199/16200), detected as _Py_NegativeRefcount during teardown of the entries list / its holding frame. Abort on debug and JIT builds (the negative-refcount assert), SIGSEGV on the release upstream build (assert compiled out under NDEBUG; the use-after-free is latent). A genuine memory-safety UAF, not a debug-only assertion.",
+  "crash_kind": "abort",
+  "sites": [
+    "Modules/posixmodule.c DirEntry_dealloc:16199"
+  ],
+  "signature": {
+    "site_frame": "DirEntry_dealloc@Modules/posixmodule.c:16199",
+    "top_frames": [
+      "DirEntry_dealloc@Modules/posixmodule.c:16199"
+    ]
+  },
+  "vehicles": [
+    "fleet inst-01 python-6 zoneinfo__tzpath-assertion-sigabrt-oomNEW"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "no-crash", "jit": "abort", "upstream": "segv"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-20",
+  "confirmed_commit": "15d7406",
+  "notes": "FIRST bug found by the new OOM Phase-4 stateful sequences (--oom-seq); vehicle zoneinfo._tzpath. A crash the single-call fail-forever harness cannot reach: it always trips the shallow OOM-0003 (code_dealloc/_co_unique_id) first, whereas the windowed sequence runs past that shallow crash (its preceding step warms the code objects) to reach this deeper UAF. Reduced out of zoneinfo to a bare recursive os.scandir under the set_nomemory sweep; deterministic on ft_debug_asan, GIL on and off, window 1 or fail-forever. A warm-up walk is load-bearing (else OOM-0003 masks it). Victim = a DirEntry name string freed while the DirEntry is still live (confirmed UAF: freed memory, debug deadbyte 0xdd, at the second Py_XDECREF). DirEntry-specific (a generic non-DirEntry recursion does not reproduce). Ruled out by inspection: DirEntry_from_posix_info (clean), ScandirIterator_iternext (clean), DirEntry_fetch_stat/path_object_error (do not touch name/path refs and are not called in the minimal repro; is_dir/stat not needed). Root PARTIAL: the exact producer (where entry->name loses a ref under OOM) is not pinned -- a conditional break on unicode_dealloc for the freed str never fired and a hardware refcount watchpoint never tripped (invalidated by the OOM allocator arena churn on this --without-pymalloc ASan build), hinting at an arena/aliasing free rather than a plain Py_DECREF; pinning needs ASan free-stack (a --with-pymalloc ASan build) or rr reverse execution. Distinct from OOM-0005 (generic thread-frame PyStackRef_XCLOSE over-close of a MemoryError -- a generic recursion does not reproduce this; they share only the generic _Py_NegativeRefcount detector). Dedup key = DirEntry_dealloc@posixmodule.c:16199 (the deduper resolves to it after skipping refcount.h/object.c:275 detector frames). NOT yet gisted -- umbrella python/cpython#151763 already filed with 35 bugs; adding this 36th outward-facing is a separate gated step."
+}
