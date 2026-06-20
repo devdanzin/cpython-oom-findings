@@ -103,13 +103,33 @@ append) does **not** crash.
 
 ## Suggested fix
 
-`_CALL_LIST_APPEND` must not leave the stolen `arg` on the value stack on the error path:
-once `_PyList_AppendTakeRef` has consumed the reference, `arg`'s stackref is dead and must be
-removed before unwinding (e.g. account for the consumed input on the error path rather than
-`ERROR_NO_POP()`, or only steal `arg` once the append has succeeded). This is the same
-"steal an input, then take a non-popping error path" anti-pattern worth auditing across the
-specialized call/append uops (cf. [OOM-0005], a related eval-loop stackref over-close under
-OOM at a different site).
+`_CALL_LIST_APPEND` must account for the consumed `arg` on the error path — once
+`_PyList_AppendTakeRef` has taken the reference, `arg`'s stackref is dead and must not be left
+on the value stack for `exception_unwind` to close. The sibling ops show the two correct
+idioms: the comprehension adds (`LIST_APPEND`/`SET_ADD`/`MAP_ADD`) use `ERROR_IF(...)` so the
+codegen drops the consumed input; the consuming call ops (`_DO_CALL_FUNCTION_EX`,
+`_PY_FRAME_EX`) call `INPUTS_DEAD(); SYNC_SP();` before `ERROR_NO_POP()`.
+
+## Audit (is this the only one?)
+
+Scanned all 440 ops in `Python/bytecodes.c` for the same shape — steal a stack input **and**
+take a bare `ERROR_NO_POP()`. `_CALL_LIST_APPEND` is the **only** affected op:
+
+- `_DO_CALL_FUNCTION_EX`, `_PY_FRAME_EX` — steal callargs/kwargs but call
+  `INPUTS_DEAD(); SYNC_SP();` before `ERROR_NO_POP()` → the unwind skips the consumed slots. Safe.
+- `DELETE_DEREF` — false positive: its `PyCell_SwapTakeRef` is on a cell's contents, not a
+  value-stack input (stack effect `(--)`). Safe.
+- the comprehension adds (`LIST_APPEND`/`SET_ADD`/`MAP_ADD`) and `STORE_SUBSCR_DICT` steal
+  inputs but use the codegen-accounted `ERROR_IF`/`goto pop_N_error`. Safe — confirmed
+  empirically: `[e.a for e in items]` (`LIST_APPEND`, the *same* `_PyList_AppendTakeRef`
+  helper) does **not** crash under the OOM sweep, whereas `out.append(e.a)`
+  (`_CALL_LIST_APPEND`) does.
+
+So the defect is specifically the bare `ERROR_NO_POP()` after a steal, with neither the
+codegen accounting nor `INPUTS_DEAD()/SYNC_SP()`. Related to [OOM-0005] — a sibling
+eval-loop stackref over-close under OOM, same `PyStackRef_XCLOSE` closer family but a
+different inconsistency source/site (the value-stack over-close fires whenever the stack is
+left inconsistent at unwind; here the source is the consumed-but-unpopped `arg`).
 
 ## Backtrace
 
