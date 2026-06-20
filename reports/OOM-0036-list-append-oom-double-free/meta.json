@@ -1,0 +1,28 @@
+{
+  "id": "OOM-0036",
+  "slug": "list-append-oom-double-free",
+  "title": "Double-free / use-after-free: `list.append(x)` under OOM double-frees the item (`_CALL_LIST_APPEND` steals `arg`, then `ERROR_NO_POP`)",
+  "description": "list.append(x) under OOM double-frees the appended item. In the specialized _CALL_LIST_APPEND bytecode (Python/bytecodes.c), `arg` is stolen via PyStackRef_AsPyObjectSteal and handed to _PyList_AppendTakeRef, which consumes the reference on every path -- on the grow path it decrefs the item when list_resize fails under OOM (_PyList_AppendTakeRefListResize, listobject.c:531). The uop then takes ERROR_NO_POP(), leaving the already-consumed `arg` stackref on the value stack; the eval loop's exception_unwind (generated_cases.c.h:13853-13857) then PyStackRef_XCLOSEs it, decreffing the item a SECOND time -> double-free. When the item has another live owner (a __slots__ attribute in the minimal repro; an os.DirEntry path field in the fleet vehicle), that owner is left dangling -> use-after-free, detected as _Py_NegativeRefcount on debug/JIT builds and SIGSEGV on the upstream release build. Generic and pure-Python reproducible; os.DirEntry/os.scandir was only the discovery vehicle.",
+  "crash_kind": "abort",
+  "sites": [
+    "Modules/posixmodule.c DirEntry_dealloc:16199"
+  ],
+  "signature": {
+    "site_frame": "DirEntry_dealloc@Modules/posixmodule.c:16199",
+    "top_frames": [
+      "DirEntry_dealloc@Modules/posixmodule.c:16199"
+    ]
+  },
+  "vehicles": [
+    "fleet inst-01 python-6 zoneinfo__tzpath-assertion-sigabrt-oomNEW"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "no-crash", "jit": "abort", "upstream": "segv"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-20",
+  "confirmed_commit": "15d7406",
+  "notes": "ROOT-CAUSED to _CALL_LIST_APPEND (Python/bytecodes.c): the uop does `_PyList_AppendTakeRef(self, PyStackRef_AsPyObjectSteal(arg)); if (err) ERROR_NO_POP();`. The steal consumes arg's ref; _PyList_AppendTakeRef consumes it on every path (decrefs newitem when list_resize fails under OOM -- listobject.c:531); ERROR_NO_POP then leaves the dead arg stackref on the value stack, and exception_unwind (generated_cases.c.h:13853-13857) PyStackRef_XCLOSEs it -> second decref -> double-free of the item. Fix: don't leave the stolen arg on the stack on the error path (pop/account for the consumed input, or steal only on success). Confirmed 4 ways: ASan free-stack (item freed by PyStackRef_XCLOSE<-exception_unwind; --with-pymalloc build ~/projects/3.16_debug_asan_pymalloc run with PYTHONMALLOC=malloc), listobject.c source (decref-on-resize-failure), disassembly (out.append(e.a) -> CALL_LIST_APPEND), and a control (load e.a but don't append -> NO crash). GENERIC + pure-Python: a __slots__ class is enough (E.a holds the 2nd ref; see repro.py), no os.scandir/filesystem/C-type. DirEntry was only the discovery vehicle (the original fleet crash was stack.append(e.path) in os.walk; entry->path was the 2nd ref, crash detected at DirEntry_dealloc). Determinism: ft_debug_asan GIL on/off; SEGV on upstream release (real memory-safety bug). Warm-up f() load-bearing: specializes CALL_LIST_APPEND + builds code objects so the shallow OOM-0003 doesn't mask it. Found by OOM Phase-4 --oom-seq fleet (vehicle zoneinfo._tzpath) -- unreachable by the single-call fail-forever harness (trips OOM-0003 first). Related to OOM-0005 (same eval-loop stackref-over-close-under-OOM class -- a steal-then-non-popping-error anti-pattern -- but a DIFFERENT op/site; kept separate, the pattern is worth auditing across specialized call/append uops). Dedup: the fleet vehicle keys on DirEntry_dealloc@posixmodule.c:16199, but this is generic so other victims surface at other dealloc sites and won't auto-dedupe. STRONG self-contained upstream candidate (tiny pure-Python repro, release-crashing, one-spot fix). NOT yet gisted/filed -- outward-facing past umbrella python/cpython#151763 is a separate gated step."
+}
