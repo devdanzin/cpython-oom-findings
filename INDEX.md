@@ -50,7 +50,7 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 | [OOM-0030](https://gist.github.com/devdanzin/fbfb9d6cd5eeb518e4f9eeab44be3893) | Abort: `Py_DECREF` of NULL-data unicode in `unicode_subtype_new` (`unicodeobject.c:13986`) | ft_debug_asan,jit | report |
 | [OOM-0032](https://gist.github.com/devdanzin/f7e483080647c7b76fbda79bfeb07e9c) | Abort: pending-exception assert from `warn_explicit` normalization (`_warnings.c:799/806`) | ft_debug_asan,ft_release,jit,upstream | report |
 | [OOM-0035](https://gist.github.com/devdanzin/8c86ca358f3711740a692eaac730b527) | Abort / malformed str: invalid `maxchar` in `_PyUnicode_FromUCS4` (`unicodeobject.c:2228`) | ft_debug_asan,ft_release,jit,upstream | report |
-| [OOM-0036](reports/OOM-0036-scandir-direntry-name-uaf/report.md) | Use-after-free of an `os.DirEntry` `name` string under OOM (`DirEntry_dealloc`, `posixmodule.c:16199`) | ft_debug_asan,ft_release,jit,upstream | draft |
+| [OOM-0036](reports/OOM-0036-scandir-direntry-name-uaf/report.md) | Use-after-free of an `os.DirEntry` string under OOM (eval-loop stackref over-close; `DirEntry_dealloc`, `posixmodule.c:16199`) | ft_debug_asan,ft_release,jit,upstream | draft |
 
 ## Fatal Python error
 

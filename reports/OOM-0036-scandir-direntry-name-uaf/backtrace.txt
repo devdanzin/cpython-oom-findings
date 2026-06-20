@@ -31,6 +31,41 @@ Build: ft_debug_asan (3.16.0a0, commit 15d7406), PYTHON_GIL=0, ASAN_OPTIONS=...:
   (gdb) the negative-refcount object `op` = entry->name, in freed memory (debug deadbyte 0xdd):
         op->ob_type unreadable ("Cannot access memory at 0xdddddddddddd...").
 
-Both faces are the same underlying bug: a DirEntry's `name` string is freed prematurely
-under OOM, and a later Py_XDECREF(entry->name) (during teardown of the entries list / its
-holding frame) hits the dangling pointer.
+Both faces are the same underlying bug: a DirEntry's string is freed prematurely under OOM,
+and a later Py_XDECREF(entry->name/path) (during teardown of the entries list / its holding
+frame) hits the dangling pointer.
+
+=== AUTHORITATIVE: ASan heap-use-after-free (--with-pymalloc build + PYTHONMALLOC=malloc) ===
+
+  ==ERROR: AddressSanitizer: heap-use-after-free ... in Py_DECREF
+  SUMMARY: AddressSanitizer: heap-use-after-free Include/refcount.h:397 in Py_DECREF
+
+  READ (the use-after-free):
+    #2 DirEntry_dealloc           Modules/posixmodule.c:16200      <- Py_XDECREF(entry->path), dangling
+    #6 list_dealloc               Objects/listobject.c:567
+    #10 frame_dealloc             Objects/frameobject.c:1949
+
+  FREED BY (the producer / the bug):
+    #1 unicode_dealloc            Objects/unicodeobject.c:1710
+    #3 Py_DECREF_MORTAL           Include/internal/pycore_object.h:419
+    #4 PyStackRef_XCLOSE          Include/internal/pycore_stackref.h:726
+    #5 _PyEval_EvalFrameDefault   Python/generated_cases.c.h:13857   <- exception_unwind: pops + XCLOSEs
+                                                                        every value-stack slot
+
+  PREVIOUSLY ALLOCATED BY (the victim string = a DirEntry path):
+    #1 PyUnicode_New              Objects/unicodeobject.c:1326
+    #2 unicode_decode_utf8        Objects/unicodeobject.c:5281
+    #3 DirEntry_from_posix_info   Modules/posixmodule.c:16747        <- entry->path = PyUnicode_DecodeFSDefault(joined_path)
+    #4 ScandirIterator_iternext   Modules/posixmodule.c:16923
+    #5 list_extend_iter_lock_held Objects/listobject.c:1318          <- building list(os.scandir(d))
+
+generated_cases.c.h:13853 (the exception_unwind handler):
+    if (handled == 0) {
+        assert(_PyErr_Occurred(tstate));
+        _PyStackRef *stackbase = _PyFrame_Stackbase(frame);
+        while (frame->stackpointer > stackbase) {
+            _PyStackRef ref = _PyFrame_StackPop(frame);
+            PyStackRef_XCLOSE(ref);          // <- 13857: over-closes a ref to the live DirEntry string
+        }
+        ...
+    }
