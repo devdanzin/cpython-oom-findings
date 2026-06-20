@@ -110,3 +110,7 @@ and the JIT build (segv); release/upstream silently build the malformed `str`.
 
 - main (3.16.0a0), commit `15d7406`. Repro matrix: `ft_debug_asan` abort, `jit` segv,
   `ft_release` no-crash, `upstream` no-crash.
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

@@ -120,3 +120,7 @@ either exits cleanly or segfaults at an unrelated downstream OOM site). Hence `f
 ## Versions
 
 - main (3.16.0a0), commit 15d7406. Reproduces (fatal) deterministically via the sweep above on both `Py_DEBUG` builds — free-threaded debug+ASan and JIT. Release/upstream: invariant compiled out (`n/a`; clean exit or unrelated downstream segv).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

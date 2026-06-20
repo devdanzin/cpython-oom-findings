@@ -114,3 +114,7 @@ The 16 fuzzer vehicles all abort at the identical `typeobject.c:6343` assertion 
 ## Versions
 
 - main (3.16.0a0, commit 15d7406); aborts on the free-threaded debug+ASan build and the JIT debug build. Release/upstream builds: assertion compiled out (`n/a`); the bug instead leaks a `MemoryError` into an unrelated `SystemError`.
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

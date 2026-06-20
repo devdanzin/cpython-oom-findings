@@ -77,3 +77,7 @@ Six fuzzer vehicles abort at the identical `ceval.c:843` assertion (`timeit` x2,
 ## Versions
 
 - main (3.16.0a0, commit 15d7406); aborts on the free-threaded debug+ASan build and the JIT debug build. Free-threaded release and upstream builds: assertion compiled out, clean `MemoryError` (`n/a`).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

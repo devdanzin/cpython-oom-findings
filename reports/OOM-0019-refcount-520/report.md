@@ -81,3 +81,7 @@ This is distinct from OOM-0003 (an uninitialized-field assert in `code_dealloc`)
 ## Versions
 
 - main (3.16.0a0, commit 15d7406); aborts on the free-threaded debug+ASan build and on the `jit` debug build (both `Py_REF_DEBUG`). Release/upstream builds: check compiled out (`n/a`); latent double-free (sweep segfault observed on `upstream`).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

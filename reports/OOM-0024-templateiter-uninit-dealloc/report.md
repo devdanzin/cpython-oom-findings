@@ -136,3 +136,7 @@ the sibling `template_*` constructors.
 - main (3.16.0a0), commit 15d7406. Reproduces (SIGSEGV) on free-threaded debug+ASan
   and JIT debug+ASan; exits cleanly on free-threaded release and upstream release
   (invariant of allocator state, see Notes).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

@@ -70,3 +70,7 @@ Found by OOM-injection fuzzing (`set_nomemory`). Same pattern as gh-146080 (`Py_
 ## Versions
 
 - main (3.16.0a0); reproduced on free-threaded debug+ASan, free-threaded release, and GIL release builds.
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

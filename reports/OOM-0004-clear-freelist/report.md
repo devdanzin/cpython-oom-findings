@@ -130,3 +130,7 @@ Found by OOM-injection fuzzing (`_testcapi.set_nomemory`). Free-threading-specif
 ## Versions
 
 - main (3.16.0a0, commit 15d7406). Reproduced (reduced repro `repro.py`) on free-threaded debug+ASan (SEGV; abort on the vehicle's `clear_freelist` surface), free-threaded release (SEGV), JIT (SEGV), and upstream (SEGV).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

@@ -97,3 +97,7 @@ Audit the bytecode-handler error/cleanup paths (and the generated `pop_N_error:`
 ## Versions
 
 - main (3.16.0a0), commit 15d7406. Confirmed on free-threaded debug+ASan (abort, 10/10 via the minimal repro). On the release builds (`ft_release`, `upstream`) the assert is compiled out — a latent use-after-free, but the minimal repro does not pin a segv at this site there. The `jit` build does not reach this stackref path with the minimal repro.
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

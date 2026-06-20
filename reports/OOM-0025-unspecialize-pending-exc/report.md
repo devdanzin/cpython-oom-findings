@@ -122,3 +122,7 @@ with shrinkray and re-verified (20/20).
 
 - main (3.16.0a0), commit 15d7406. Aborts on free-threaded debug+ASan and JIT
   debug+ASan; assert compiled out on the release builds.
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

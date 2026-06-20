@@ -122,3 +122,7 @@ a gdb run drifts to the `list_ass_slice` negrefcount — both are this bug.
 
 - main (3.16.0a0), commit `15d7406`. Repro matrix: `ft_debug_asan` abort (negrefcount),
   `jit` segv, `upstream` segv, `ft_release` no-crash (this run).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

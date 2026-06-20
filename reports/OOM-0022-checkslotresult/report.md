@@ -130,3 +130,7 @@ Two fuzzer vehicles reach the identical fatal: `python-7/pdb-fatal_python_error`
 - main (3.16.0a0, commit 15d7406). Aborts on the free-threaded debug+ASan build and
   on the JIT debug build (`_Py_CheckSlotResult` fatal). FT release: clean. Upstream
   release: unrelated segfault (assert compiled out) -> recorded `n/a`.
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

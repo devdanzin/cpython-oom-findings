@@ -125,3 +125,7 @@ _interpchannelsmodule.c:3487). Exception-state-under-OOM family.
 
 - main (3.16.0a0), commit 15d7406. Aborts on free-threaded debug+ASan and JIT
   debug+ASan; clean exit on the release builds (asserts compiled out).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

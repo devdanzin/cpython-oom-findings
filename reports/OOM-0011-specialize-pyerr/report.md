@@ -86,3 +86,7 @@ Ten fuzzer vehicles across `python-4/5/7` abort at the identical `specialize.c:3
 ## Versions
 
 - main (3.16.0a0, commit 15d7406); aborts on the free-threaded debug+ASan build and the JIT build. FT release / upstream builds: assertion compiled out (`n/a`, clean exit).
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*

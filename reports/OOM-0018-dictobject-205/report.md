@@ -125,3 +125,7 @@ on this build); it is not tied to the small-int cache.
 ## Versions
 
 - main (3.16.0a0, commit 15d7406); aborts on the free-threaded debug+ASan build. Release/JIT/upstream builds: assertion compiled out / not present (`n/a`). Recovery branch introduced in commit `6c450f44c283`.
+
+---
+
+*Part of [python/cpython#151763](https://github.com/python/cpython/issues/151763) — an umbrella tracking 35 OOM-related crash findings.*
