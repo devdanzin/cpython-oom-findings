@@ -133,6 +133,20 @@ eval-loop stackref over-close under OOM, same `PyStackRef_XCLOSE` closer family 
 different inconsistency source/site (the value-stack over-close fires whenever the stack is
 left inconsistent at unwind; here the source is the consumed-but-unpopped `arg`).
 
+## Related CPython issue
+
+[python/cpython#151119](https://github.com/python/cpython/issues/151119) (+ open PR
+[gh-151538](https://github.com/python/cpython/pull/151538)) targets the *same*
+`_PyList_AppendTakeRef`-under-OOM area but a **distinct** defect: the missing eval-stack
+SP-sync, which trips the `_Py_Dealloc` `stackpointer != NULL` assert in `LIST_APPEND` when the
+appended item has no other reference (so the resize-failure decref deallocs it immediately).
+PR #151538 marks the append ops `HAS_ESCAPES` and so adds the SP-sync to `_CALL_LIST_APPEND`
+too — **but its `_CALL_LIST_APPEND` hunk only adds the sync**: the error path still
+`JUMP_TO_ERROR()`s with the stolen `arg` on the stack (verified from the diff: 6
+`_PyFrame_SetStackPointer` lines added, 0 changes to the `ERROR_NO_POP`/`ERROR_IF` accounting),
+so **this double-free survives PR #151538**. Consistent with the audit above —
+`_CALL_LIST_APPEND` is the lone append op using `ERROR_NO_POP`. Cross-referenced on #151818.
+
 ## Backtrace
 
 See `backtrace.txt` for the ASan use-after-free report (allocated-by / freed-by / use
