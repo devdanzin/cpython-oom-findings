@@ -65,7 +65,45 @@ generated_cases.c.h:13853 (the exception_unwind handler):
         _PyStackRef *stackbase = _PyFrame_Stackbase(frame);
         while (frame->stackpointer > stackbase) {
             _PyStackRef ref = _PyFrame_StackPop(frame);
-            PyStackRef_XCLOSE(ref);          // <- 13857: over-closes a ref to the live DirEntry string
+            PyStackRef_XCLOSE(ref);          // <- 13857: over-closes the stale (consumed) arg slot
         }
         ...
     }
+
+=== THE BUG: _CALL_LIST_APPEND leaves the stolen arg on the stack (Python/bytecodes.c) ===
+
+Pure-Python repro ASan free-stack is byte-identical (victim is a str from PyUnicode_Concat,
+freed by PyStackRef_XCLOSE <- exception_unwind @ generated_cases.c.h:13857; UAF at
+clear_slots <- subtype_dealloc, the __slots__ analog of DirEntry_dealloc). Disassembly of
+`out.append(e.a)` after warm-up: LOAD_ATTR_SLOT (a) ; CALL_LIST_APPEND.
+
+    op(_CALL_LIST_APPEND, (callable, self, arg -- none, c, s)) {
+        ...
+        int err = _PyList_AppendTakeRef((PyListObject *)self_o,
+                                        PyStackRef_AsPyObjectSteal(arg));   // STEALS arg
+        UNLOCK_OBJECT(self_o);
+        if (err) {
+            ERROR_NO_POP();        // <- arg already consumed, but left on the value stack
+        }
+        ...
+    }
+
+    // Objects/listobject.c:526  (the grow path _PyList_AppendTakeRef takes when allocated == len)
+    _PyList_AppendTakeRefListResize(PyListObject *self, PyObject *newitem) {
+        ...
+        if (list_resize(self, len + 1) < 0) {
+            Py_DECREF(newitem);    // <- under OOM: consumes (decrefs) the stolen item
+            return -1;
+        }
+        ...
+    }
+
+Sequence under OOM:
+  1. LOAD_ATTR_SLOT pushes an owned ref to e.a            (e.a refcount = 2: E.a slot + arg slot)
+  2. _CALL_LIST_APPEND steals arg, hands it to AppendTakeRef
+  3. list_resize fails (OOM) -> Py_DECREF(newitem)        (e.a refcount 2 -> 1; arg's ref consumed)
+  4. ERROR_NO_POP() leaves the dead arg stackref on the value stack
+  5. exception_unwind PyStackRef_XCLOSE(arg)              (e.a refcount 1 -> 0 -> FREED)
+  6. E.a slot now dangles; clear_slots/DirEntry_dealloc Py_XDECREFs it -> negrefcount / SIGSEGV
+
+Control: loading e.a WITHOUT the list.append does not crash -> the append is essential.
