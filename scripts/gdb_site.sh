@@ -5,9 +5,10 @@
 #
 # Usage: gdb_site.sh <source.py> [frames]
 set -u
+. "$(cd "$(dirname "$0")" && pwd)/env.sh"   # OOM_PY = workhorse interpreter (overridable)
 SRC="${1:?usage: gdb_site.sh <source.py> [frames]}"
 N="${2:-20}"
-PY=~/projects/3.16_ft_debug_asan_cpython/python
+PY="$OOM_PY"
 ASAN_OPTIONS=detect_leaks=0:abort_on_error=0 timeout 180 gdb -q -batch \
   -ex 'set pagination off' -ex 'set print frame-arguments none' \
   -ex 'set debuginfod enabled off' -ex run -ex "bt $N" \

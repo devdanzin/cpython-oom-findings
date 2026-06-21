@@ -6,10 +6,11 @@
 # - fingerprint: first 3 CPython-source frames joined by ';' (for finer dedupe)
 # Usage: segv_worker.sh <crash-dir>            (expects <dir>/source.py)
 set -u
+. "$(cd "$(dirname "$0")" && pwd)/env.sh"   # OOM_PY = workhorse interpreter (overridable)
 DIR="${1:?usage: segv_worker.sh <crash-dir>}"
 SRC="$DIR/source.py"
 LABEL="$(basename "$(dirname "$DIR")")/$(basename "$DIR")"
-PY=~/projects/3.16_ft_debug_asan_cpython/python
+PY="$OOM_PY"
 BT="$(mktemp)"
 ASAN_OPTIONS=detect_leaks=0:abort_on_error=0 timeout "${WORKER_TIMEOUT:-180}" gdb -q -batch \
   -ex 'set pagination off' -ex 'set print frame-arguments none' \

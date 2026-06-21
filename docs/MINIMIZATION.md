@@ -10,14 +10,20 @@ oracle**, followed by hand-cleanup. Every lesson below was paid for in a real re
 - **`scripts/min_oracle.sh`** — the interestingness oracle. Exit 0 iff the candidate still
   crashes with the bug's `OOM_SIG` regex within `OOM_N` runs. **Pinning the signature is
   essential**: vehicles are multi-bug, so an "any crash" oracle reduces toward a *different*
-  bug. Env knobs: `OOM_PY` (interpreter, default the ft_debug_asan build), `OOM_GIL`
-  (`PYTHON_GIL`), `OOM_SIG` (REQUIRED regex), `OOM_N` (runs/candidate), `OOM_T` (per-run
-  timeout), **`OOM_ASAN`** (ASAN_OPTIONS — set
+  bug. Env knobs: `OOM_PY` (interpreter; defaults via `scripts/env.sh` to the workhorse
+  `debug-ft-nojit-asan` build), `OOM_GIL` (`PYTHON_GIL`), `OOM_SIG` (REQUIRED regex), `OOM_N`
+  (runs/candidate), `OOM_T` (per-run timeout), **`OOM_ASAN`** (ASAN_OPTIONS — set
   `detect_leaks=0:abort_on_error=0:handle_abort=1` to pin a *dealloc-cascade frame* of an
   abort, since handle_abort prints a symbolized backtrace — see below).
+- **`scripts/env.sh`** — single source of truth for machine paths, sourced by all the
+  triage/minimization scripts. Sets `OOM_PY`, `MATRIX_ROOT`
+  (`~/projects/python_build_matrix/builds`, layout `{debug,release}-{ft,gil}-{nojit,jit}[-asan]`),
+  `MATRIX_BUILDS` (the cross-build set), and `find_shrinkray`. **Everything is env-overridable**
+  — point `OOM_PY`/`MATRIX_ROOT`/`SHRINKRAY` elsewhere without editing scripts.
 - **`scripts/minimize.sh`** — drives `shrinkray --input-type arg` with the oracle. creduce
   (`/usr/bin`) is the fallback.
-- **`shrinkray`** at `~/venvs/shrinkray_venv/bin/shrinkray`.
+- **`shrinkray`** — auto-discovered by `env.sh`'s `find_shrinkray` (`$SHRINKRAY`, then `PATH`,
+  then `~/venvs/*/bin/shrinkray`); override with `$SHRINKRAY`.
 
 ## Workflow
 

@@ -14,12 +14,13 @@
 #     REPRO_RUNS=10 repro_collect.sh <crash-dir> <out-dir>
 #
 # Env knobs:
-#   REPRO_BUILDS  "name=/abs/python ..."   (default: local 3.16 matrix)
+#   REPRO_BUILDS  "name=/abs/python ..."   (default: $MATRIX_BUILDS from env.sh)
 #   REPRO_RUNS    N runs per build for flakiness (default 1)
 #   REPRO_GIL     0 | 1 | both   GIL mode(s) to try (default both; matters -- some OOM
 #                 crashes reproduce only GIL-off, others only GIL-on). Host used 0.
 # Usage: repro_collect.sh <source.py | crash-dir> <out-dir> [timeout_s]
 set -u
+. "$(cd "$(dirname "$0")" && pwd)/env.sh"   # MATRIX_BUILDS default (overridable)
 SRC="${1:?usage: repro_collect.sh <source.py|crash-dir> <out-dir> [timeout_s]}"
 OUT="${2:?need out-dir}"; T="${3:-120}"
 [ -d "$SRC" ] && { SRCDIR="$SRC"; SRC="$(cd "$SRC" && pwd)/source.py"; } || SRCDIR="$(cd "$(dirname "$SRC")" && pwd)"
@@ -27,11 +28,7 @@ mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"
 RUNS="${REPRO_RUNS:-1}"
 case "${REPRO_GIL:-both}" in 0) GILS="0";; 1) GILS="1";; *) GILS="0 1";; esac
 
-DEFAULT_BUILDS="ft_debug_asan=$HOME/projects/3.16_ft_debug_asan_cpython/python \
-ft_release=$HOME/projects/3.16_ft_release_cpython/python \
-jit=$HOME/projects/jit_cpython/python \
-upstream=$HOME/projects/upstream_cpython/python"
-BUILDS="${REPRO_BUILDS:-$DEFAULT_BUILDS}"
+BUILDS="${REPRO_BUILDS:-$MATRIX_BUILDS}"
 
 run_once() {  # <bin> <gil> <logfile> ; writes combined output, returns rc
   ( cd "$SRCDIR" && PYTHON_GIL="$2" ASAN_OPTIONS=detect_leaks=0:abort_on_error=0 \
