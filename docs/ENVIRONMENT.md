@@ -19,7 +19,15 @@ of the build trees below — several builds keep their own source tree).
 
 We test every crasher across several locally-built CPython `main` (3.16.0a0) interpreters.
 Each lives in its own dir with a `./python`. Configure flags are the standard ones — match
-your exact builds; the **purpose** is what matters:
+your exact builds; the **purpose** is what matters.
+
+> **Current layout: a matrix at `~/projects/python_build_matrix/builds/`** with one dir per
+> build named `{debug,release}-{ft,gil}-{nojit,jit}[-asan]`. Map to the purposes below:
+> triage/workhorse = `debug-ft-nojit-asan`; UAF-pinning = `debug-gil-nojit-asan` (GIL ⇒
+> pymalloc, accepts `PYTHONMALLOC=malloc`); FT release = `release-ft-nojit`; JIT =
+> `debug-gil-jit-asan`; plain release = `release-gil-nojit`. The scripts resolve these via
+> `scripts/env.sh` (override `MATRIX_ROOT`/`OOM_PY`/`MATRIX_BUILDS`). The dir names below are
+> the legacy per-build layout.
 
 | build dir | flags (approx.) | purpose |
 |---|---|---|
@@ -38,9 +46,10 @@ source headers (point it at a checkout).
 ## 3. Python venvs
 
 ```
-~/venvs/fusil_venv        # fleet runner (GIL); needs python-ptrace
+~/venvs/fusilvenv         # fleet runner (GIL); needs python-ptrace   (was fusil_venv)
 ~/venvs/fusil_ft_venv     # fleet runner (free-threaded); built from a FT CPython + python-ptrace
-~/venvs/shrinkray_venv    # shrinkray (test-case minimizer)
+# shrinkray (test-case minimizer): auto-discovered by scripts/env.sh find_shrinkray
+# ($SHRINKRAY, then PATH, then ~/venvs/*/bin/shrinkray). Currently in 3.14_jit_asan_debug_venv.
 ```
 
 - `python-ptrace` (0.9.9) is a **hard** runtime dependency of fusil (`fusil.application`

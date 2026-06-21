@@ -3,7 +3,8 @@
 # crash signature (so it can't drift to a different bug). creduce is the fallback.
 #
 # Usage: minimize.sh <report-dir | vehicle.py> <signature-regex> [out.py]
-#   env: OOM_N (runs/candidate, default 20), OOM_GIL (default 1), OOM_PY (interpreter)
+#   env: OOM_N (runs/candidate, default 20), OOM_GIL (default 1), OOM_PY (interpreter),
+#        SHRINKRAY (override the auto-discovered shrinkray). Paths default via env.sh.
 #
 # Always re-verify the reduced output at a higher OOM_N before trusting it.
 set -eu
@@ -11,6 +12,8 @@ SRC="${1:?report dir or vehicle.py}"
 SIG="${2:?signature regex}"
 OUT="${3:-}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$HERE/env.sh"
+SR="$(find_shrinkray)" || { echo "[minimize] shrinkray not found -- set \$SHRINKRAY or install it"; exit 4; }
 [ -d "$SRC" ] && SRC="$SRC/vehicle_source.py"
 [ -f "$SRC" ] || { echo "no such source: $SRC"; exit 2; }
 
@@ -24,7 +27,7 @@ if ! "$HERE/min_oracle.sh" "$WORK/cand.py"; then
     exit 3
 fi
 echo "[minimize] vehicle reproduces ($(wc -l <"$WORK/cand.py") lines). Reducing with shrinkray (niced)..."
-nice -n 19 ~/venvs/shrinkray_venv/bin/shrinkray --input-type arg --volume normal \
+nice -n 19 "$SR" --input-type arg --volume normal \
     --parallelism "${SR_PARALLELISM:-1}" --timeout "${SR_TIMEOUT:-120}" \
     "$HERE/min_oracle.sh" "$WORK/cand.py" || true
 echo "[minimize] reduced to $(wc -l <"$WORK/cand.py") lines -> $WORK/cand.py"

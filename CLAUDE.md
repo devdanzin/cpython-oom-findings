@@ -136,9 +136,17 @@ The faulting C frame is what dedupes a crash; the module is just the vehicle.
 ## Build matrix & reading it
 
 Test every crasher across the local CPython 3.16.0a0 builds (suggest adding configs when
-useful):
+useful).
 
-| build | path (this machine) | notes |
+> **Paths: use `scripts/env.sh`.** The build matrix now lives at
+> `~/projects/python_build_matrix/builds/` with the naming
+> `{debug,release}-{ft,gil}-{nojit,jit}[-asan]` (workhorse = `debug-ft-nojit-asan`, the
+> `ft_debug_asan` analog). All triage/minimization scripts resolve interpreters through
+> `scripts/env.sh` (`OOM_PY`, `MATRIX_ROOT`, `MATRIX_BUILDS`, `find_shrinkray`) and every
+> value is env-overridable. The table below maps the **logical names** the docs use to that
+> matrix; the old `~/projects/3.16_*_cpython` paths are the legacy layout.
+
+| logical build | legacy path / matrix dir | notes |
 |---|---|---|
 | `ft_debug_asan` | `~/projects/3.16_ft_debug_asan_cpython/python` | free-threaded, debug, ASan + asserts — **the triage build** (gdb, refcount/assert checks, `_testcapi.set_nomemory`, source tree) |
 | `debug_asan_pymalloc` | `~/projects/3.16_debug_asan_pymalloc/python` | GIL, debug, **pymalloc**+ASan — accepts `PYTHONMALLOC=malloc`, so frees route through ASan → **UAF reports with the free stack** (how OOM-0036's producer was pinned; `ft_debug_asan` is `--without-pymalloc` and rejects it) |

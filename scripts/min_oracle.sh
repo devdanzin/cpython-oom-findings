@@ -19,8 +19,9 @@
 #
 # Usage (shrinkray --input-type arg):  min_oracle.sh <candidate.py>
 set -u
+. "$(cd "$(dirname "$0")" && pwd)/env.sh"   # defaults OOM_PY to the workhorse (overridable)
 CAND="${1:?candidate file}"
-PY="${OOM_PY:-/home/danzin/projects/3.16_ft_debug_asan_cpython/python}"
+PY="${OOM_PY}"
 GIL="${OOM_GIL:-1}"
 SIG="${OOM_SIG:?set OOM_SIG to the signature regex}"
 N="${OOM_N:-20}"
