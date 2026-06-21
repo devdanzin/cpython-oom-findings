@@ -1,68 +1,77 @@
 # cpython-oom-findings
 
-Triage and reporting for CPython crashes found by **fusil** OOM-injection fuzzing
-(`_testcapi.set_nomemory`) of CPython 3.16.0a0. Findings are published as **gists**
-and tracked from a single **umbrella issue** (modelled on python/cpython#146102),
-so developers can pick work without polluting the issue tracker with reports that
-may not be actionable.
+A catalog of **memory-safety and assertion crashes in CPython** (`main`, 3.16.0a0),
+found by driving allocation-failure (out-of-memory) error paths with the
+[**fusil**](https://github.com/devdanzin/fusil) fuzzer. One directory per *unique* bug,
+each with a minimal reproducer, a backtrace, a root-cause analysis, and a suggested fix.
 
-**State: 35 unique bugs (OOM-0001..0035), all with a minimal reproducer.** Discovery,
-triage and minimization are done; publishing is the remaining (gated) work — see
-`reports/NEXT_STEPS.md`. **`CLAUDE.md` is the operational hub** (workflow, dedup-key
-rules, build matrix, lessons); `docs/MINIMIZATION.md` and `docs/DEDUP_PIPELINE.md` go
-deep on those two areas.
+The idea: when an allocation fails part-way through an operation, CPython's error/cleanup
+paths are exercised in ways normal testing rarely reaches — and a program that dutifully
+catches `MemoryError` can still be left with a use-after-free, a double-free, or a tripped
+invariant. fusil makes those allocations fail (via `_testcapi.set_nomemory`); this repo
+turns the resulting flood of crashes (≈96% duplicates) into a deduped, minimized,
+root-caused set of reports.
 
-## Layout
+## The findings
+
+- **36 unique bugs** (`reports/OOM-0001` … `OOM-0036`), each with a deterministic,
+  standard-library-only reproducer.
+- **[INDEX.md](INDEX.md)** is the table — one row per bug (title, which builds crash,
+  status), linking each to its report/gist.
+- **OOM-0001 … OOM-0035** are published as gists and tracked from the umbrella issue
+  **[python/cpython#151763](https://github.com/python/cpython/issues/151763)**.
+- **OOM-0036** — a `list.append()` double-free under `MemoryError` (in the
+  `_CALL_LIST_APPEND` bytecode), found by fusil's stateful-sequence mode and reproducible
+  *without any test API* via a real `RLIMIT_AS` cap — is filed as
+  **[python/cpython#151818](https://github.com/python/cpython/issues/151818)**.
+
+## What's in each report
 
 ```
-reports/OOM-####-<slug>/    one per UNIQUE bug (source of truth)
-    report.md               the gist body (issue draft)
-    repro.py                minimal, stdlib-only reproducer
-    backtrace.txt           authoritative gdb backtrace
-    meta.json               status, signature, vehicles, build matrix, gist URL, ...
-catalog/backtraces/         every backtrace ever seen (dedupe corpus, kept forever)
-scripts/                    signature.py · dedupe.py · gen_index.py · triage_matrix.sh
-docs/SUBAGENT_BRIEF.md      the per-crash triage procedure
-INDEX.md                    generated umbrella table (do not hand-edit)
+reports/OOM-####-<slug>/
+    report.md       the analysis: crash report, reproducer, backtrace, root cause, fix
+    repro.py        a minimal, deterministic, standard-library-only reproducer
+    backtrace.txt   the authoritative gdb / ASan backtrace
+    meta.json       structured metadata (sites, build matrix, status, …)
 ```
 
-**One row = one bug.** Crash directories are *vehicles*; many dedupe to the same
-underlying CPython defect (e.g. 8 stdlib modules → one `_warnings.c` bug). Vehicles
-are listed in each report's `meta.json`.
+## Reproducing a bug
 
-## Dedupe
+Most reproducers use `_testcapi.set_nomemory(...)` to fail allocations deterministically,
+so they need a CPython built with `--with-pydebug` (which exposes `_testcapi`):
 
-Compare crashes by the **faulting frame** (the crash SITE), never by the directory's
-signal label (assert-on-debug and segv-on-release can be the same bug) nor the ASan
-re-raise pc. The current pipeline is a **single-writer read-only snapshot**: triage
-writes `reports/*/meta.json`; `scripts/gen_known_sites.py` derives the flat
-`catalog/known_sites.tsv`; the fuzzer dedupes in-loop against it and `scripts/ingest.py`
-reconciles batches of run-dirs — see `docs/DEDUP_PIPELINE.md`. Detector/plumbing frames
-(the assert machinery, `refcount.h` macros) must never be discriminating keys — see the
-dedup-key rule in `CLAUDE.md`. (`scripts/signature.py`/`dedupe.py` are the earlier
-single-crash matchers, still present.) Build matrix + exit-code reading: `CLAUDE.md` /
-`scripts/triage_matrix.sh`.
+```bash
+./python reports/OOM-0036-list-append-oom-double-free/repro.py
+```
 
-## Workflow
+Debug builds abort on the tripped assertion; release builds may segfault or silently
+corrupt (the per-report build matrix records which). Several reproduce on a **release**
+build directly. OOM-0036 additionally ships a no-`_testcapi` reproducer (`repro_natural.py`)
+that triggers the same bug under a real memory limit.
 
-1. Ingest a crash dir → `triage_matrix.sh` → backtrace + matrix results.
-2. `dedupe.py` → existing vehicle, or a new `OOM-####`.
-3. For new bugs: minimize, root-cause, write the report (`docs/SUBAGENT_BRIEF.md`).
-4. `gen_index.py` → regenerate `INDEX.md`.
-5. **Gated, maintainer-confirmed:** publish gists (`gh gist create`, public) and
-   write URLs back into `meta.json`; post/update the umbrella issue. *(publish/retest
-   scripts are TODO.)*
-6. Periodically re-run reproducers against updated interpreters to flip status to
-   `fixed:<commit>`.
+## How they were found
 
-## Status / not-yet-built
+[fusil](https://github.com/devdanzin/fusil)'s OOM-injection modes — `--oom-fuzz` and the
+newer `--oom-seq` stateful sequences. Crashes are deduped by their faulting **C site** (the
+fuzzed module is just a vehicle), minimized with shrinkray, then root-caused against CPython
+source. The dedup model and triage workflow are documented in [`CLAUDE.md`](CLAUDE.md).
 
-- `scripts/publish_gists.py` (create/edit public gists, capture URLs) — TODO.
-- `scripts/retest.py` (re-run repros vs latest builds, update `fixed` status) — TODO.
-- Ingestion from the fuzzing host(s) into a staging area — TODO.
+## Picking one up
 
-## Credit
+These are filed so they can be worked individually — comment on the umbrella issue
+([#151763](https://github.com/python/cpython/issues/151763)) or the specific issue to claim
+or fix one.
 
-Crashes found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode
-(fusil originally by Victor Stinner). Triage and reports drafted with Claude Code;
-reproducers machine-generated. Each report carries an `_AI Disclaimer:_` line.
+## Credit & a note on AI assistance
+
+Crashes found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode (fusil
+originally by Victor Stinner). The triage, the reduced reproducers, and the root-cause
+write-ups were produced with **[Claude Code](https://claude.com/claude-code)** working
+alongside the maintainer, who reviews and re-reproduces every finding before it's disclosed.
+Each published gist/issue carries an explicit disclaimer.
+
+## More
+
+- [`INDEX.md`](INDEX.md) — the full table · [`catalog/SUMMARY.md`](catalog/SUMMARY.md) — snapshot
+- [`CLAUDE.md`](CLAUDE.md) — operational hub (dedup model, build matrix, lifecycle)
+- [`HANDOFF.md`](HANDOFF.md) / [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) — working on this from scratch
