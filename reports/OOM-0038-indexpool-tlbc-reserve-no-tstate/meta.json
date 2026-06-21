@@ -1,0 +1,30 @@
+{
+  "id": "OOM-0038",
+  "slug": "indexpool-tlbc-reserve-no-tstate",
+  "title": "Fatal/segv: `_PyIndexPool_AllocIndex` calls `PyErr_NoMemory()` with no active thread state while reserving a TLBC index during free-threaded sub-interpreter creation (`index_pool.c:167`)",
+  "description": "On free-threaded builds, creating a sub-interpreter under OOM crashes while reporting the allocation failure. new_interpreter (Python/pylifecycle.c) detaches the calling thread's thread state before building the new interpreter's first thread state, so there is no active thread state in that window. new_threadstate (pystate.c:1671) reserves a per-interpreter TLBC index via _Py_ReserveTLBCIndex -> _PyIndexPool_AllocIndex(&interp->tlbc_indices); a fresh interp's pool is empty so it grows with PyMem_RawCalloc, which fails under OOM and calls PyErr_NoMemory() (index_pool.c:167). PyErr_NoMemory -> get_memory_error -> get_exc_state -> _PyInterpreterState_GET requires an active thread state: FT debug build aborts via the _Py_EnsureTstateNotNULL assertion (Fatal Python error: _PyInterpreterState_GET ... without an active thread state); FT release build dereferences a NULL interpreter pointer (&((PyInterpreterState*)0)->exc_state.memerrors_lock) and SIGSEGVs. The sibling reservation _Py_qsbr_reserve (pystate.c:1666) correctly returns -1 without raising.",
+  "crash_kind": "fatal",
+  "sites": [
+    "Python/index_pool.c _PyIndexPool_AllocIndex:167",
+    "Objects/exceptions.c _PyErr_NoMemory:4158",
+    "Objects/exceptions.c get_memory_error:4136"
+  ],
+  "signature": {
+    "site_frame": "_PyIndexPool_AllocIndex@Python/index_pool.c:167",
+    "top_frames": [
+      "_PyIndexPool_AllocIndex@Python/index_pool.c:167",
+      "_PyErr_NoMemory@Objects/exceptions.c:4158",
+      "get_memory_error@Objects/exceptions.c:4136"
+    ]
+  },
+  "vehicles": ["fleet inst-04 python-2 concurrent_interpreters-fatal_python_error-oomNEW"],
+  "matrix": {"ft_debug_asan": "fatal", "ft_release": "segfault", "jit": "n/a", "upstream": "n/a"},
+  "repro_start": 30,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-21",
+  "confirmed_commit": "1b9fe5c",
+  "notes": "Free-threading-specific: _Py_ReserveTLBCIndex/_PyIndexPool_AllocIndex and the interp->tlbc_indices pool are gated on Py_GIL_DISABLED, so GIL builds never reach the path (n/a). Root cause: _PyIndexPool_AllocIndex (Python/index_pool.c) reports its PyMem_RawCalloc failure with PyErr_NoMemory(), but its only caller, new_threadstate via _Py_ReserveTLBCIndex (codeobject.c:3303 <- pystate.c:1671), runs during new_interpreter() AFTER _PyThreadState_Detach(save_tstate) (~pylifecycle.c:2678) and before init_interp_create_gil, i.e. with NO active thread state. PyErr_NoMemory -> _PyErr_NoMemory(_PyThreadState_GET()==NULL) -> get_memory_error -> get_exc_state -> _PyInterpreterState_GET: debug aborts (_Py_EnsureTstateNotNULL), release NULL-derefs in MEMERRORS_LOCK at get_memory_error exceptions.c:4113 (SEGV addr 0x1500c = exc_state.memerrors_lock offset from interp==NULL); gdb shows _PyErr_NoMemory(tstate=0x0). Fix: _PyIndexPool_AllocIndex should return -1 without calling PyErr_NoMemory (the caller already turns -1 into free_threadstate + _PyStatus_NO_MEMORY()), matching the sibling _Py_qsbr_reserve which returns -1 without raising. DEDUP vs OOM-0020: SAME function new_threadstate, ADJACENT allocation index, but DISTINCT defect (OOM-0020 = _Py_qsbr_reserve cleanup free_threadstate bad-frees the embedded _initial_thread -> _PyMem_DebugRawFree bad ID / heap-corruption segv; this = _Py_ReserveTLBCIndex path raising PyErr_NoMemory with no tstate -> _PyInterpreterState_GET fatal / NULL-deref segv). DISTINCT crash sig, DISTINCT fix. OOM-0020 fires ONE allocation index earlier and MASKS this under fail-forward sweeps (its qsbr allocation comes first) -- which is why OOM-0020's repro only ever shows bad-ID. Empirically on debug-ft-nojit-asan: set_nomemory(29,34)->OOM-0020, set_nomemory(30,35)->this (8/8 determ); plain fail-forward set_nomemory(30,0) also reaches it (no windowing needed). repro.py self-sweeps and SKIPS the OOM-0020 bad-ID signature so it stops only on this bug; debug Fatal at start=30, release SIGSEGV at start=31 (start is allocation-preamble sensitive; defect is index-agnostic). Dedup keys deliberately use ONLY the discriminating frames (_PyIndexPool_AllocIndex@index_pool.c:167, _PyErr_NoMemory/get_memory_error@exceptions.c, and the _PyInterpreterState_GET Fatal message); the shared subinterp-create frames (new_threadstate@pystate.c, new_interpreter@pylifecycle.c:2728, _PyXI_NewInterpreter@crossinterp.c:3269, Py_NewInterpreterFromConfig, _interpreters_create_impl) are kept in report.md/backtrace.txt as CONTEXT ONLY -- they collide with OOM-0020 and OOM-0037, which crash elsewhere on the same create path. Found by fusil OOM-injection fuzzing (--oom-fuzz/--oom-seq), vehicle concurrent.interpreters; crashing step is create()."
+}

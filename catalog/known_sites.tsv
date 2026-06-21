@@ -358,3 +358,10 @@ OOM-0037	segv	line	Python/errors.c:1422
 OOM-0037	segv	line	Python/errors.c:1706
 OOM-0037	segv	line	Python/errors.c:1777
 OOM-0037	segv	line	Python/pylifecycle.c:3856
+OOM-0038	fatal	func	Objects/exceptions.c:_PyErr_NoMemory
+OOM-0038	fatal	func	Objects/exceptions.c:get_memory_error
+OOM-0038	fatal	func	Python/index_pool.c:_PyIndexPool_AllocIndex
+OOM-0038	fatal	line	Objects/exceptions.c:4136
+OOM-0038	fatal	line	Objects/exceptions.c:4158
+OOM-0038	fatal	line	Python/index_pool.c:167
+OOM-0038	fatal	msg	_PyInterpreterState_GET: the function must be called with an

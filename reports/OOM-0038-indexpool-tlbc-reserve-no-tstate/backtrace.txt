@@ -1,0 +1,54 @@
+Fatal / SEGV during free-threaded sub-interpreter creation under OOM: _PyIndexPool_AllocIndex
+calls PyErr_NoMemory() while the creating thread has no active thread state.
+
+============================================================================================
+(1) free-threaded DEBUG + ASan (debug-ft-nojit-asan, commit 1b9fe5c) -- SIGABRT
+    Fatal Python error: _PyInterpreterState_GET: the function must be called with an active
+    thread state, after Python initialization and before Python finalization, but it was
+    called without an active thread state. Are you trying to call the C API inside of a
+    Py_BEGIN_ALLOW_THREADS block?
+--------------------------------------------------------------------------------------------
+  #13 get_memory_error            Objects/exceptions.c:4136   <- _PyInterpreterState_GET() in get_exc_state(), no tstate
+  #14 _PyErr_NoMemory             Objects/exceptions.c:4158   <- (gdb: tstate == 0x0)
+  #15 _PyIndexPool_AllocIndex     Python/index_pool.c:167     <- PyErr_NoMemory() after PyMem_RawCalloc() fails
+  #16 new_threadstate             Python/pystate.c:1671       <- _Py_ReserveTLBCIndex(interp)         [context; shared w/ OOM-0020]
+  #17 new_interpreter             Python/pylifecycle.c:2728   <- thread detached at ~L2678            [context]
+  #18 Py_NewInterpreterFromConfig Python/pylifecycle.c:2770                                           [context]
+  #19 _PyXI_NewInterpreter        Python/crossinterp.c:3269                                           [context]
+  #20 _interpreters_create_impl   Modules/_interpretersmodule.c:878                                   [context]
+  #21 _interpreters_create        Modules/clinic/_interpretersmodule.c.h:91
+  #22 cfunction_vectorcall_FASTCALL_KEYWORDS Objects/methodobject.c:465
+
+gdb (debug build), confirming the NULL thread state:
+  #5  fatal_error_exit       Python/pylifecycle.c:3517
+  #6  fatal_error            Python/pylifecycle.c:3742   prefix = "_PyInterpreterState_GET"
+  #7  _Py_FatalErrorFunc     Python/pylifecycle.c:3765
+  #8  get_memory_error       Objects/exceptions.c:4136   (allow_allocation = 0)
+  #9  _PyErr_NoMemory        Objects/exceptions.c:4158   tstate = 0x0          <- current thread state is NULL
+  #10 _PyIndexPool_AllocIndex Python/index_pool.c:167
+  #11 new_threadstate        Python/pystate.c:1671       whence = 1
+
+============================================================================================
+(2) free-threaded RELEASE + ASan (release-ft-nojit-asan, commit 1b9fe5c) -- SIGSEGV
+    The Py_DEBUG _Py_EnsureTstateNotNULL assertion is compiled out; the thread-local interp
+    pointer is NULL, so get_exc_state() returns &((PyInterpreterState*)0)->exc_state and
+    MEMERRORS_LOCK dereferences a near-NULL address.
+    ERROR: AddressSanitizer: SEGV on unknown address 0x000000001500c
+    (0x1500c = offset of exc_state.memerrors_lock within PyInterpreterState, from interp == NULL)
+--------------------------------------------------------------------------------------------
+  #0 _Py_atomic_compare_exchange_uint8  Include/cpython/pyatomic_gcc.h:105
+  #1 PyMutex_LockFlags                  Include/internal/pycore_lock.h:64
+  #2 get_memory_error                   Objects/exceptions.c:4113   <- MEMERRORS_LOCK(state), state = &interp->exc_state, interp == NULL
+  #3 _PyErr_NoMemory                    Objects/exceptions.c:4158
+  #4 _PyIndexPool_AllocIndex            Python/index_pool.c:167
+  #5 new_threadstate                    Python/pystate.c:1671       [context; shared w/ OOM-0020]
+  #6 new_interpreter                    Python/pylifecycle.c:2728   [context]
+  #7 Py_NewInterpreterFromConfig        Python/pylifecycle.c:2770   [context]
+  #8 _PyXI_NewInterpreter               Python/crossinterp.c:3269   [context]
+  #9 _interpreters_create_impl          Modules/_interpretersmodule.c:878   [context]
+
+Root: _PyIndexPool_AllocIndex (index_pool.c:167) calls PyErr_NoMemory() when its PyMem_RawCalloc
+fails, but it runs inside new_threadstate() during new_interpreter(), after the caller's thread
+state has been detached -- so _PyInterpreterState_GET() has no active thread state (fatal on
+debug, NULL-deref on release). Sibling _Py_qsbr_reserve() (pystate.c:1666) returns -1 without
+raising; _PyIndexPool_AllocIndex() should do the same.
