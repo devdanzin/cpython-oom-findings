@@ -346,3 +346,15 @@ OOM-0035	abort	line	Objects/unicodeobject.c:2228
 OOM-0035	abort	line	Objects/unicodeobject.c:673
 OOM-0036	abort	func	Modules/posixmodule.c:DirEntry_dealloc
 OOM-0036	abort	line	Modules/posixmodule.c:16199
+OOM-0037	segv	func	Objects/structseq.c:PyStructSequence_New
+OOM-0037	segv	func	Objects/structseq.c:get_type_attr_as_size
+OOM-0037	segv	func	Python/errors.c:PyErr_FormatUnraisable
+OOM-0037	segv	func	Python/errors.c:format_unraisable_v
+OOM-0037	segv	func	Python/errors.c:make_unraisable_hook_args
+OOM-0037	segv	func	Python/pylifecycle.c:wait_for_thread_shutdown
+OOM-0037	segv	line	Objects/structseq.c:30
+OOM-0037	segv	line	Objects/structseq.c:68
+OOM-0037	segv	line	Python/errors.c:1422
+OOM-0037	segv	line	Python/errors.c:1706
+OOM-0037	segv	line	Python/errors.c:1777
+OOM-0037	segv	line	Python/pylifecycle.c:3856

@@ -1,6 +1,6 @@
 # Fusil OOM-injection findings on CPython — summary
 
-Snapshot: 2026-06-19 · CPython `main` 3.16.0a0, commit `15d7406` · **35 distinct bugs** (OOM-0001…0035).
+Snapshot: 2026-06-21 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0037) · **37 distinct bugs** (OOM-0001…0037).
 
 **Method.** [Fusil](https://github.com/devdanzin/fusil) fuzzes CPython with `_testcapi.set_nomemory`
 to fail allocations and drive the rarely-tested allocation-failure error paths. Crashes are triaged
@@ -56,11 +56,13 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0033 | import over-decrefs a `sys.path` entry → freed-obj `isinstance` | segv | release | yes | `typeobject.c:PyType_IsSubtype` |
 | OOM-0034 | tokenizer col-offset: unchecked `PyUnicode_AsUTF8` → NULL deref | segv | release | yes | `pegen.c:_PyPegen_byte_offset_to_character_offset_line` |
 | OOM-0035 | `StringIO.getvalue()` scans uninitialized buffer → bad `maxchar` | abort | ASan/jit | yes | `unicodeobject.c:_PyUnicode_FromUCS4` |
+| OOM-0036 | `list.append(x)` under `MemoryError` double-frees the item (`_CALL_LIST_APPEND` steals `arg`, then `ERROR_NO_POP`) | abort | release | yes | `bytecodes.c:_CALL_LIST_APPEND` |
+| OOM-0037 | unraisable reporter derefs NULL `UnraisableHookArgs` type-dict finalizing a failed sub-interpreter | segv | release | yes | `errors.c:make_unraisable_hook_args` / `structseq.c:get_type_attr_as_size` |
 
-**Totals:** 35 bugs — 7 segv, 23 abort, 5 fatal · 10 reproduce on a **release** build · **all 35 have a
+**Totals:** 37 bugs — 8 segv, 24 abort, 5 fatal · 12 reproduce on a **release** build · **all 37 have a
 minimal reproducer** (0 vehicle-confirmed).
 
-**Upstream status** (issue-tracker check 2026-06-19, see `catalog/prior_art.md`): only **OOM-0001** is already filed — [#151673](https://github.com/python/cpython/issues/151673) (open). The other 34 have no matching python/cpython issue (appear novel).
+**Upstream status** (issue-tracker check 2026-06-19, see `catalog/prior_art.md`): of OOM-0001…0035, only **OOM-0001** is already filed — [#151673](https://github.com/python/cpython/issues/151673) (open); the other 34 had no matching python/cpython issue (appear novel). Since then: **OOM-0036** is filed as [#151818](https://github.com/python/cpython/issues/151818); **OOM-0037** is drafted (not yet filed).
 
 **Suggested starting points** — crashes a release build **and** has a minimal reproducer (highest
 confidence, lowest effort to verify): **OOM-0001, 0002, 0012, 0014, 0020, 0028, 0031, 0033, 0034**. Of these,

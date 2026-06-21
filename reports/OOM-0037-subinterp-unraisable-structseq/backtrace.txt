@@ -1,0 +1,31 @@
+SEGV — NULL deref. AddressSanitizer (debug-ft-nojit-asan, commit 1b9fe5c), worker thread T1.
+Fault address 0x18 = Py_TYPE(NULL) reading ob_type on the FT PyObject layout.
+
+==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000018
+  #0 _Py_TYPE_impl                       Include/object.h:234        <- Py_TYPE(op), op == NULL
+  #1 PyDict_GetItemWithError             Objects/dictobject.c:2613   <- op (the dict) == NULL
+  #2 get_type_attr_as_size              Objects/structseq.c:30       <- PyDict_GetItemWithError(_PyType_GetDict(tp), name)
+  #3 PyStructSequence_New                Objects/structseq.c:68
+  #4 make_unraisable_hook_args           Python/errors.c:1422        <- PyStructSequence_New(&UnraisableHookArgsType)
+  #5 format_unraisable_v                 Python/errors.c:1706
+  #6 PyErr_FormatUnraisable              Python/errors.c:1777
+  #7 wait_for_thread_shutdown            Python/pylifecycle.c:3856   (reports the pending exc as unraisable)
+  #8 make_pre_finalization_calls         Python/pylifecycle.c:2292
+  #9 Py_EndInterpreter                   Python/pylifecycle.c:2811   <- tearing down the half-built subinterp
+ #10 new_interpreter                     Python/pylifecycle.c:2755   <- OOM failure path
+ #11 Py_NewInterpreterFromConfig         Python/pylifecycle.c:2770
+ #12 _PyXI_NewInterpreter                Python/crossinterp.c:3269
+ #13 _interpreters_create_impl           Modules/_interpretersmodule.c:878
+ #15 cfunction_vectorcall_FASTCALL_KEYWORDS Objects/methodobject.c:465
+ ... (InterpreterPoolExecutor worker thread)
+SUMMARY: AddressSanitizer: SEGV Include/object.h:234 in _Py_TYPE_impl
+
+gdb confirmation of the NULL (debug-gil-nojit, non-ASan) — at get_type_attr_as_size:
+  (frame 0, PyDict_GetItemWithError)  op            = (PyObject *)  0x0          <- NULL dict
+  (frame 1, get_type_attr_as_size)    tp            = (PyTypeObject *) <UnraisableHookArgsType>
+                                      tp->tp_name   = "UnraisableHookArgs"
+                                      tp->tp_dict   = (void *) 0x0                <- type never initialized
+
+So tp (the static UnraisableHookArgsType) is valid but its tp_dict is NULL: the per-interpreter
+structseq type was not initialized in this subinterpreter (creation failed under OOM before
+_PyErr_InitTypes), yet the unraisable-exception reporter calls PyStructSequence_New on it.
