@@ -15,24 +15,26 @@ goal is to publish each finding as a gist and track them from a single **umbrell
 (modelled on python/cpython#146102), so CPython devs can pick work without the issue
 tracker filling with reports that may not be actionable.
 
-**This is a local-only git repo (branch `master`, no remote).** Concrete local paths
-below are this machine's layout — recreate/adjust them on another box (see *Local
-environment*).
+**Public on GitHub: `github.com/devdanzin/cpython-oom-findings` (branch `main`).** Concrete
+local paths below are one machine's layout — recreate/adjust on another box (see *Local
+environment* and `docs/ENVIRONMENT.md`). **On a new machine / new chat, read `HANDOFF.md`
+first.**
 
 ## Current state (keep this updated)
 
-- **35 unique bugs cataloged (OOM-0001..0035), all committed.** `catalog/SUMMARY.md` is
-  the human-facing snapshot table (ID / title / kind / which builds / has-MRE / site).
-- **All 35 have a minimal reproducer; 0 are vehicle-confirmed-only.** (The last four —
-  OOM-0005/0017/0018/0029 — were minimized in the 2026-06-19 round; see
-  `docs/MINIMIZATION.md`.)
-- 11 reproduce on a **release** build (the highest-value subset); the rest are
-  debug-only asserts (compiled out under `NDEBUG`, where they are latent UB / UAF risk).
-- SEGV phase + deferred-singleton phase done; two fleet triages done (everything dedupes
-  to the catalog). **Outward-facing publishing has NOT started** (gated on maintainer OK).
-- Host-only candidates (don't reproduce locally) are in `catalog/host_only_candidates.md`
-  (HOC-1 = the `concurrent_interpreters` `ceval.c:1216` crash, likely fixed upstream by
-  GH-150516). Withdrawn non-bugs (harness artifacts) are in `catalog/non_bugs.md`.
+- **36 unique bugs cataloged (OOM-0001..0036), all committed**, each with a minimal
+  deterministic reproducer. `catalog/SUMMARY.md` is the snapshot table.
+- **Published:** OOM-0001..0035 are public gists, tracked from the umbrella issue
+  **python/cpython#151763**. **OOM-0036** is filed as its own issue,
+  **python/cpython#151818** — a `list.append()` double-free under `MemoryError` in the
+  `_CALL_LIST_APPEND` bytecode; found by fusil's new `--oom-seq` mode; reproduces *without*
+  `_testcapi` via a real `RLIMIT_AS` cap. Watch the issues for fixes → set
+  `status: fixed:<commit>` on the relevant `meta.json`.
+- ~11 reproduce on a **release** build (highest-value); the rest are debug-only asserts
+  (compiled out under `NDEBUG`, where the same defect is latent UB / UAF).
+- SEGV + deferred-singleton phases done; fleet triages keep deduping to the catalog. Host-
+  only candidates → `catalog/host_only_candidates.md` (HOC-1 likely fixed by GH-150516);
+  withdrawn non-bugs (harness artifacts) → `catalog/non_bugs.md`.
 
 ## Repo layout
 
@@ -139,6 +141,7 @@ useful):
 | build | path (this machine) | notes |
 |---|---|---|
 | `ft_debug_asan` | `~/projects/3.16_ft_debug_asan_cpython/python` | free-threaded, debug, ASan + asserts — **the triage build** (gdb, refcount/assert checks, `_testcapi.set_nomemory`, source tree) |
+| `debug_asan_pymalloc` | `~/projects/3.16_debug_asan_pymalloc/python` | GIL, debug, **pymalloc**+ASan — accepts `PYTHONMALLOC=malloc`, so frees route through ASan → **UAF reports with the free stack** (how OOM-0036's producer was pinned; `ft_debug_asan` is `--without-pymalloc` and rejects it) |
 | `ft_release` | `~/projects/3.16_ft_release_cpython/python` | free-threaded, release |
 | `jit` | `~/projects/jit_cpython/python` | GIL build, JIT (also ASan here) |
 | `upstream` | `~/projects/upstream_cpython/python` | GIL build, plain release |
@@ -184,14 +187,14 @@ has the detail). The contract with this catalog:
 
 ## Commits
 
-This repo has **no remote** → branch + `git merge --no-ff` to `master` (keep the branch).
+Branch + `git merge --no-ff` to `main` (keep the branch), then `git push origin main`.
 Trailer: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 
 The sibling **fusil** repo uses the full GitHub flow (the maintainer's standing default):
 branch → commit → `gh issue create` (problem/desired outcome) → push → `gh pr create`
 (implementation, `Closes #N`) → `gh pr merge --merge` (no `--delete-branch`) →
 `git push origin --delete <branch>` (keep local). Direct-to-`main` only if the maintainer
-says a change is too small. The fusil `CLAUDE.md` is intentionally kept untracked there.
+says a change is too small. The fusil `CLAUDE.md` is now **committed** in that repo too.
 
 ## Local environment (this machine — recreate elsewhere)
 
@@ -203,12 +206,16 @@ says a change is too small. The fusil `CLAUDE.md` is intentionally kept untracke
   (fleet runners). `oom_dedup` is pure-Python and imports without the runtime stack.
 - Tools: `gdb`, `addr2line`, `ruff` (`/snap/bin/ruff`), `shrinkray`, `creduce`
   (`/usr/bin`). `pyflakes`/`pytest` are NOT installed (fusil tests use `unittest`).
-- On another machine: rebuild the four interpreters (or at least `ft_debug_asan`), point
-  `OOM_PY` (see `scripts/min_oracle.sh`) at the debug+ASan one, recreate the venvs, and
-  sync this repo. The reports/snapshot are portable; the paths are not.
+- On another machine: run `scripts/setup_machine.sh` as root (creates the `fusil` user +
+  fleet dirs + permissions), then rebuild the interpreters (at least `ft_debug_asan` and
+  `debug_asan_pymalloc`), recreate the venvs, and `git clone` both repos — full steps in
+  **`docs/ENVIRONMENT.md`**. The reports/snapshot are portable; the paths are not.
 
 ## Pointers
 
+- **New machine / new chat → `HANDOFF.md`** (what we do + how we work together)
+- Recreate the build/venv/tool environment → `docs/ENVIRONMENT.md`
+- Root machine setup (the `fusil` user, fleet dirs, permissions) → `scripts/setup_machine.sh`
 - Dedupe design + tools → `docs/DEDUP_PIPELINE.md`
 - Minimization workflow + every lesson → `docs/MINIMIZATION.md`
 - Per-crash triage procedure → `docs/SUBAGENT_BRIEF.md`
