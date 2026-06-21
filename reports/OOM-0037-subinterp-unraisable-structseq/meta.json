@@ -1,0 +1,27 @@
+{
+  "id": "OOM-0037",
+  "slug": "subinterp-unraisable-structseq",
+  "title": "Segfault: NULL `UnraisableHookArgs` type-dict deref in `PyStructSequence_New`/`make_unraisable_hook_args` during sub-interpreter finalization under OOM (`structseq.c:30`)",
+  "description": "A sub-interpreter created by an InterpreterPoolExecutor worker fails to initialize under OOM (before _PyErr_InitTypes runs, so UnraisableHookArgsType.tp_dict is NULL) with a pending MemoryError. new_interpreter -> Py_EndInterpreter -> wait_for_thread_shutdown reports the pending exception via PyErr_FormatUnraisable -> make_unraisable_hook_args (errors.c:1422) -> PyStructSequence_New(&UnraisableHookArgsType) -> get_type_attr_as_size (structseq.c:30) calls PyDict_GetItemWithError(_PyType_GetDict(tp)==NULL) -> Py_TYPE(NULL) -> SIGSEGV on all builds.",
+  "crash_kind": "segv",
+  "sites": ["Python/errors.c make_unraisable_hook_args:1422", "Objects/structseq.c get_type_attr_as_size:30", "Objects/structseq.c PyStructSequence_New:68", "Python/pylifecycle.c wait_for_thread_shutdown:3856"],
+  "signature": {
+    "site_frame": "make_unraisable_hook_args@Python/errors.c:1422",
+    "top_frames": [
+      "make_unraisable_hook_args@Python/errors.c:1422",
+      "format_unraisable_v@Python/errors.c:1706",
+      "PyErr_FormatUnraisable@Python/errors.c:1777",
+      "wait_for_thread_shutdown@Python/pylifecycle.c:3856"
+    ]
+  },
+  "vehicles": ["fleet inst-02 python-7 concurrent_futures_interpreter-segmentation_fault-oomNEW"],
+  "matrix": {"ft_debug_asan": "segv", "gil_debug_asan": "segv", "jit": "segv", "ft_release": "segv", "upstream": "segv"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-21",
+  "confirmed_commit": "1b9fe5c",
+  "notes": "NULL deref confirmed by gdb (debug-gil-nojit): tp == &UnraisableHookArgsType (valid, tp_name='UnraisableHookArgs') but tp->tp_dict == 0x0, and op passed to PyDict_GetItemWithError == 0x0; addr 0x18 = Py_TYPE(NULL) ob_type offset on the FT PyObject layout. Generic leaf frames (_Py_TYPE_impl@object.h:234 [detector-file, auto-skipped], PyDict_GetItemWithError@dictobject.c:2613, cfunction_vectorcall_FASTCALL_KEYWORDS, context_run) deliberately kept OUT of sites[]/signature so the dedup keys are discriminating (make_unraisable_hook_args@errors.c:1422 is unique to this bug). Also pruned the shared subinterp-creation context frames _PyXI_NewInterpreter@crossinterp.c:3269 and new_interpreter@pylifecycle.c (they collide with OOM-0020, which crashes elsewhere on the same create path) -- kept in report.md/backtrace.txt as context only. Reduced 100% (20/20) on debug-ft-nojit-asan; release-reproducing (rc 139 on release-ft-nojit / release-gil-nojit). Windowed set_nomemory required (fail-forever only hangs the executor); GIL-agnostic. This is 'Face A' of the concurrent_futures_interpreter vehicle; 'Face B' of the same vehicle is OOM-0020 (_PyMem_DebugRawFree bad-free in the same _PyXI_NewInterpreter/new_interpreter area) -- a distinct defect, dedup by site. Suggested fix: guard make_unraisable_hook_args against _PyType_GetDict(&UnraisableHookArgsType)==NULL (return NULL so format_unraisable_v falls back to its default stderr path)."
+}

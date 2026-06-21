@@ -4,7 +4,7 @@ Crashes found by allocation-failure fuzzing (`_testcapi.set_nomemory`) of CPytho
 
 **Pick anything to work on** — open a CPython issue if one doesn't exist, comment with the issue/PR, and the Status column will be updated. Reports are deduped by crash signature; one row = one underlying bug (vehicles listed in the report).
 
-_36 unique bug(s). Generated 2026-06-20._
+_37 unique bug(s). Generated 2026-06-21._
 
 _Found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode (fusil originally by Victor Stinner). Reports drafted by Claude Code; reproducers machine-generated._
 
@@ -22,6 +22,7 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 | [OOM-0031](https://gist.github.com/devdanzin/44ffdf25538575e497fd80552ea5d467) | Segfault: NULL `info` deref in `_excinfo_clear_type` (`crossinterp.c:1319`) | ft_debug_asan,ft_release,jit,upstream | report |
 | [OOM-0033](https://gist.github.com/devdanzin/249032e1746d63406a5f68d7dfdedb79) | Segfault / negative-refcount: over-decreffed `sys.path` entry in `PyType_IsSubtype` (`typeobject.c:2931`) | ft_debug_asan,ft_release,jit,upstream | report |
 | [OOM-0034](https://gist.github.com/devdanzin/9871a21facf4c9c6a415e220f9d10762) | Segfault: unchecked `PyUnicode_AsUTF8` NULL deref in `pegen.c:33` | ft_debug_asan,ft_release,jit,upstream | report |
+| [OOM-0037](reports/OOM-0037-subinterp-unraisable-structseq/report.md) | Segfault: NULL `UnraisableHookArgs` type-dict deref in `PyStructSequence_New`/`make_unraisable_hook_args` during sub-interpreter finalization under OOM (`structseq.c:30`) | ft_debug_asan,gil_debug_asan,jit,ft_release,upstream | draft |
 
 ## Assertion / abort
 
