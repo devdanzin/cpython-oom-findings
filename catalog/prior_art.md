@@ -40,3 +40,26 @@ The allocation-failure crash vein is already active in the tracker:
 - #74880 / #93649 — the `_testcapi.set_nomemory` infrastructure itself (not crash reports).
 
 No single OOM "umbrella" tracking issue was found; the campaign's umbrella-issue plan still applies.
+
+## Addendum 2026-06-21 — OOM-0038 (dup-check + filing policy)
+
+**OOM-0038** (`_PyIndexPool_AllocIndex` calls `PyErr_NoMemory()` with no active thread state while
+reserving a TLBC index during free-threaded sub-interpreter creation, `index_pool.c:167`) —
+**appears novel.** `gh search issues python/cpython` on the crash-site symbols
+(`_PyIndexPool_AllocIndex`, `_Py_ReserveTLBCIndex`, `index_pool.c`) and distinctive terms
+(`_PyInterpreterState_GET without an active thread state`, `new_threadstate MemoryError`,
+`PyErr_NoMemory sub-interpreter create`, `Py_NewInterpreterFromConfig MemoryError`) returned no
+matching report. Nearest prior art: **#126644** (devdanzin) "`_interpreters` is not thread safe on
+the free-threaded build" — a **data race** in the *same* `index_pool.c` but on the `heap_pop`
+freelist branch (`index_pool.c:92` ← `_PyIndexPool_AllocIndex:173`), from concurrent create/destroy,
+**not** allocation failure; closed NOT_PLANNED (2025-01-11), fix PR #126696 closed unmerged.
+Distinct defect/branch/mechanism/fix — cite for context, not a duplicate.
+
+**Filing policy — free-threaded sub-interpreter fuzzing crashes are on hold.** colesbury (FT lead)
+on **#143232** (devdanzin, "Assertion failures at interpreter finalization from using `_interpreters`
+with free-threading"): "I don't think it's worth fuzzing [subinterpreters] for now until the known
+issues are addressed" (cf. the FT subinterpreter data-race umbrella **#129824**). So **OOM-0038** and
+**OOM-0020** — both FT-only subinterpreter-create OOM crashes — are **not** to be filed upstream for
+now (see `filing_hold` in their `meta.json`); they stay cataloged and become file-ready once the FT
+subinterpreter area stabilizes. **OOM-0037** is **kept fileable** — it also crashes GIL builds and is
+not a race, so it falls outside that scope.

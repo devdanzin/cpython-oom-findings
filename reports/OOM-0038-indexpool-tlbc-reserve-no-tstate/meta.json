@@ -22,6 +22,7 @@
   "repro_start": 30,
   "upstream_reported": false,
   "upstream_issue": null,
+  "filing_hold": "Do not open an upstream python/cpython issue for now. Free-threaded sub-interpreter creation crash found by fuzzing -- the category colesbury (FT lead) de-prioritized on python/cpython#143232: 'I don't think it's worth fuzzing [subinterpreters] for now until the known issues are addressed' (cf. the subinterpreter data-race umbrella python/cpython#129824). The bug is real and novel and NOT a data race -- a deterministic OOM-path defect with a clean ~one-line fix (drop the PyErr_NoMemory() call) -- so it is a good candidate to file once the FT subinterpreter area stabilizes. Catalog-only until then.",
   "gist_url": null,
   "status": "drafted",
   "found_date": "2026-06-21",
