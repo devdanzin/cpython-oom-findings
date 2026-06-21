@@ -17,7 +17,8 @@
     "python-4/genericpath-segmentation_fault",
     "python-4/urllib_parse-segmentation_fault",
     "python-4/importlib__bootstrap_external-segmentation_fault",
-    "python-4/multiprocessing_resource_tracker-segmentation_fault"
+    "python-4/multiprocessing_resource_tracker-segmentation_fault",
+    "fleet inst-03 python-7 ssl-cpu_load-segmentation_fault-oomSEGV"
   ],
   "matrix": {"ft_debug_asan": "segv", "ft_release": "segv", "jit": "segv", "upstream": "segv"},
   "repro_start": 0,

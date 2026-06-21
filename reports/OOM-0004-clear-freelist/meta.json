@@ -12,7 +12,8 @@
   "vehicles": [
     "python-4/tarfile-assertion",
     "python-4/_pyrepl__threading_handler-assertion",
-    "python-4/profiling_sampling__format_utils-assertion"
+    "python-4/profiling_sampling__format_utils-assertion",
+    "fleet inst-01 python-7 profiling_sampling_dump-segmentation_fault-oomSEGV"
   ],
   "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "n/a", "upstream": "n/a"},
   "repro_start": 4,
@@ -22,5 +23,5 @@
   "status": "gisted",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
-  "notes": "Free-threading-only abort surface (clear_freelist assert + per-PyThreadState freelists are Py_GIL_DISABLED). The DEBUG-only assert is the recorded vehicle signature; the reduced repro deterministically (start=4) hits the build-agnostic sibling SEGV (PyList_New -> free_list_items use-after-free of a 0xcd-filled freed array), which also crashes ft_release/jit/upstream. Matrix kept abort/n-a per brief (assert fires only on debug); underlying corruption is NOT debug-only. All 3 vehicles recorded the identical Objects/object.c:909 assertion; re-running them now non-deterministically yields the sibling SEGV. Distinct from the codeobject.c:2440 _co_unique_id assert the same vehicles can also hit (separate FT unique-id-pool invariant)."
+  "notes": "Free-threading-only abort surface (clear_freelist assert + per-PyThreadState freelists are Py_GIL_DISABLED). The DEBUG-only assert is the recorded vehicle signature; the reduced repro deterministically (start=4) hits the build-agnostic sibling SEGV (PyList_New -> free_list_items use-after-free of a 0xcd-filled freed array), which also crashes ft_release/jit/upstream. Matrix kept abort/n-a per brief (assert fires only on debug); underlying corruption is NOT debug-only. All 3 vehicles recorded the identical Objects/object.c:909 assertion; re-running them now non-deterministically yields the sibling SEGV. Distinct from the codeobject.c:2440 _co_unique_id assert the same vehicles can also hit (separate FT unique-id-pool invariant). 2026-06-21: the profiling_sampling_dump fleet vehicle (str.split via posixpath.relpath) reconfirms the sibling SEGV through ucs1lib_split_char->PyList_New; reproduced deterministically on ALL 6 local matrix builds at commit 1b9fe5c (debug/release x ft/gil x asan/jit), so the SEGV is build-agnostic and NOT FT-only (only the abort surface is). FT-asan leaf = free_list_items UAF of a 0xcd ob_item (start=6); GIL leaf = _Py_Dealloc on the corrupt popped list object one frame earlier (start=22). Alt str.split reproducer drafted (repro_split.py)."
 }
