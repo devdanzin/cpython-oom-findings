@@ -54,6 +54,14 @@ discloses it (gist + an umbrella issue, or a standalone issue for the strong one
 - **Dup-check before filing**, by the **culprit C symbol** (e.g. `_PyList_AppendTakeRef`),
   not just the symptom — that's how related issues surface. (We learned this the hard way on
   #151818 vs #151119.)
+- **Free-threaded sub-interpreter fuzzing crashes are on filing-hold.** colesbury (FT lead)
+  de-prioritized the whole category on **#143232**: "I don't think it's worth fuzzing
+  [subinterpreters] for now until the known issues are addressed" (cf. the FT subinterpreter
+  data-race umbrella **#129824**). So **don't open upstream issues** for FT-only
+  subinterpreter create/destroy/run crashes (e.g. OOM-0020, OOM-0038) for now — keep
+  cataloging them (they're real), mark `"filing_hold": "<reason>"` in their `meta.json`, and
+  revisit once that area stabilizes. This does **not** cover subinterpreter crashes that also
+  hit GIL builds and aren't races (e.g. OOM-0037 stays fileable).
 - **Keep the records updated** as you go (the `meta.json`, `SUMMARY.md`, `INDEX.md`, and the
   per-repo `CLAUDE.md`).
 

@@ -37,6 +37,7 @@
   "repro_start": 31,
   "upstream_reported": false,
   "upstream_issue": null,
+  "filing_hold": "Do not open an upstream python/cpython issue for now. Free-threaded sub-interpreter creation crash found by fuzzing -- de-prioritized by colesbury (FT lead) on python/cpython#143232: not worth fuzzing subinterpreters until the known FT issues are addressed (cf. python/cpython#129824). Already gisted (see gist_url) but never filed as an issue, and should stay that way for now. Revisit once the FT subinterpreter area stabilizes.",
   "gist_url": "https://gist.github.com/devdanzin/df523c79368baa0c44bd69e9d5ee0c7e",
   "status": "gisted",
   "found_date": "2026-06-18",
