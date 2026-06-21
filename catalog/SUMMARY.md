@@ -1,6 +1,6 @@
 # Fusil OOM-injection findings on CPython — summary
 
-Snapshot: 2026-06-21 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0037) · **37 distinct bugs** (OOM-0001…0037).
+Snapshot: 2026-06-21 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0038) · **38 distinct bugs** (OOM-0001…0038).
 
 **Method.** [Fusil](https://github.com/devdanzin/fusil) fuzzes CPython with `_testcapi.set_nomemory`
 to fail allocations and drive the rarely-tested allocation-failure error paths. Crashes are triaged
@@ -58,15 +58,17 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0035 | `StringIO.getvalue()` scans uninitialized buffer → bad `maxchar` | abort | ASan/jit | yes | `unicodeobject.c:_PyUnicode_FromUCS4` |
 | OOM-0036 | `list.append(x)` under `MemoryError` double-frees the item (`_CALL_LIST_APPEND` steals `arg`, then `ERROR_NO_POP`) | abort | release | yes | `bytecodes.c:_CALL_LIST_APPEND` |
 | OOM-0037 | unraisable reporter derefs NULL `UnraisableHookArgs` type-dict finalizing a failed sub-interpreter | segv | release | yes | `errors.c:make_unraisable_hook_args` / `structseq.c:get_type_attr_as_size` |
+| OOM-0038 | sub-interpreter TLBC-index reserve calls `PyErr_NoMemory()` with no active thread state (FT-only) | fatal | release | yes | `index_pool.c:_PyIndexPool_AllocIndex` |
 
 **Totals:** 37 bugs — 8 segv, 24 abort, 5 fatal · 12 reproduce on a **release** build · **all 37 have a
 minimal reproducer** (0 vehicle-confirmed).
 
-**Upstream status** (issue-tracker check 2026-06-19, see `catalog/prior_art.md`): of OOM-0001…0035, only **OOM-0001** is already filed — [#151673](https://github.com/python/cpython/issues/151673) (open); the other 34 had no matching python/cpython issue (appear novel). Since then: **OOM-0036** is filed as [#151818](https://github.com/python/cpython/issues/151818); **OOM-0037** is drafted (not yet filed).
+**Upstream status** (issue-tracker check 2026-06-19, see `catalog/prior_art.md`): of OOM-0001…0035, only **OOM-0001** is already filed — [#151673](https://github.com/python/cpython/issues/151673) (open); the other 34 had no matching python/cpython issue (appear novel). Since then: **OOM-0036** is filed as [#151818](https://github.com/python/cpython/issues/151818); **OOM-0037** and **OOM-0038** are drafted (not yet filed).
 
 **Suggested starting points** — crashes a release build **and** has a minimal reproducer (highest
-confidence, lowest effort to verify): **OOM-0001, 0002, 0012, 0014, 0020, 0028, 0031, 0033, 0034**. Of these,
-**OOM-0034** and **OOM-0028** are the cleanest single-defect unchecked-allocation NULL derefs (≈one-line fixes).
+confidence, lowest effort to verify): **OOM-0001, 0002, 0012, 0014, 0020, 0028, 0031, 0033, 0034, 0038**. Of these,
+**OOM-0034** and **OOM-0028** are the cleanest single-defect unchecked-allocation NULL derefs (≈one-line fixes);
+**OOM-0038** is similarly clean (drop a `PyErr_NoMemory()` call), but free-threaded-only.
 (**OOM-0005** is the most severe defect — an eval-loop stackref over-decref / memory-safety bug — but its
 minimal repro is confirmed only on the debug build, so it's listed under debug-only, not here.)
 
