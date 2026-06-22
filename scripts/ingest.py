@@ -57,7 +57,17 @@ ASAN_FRAME = re.compile(r'#\d+\s+0x[0-9a-fA-F]+\s+in\s+(\w+)\s+\S*?'
                         r'/((?:Objects|Python|Modules|Include|Parser)/[\w./+-]+\.(?:c|h)):(\d+)')
 NATIVE_SKIP = re.compile(r'^(fatal_error(_exit)?|_Py_FatalError\w*|_PyObject_AssertFailed'
                          r'|_Py_NegativeRefcount|_Py_DumpStack|faulthandler\w*'
-                         r'|_Py_DumpExtensionModules)$')
+                         r'|_Py_DumpExtensionModules'
+                         # debug allocator free-time checks: detectors, not the defect -- the
+                         # real site is the caller doing the bad free (free_list_items,
+                         # free_threadstate, ...). Mirrors oom_dedup._BT_SKIP / gen_known_sites.
+                         r'|_PyMem_DebugCheckAddress|_PyMem_DebugRawFree|_PyMem_DebugFree'
+                         # tracemalloc allocator hooks: pass-through layer present in every
+                         # alloc/free while tracing is on -- same detector role, skip to the
+                         # real caller (e.g. free_list_items = OOM-0004). NB the by-design
+                         # `tracemalloc_realloc() failed to allocate a trace` fatal is matched
+                         # by its message, not this frame, so skipping it here is safe.
+                         r'|tracemalloc_(raw_)?(alloc|calloc|realloc|free))$')
 # inlined refcount/atomic helpers (these headers) mask the real .c caller of a
 # "DECREF a freed object" segv -- skip so the site is e.g. do_warn, not Py_DECREF.
 NATIVE_SKIP_FILE = re.compile(r'(?:^|/)(?:refcount|pyatomic\w*|object)\.h$')
