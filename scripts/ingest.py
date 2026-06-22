@@ -194,7 +194,8 @@ def main():
     for d in dirs:
         label = f"{os.path.basename(os.path.dirname(d))}/{os.path.basename(d)}"
         try:
-            text = open(os.path.join(d, "stdout"), errors="replace").read()
+            with open(os.path.join(d, "stdout"), errors="replace") as _fh:
+                text = _fh.read()
         except OSError:
             continue
         asserts = all_asserts(text)
