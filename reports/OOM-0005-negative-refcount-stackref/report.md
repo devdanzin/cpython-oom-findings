@@ -83,6 +83,30 @@ This is correct *only if* `frame->stackpointer` accurately reflects the set of o
 
 The MemoryError itself being the over-decref'd object suggests the offending opcode is one that puts the just-raised exception (or a value derived alongside it) onto the stack and mishandles its ownership on the error path (CALL/`*_VECTORCALL` steal paths, `BINARY_OP`, `BUILD_*`, or the `FOR_ITER`/`SEND`/`CLEANUP_THROW` family), or one of the generated `pop_N_error:` / `error:` exit stubs miscounting the live stack depth.
 
+## Use-after-free face (confirmed 2026-06-22)
+
+The "latent use-after-free" predicted above is now **directly demonstrated**, not just inferred.
+When the over-decref'd local is *also* referenced elsewhere, the underflow frees it while it is
+still live, and a later access touches freed memory. `repro_uaf.py` (shrinkray-reduced from a
+`pkgutil` fuzzing vehicle) threads a heap `str` through
+`pkgutil.get_importer(s) -> os.fsdecode(s) -> os.fspath(s)` while keeping a second reference to
+it in a dict:
+
+- **debug-gil-nojit-asan**: ASan reports a clean `heap-use-after-free`. Its *freed-by* stack is
+  this exact over-decref — `PyStackRef_XCLOSE` (`stackref.h:726`) <- `_PyFrame_ClearLocals`
+  (`frame.c:101`), `exit_unwind` — the *read* is a later `Py_INCREF` via a dict lookup, and the
+  *allocated-by* is the victim `str(0)`. So the bug is **not** free-threading-specific and **not**
+  assert-only.
+- **debug-ft-nojit-asan**: the same freed local is instead used by `PyOS_FSPath`
+  (`posixmodule.c:17168`) -> `PyType_HasFeature` reads `Py_TYPE(path)->tp_flags` on the freed
+  object (`ob_type == 0xdd`, the debug freed-fill) -> SIGSEGV.
+
+See `repro_uaf.py` and `backtrace_uaf.txt`. This pins the memory-safety hazard to *this* site (a
+genuine UAF reachable through ordinary stdlib such as `pkgutil.get_importer`), upgrading the
+release behaviour from "latent / not pinned" to a demonstrated use-after-free. Which downstream
+*use* faults (dict-lookup `Py_INCREF` vs `os.fspath` type read) depends on build/timing — the
+defect is the single `_PyFrame_ClearLocals` over-decref, not any particular use site.
+
 ## Suggested fix
 
 Audit the bytecode-handler error/cleanup paths (and the generated `pop_N_error:` / `error:` stubs in `Python/bytecodes.c` / `generated_cases.c.h`) so that on any allocation-failure exit, `frame->stackpointer` exactly matches the set of still-owned stackrefs: every consumed/stolen value must be popped, every leftover value must remain owned. The fix is in the opcode that leaks the stale ref, not in `_PyFrame_ClearLocals` (which must trust the stack pointer). As a debugging aid, the stack-effect invariants could be asserted on the error path before `_PyEval_FrameClearAndPop`.
