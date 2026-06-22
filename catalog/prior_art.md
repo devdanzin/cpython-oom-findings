@@ -63,3 +63,22 @@ issues are addressed" (cf. the FT subinterpreter data-race umbrella **#129824**)
 now (see `filing_hold` in their `meta.json`); they stay cataloged and become file-ready once the FT
 subinterpreter area stabilizes. **OOM-0037** is **kept fileable** — it also crashes GIL builds and is
 not a race, so it falls outside that scope.
+
+## Observed-but-held 2026-06-22 — `_PyAST_Validate` parser-returns-AST-with-exc (NOT cataloged)
+
+A fleet capture (`xml_sax_expatreader-assertion-oomNEW`) aborted on
+`Python/ast.c:1051: _PyAST_Validate: Assertion `!PyErr_Occurred()'` — i.e. under OOM, `_PyPegen_parse`
+returns a **non-NULL AST while a `MemoryError` is set**, caught by the parser's `Py_DEBUG`-only validator
+(call site `pegen.c:980`). Wild trigger: the traceback PEP-657 caret machinery parses a source segment via
+`ast.parse(f"(\n{segment}\n)")` (`traceback.py:889`) while formatting an exception under memory pressure.
+
+**Confirmed distinct** from **OOM-0013** (compile returns **NULL without** an error — the opposite contract
+side; different culprit: compile's NULL path vs the pegen parser) and from **OOM-0021**. Debug-build-only
+*observable* (release returns the AST with the error set, latent).
+
+**Held, not cataloged:** not reproducible. ~2500 minimal-repro trials (exec/eval `compile()` sweeps, traceback-
+caret in-process + 1000-subprocess sweeps) only ever hit the OOM-0013 NULL-without-error faces, never
+`_PyAST_Validate`. The vehicle now reproduces deterministically as **OOM-0005**
+(`_Py_NegativeRefcount` @ `pycore_stackref.h:726`/`PyStackRef_XCLOSE`, 7/7), which fires earlier and masks the
+validate point — so the validate assert was a one-off. Per the campaign bar (reproduce → minimize → catalog),
+this is note-and-held; revisit and catalog if it ever recurs/reproduces. The vehicle dir is an OOM-0005 dup.
