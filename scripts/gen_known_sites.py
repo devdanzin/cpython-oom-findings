@@ -44,7 +44,15 @@ GENERIC_ASSERTS = {"!PyErr_Occurred()", "!_PyErr_Occurred(tstate)"}
 # real site keys (the dealloc cascade, the pegen frames, PyStackRef_XCLOSE@pycore_stackref.h:726
 # from its signature). Mirrors oom_dedup._BT_SKIP, which already drops these frames when
 # resolving a live backtrace.
-GENERIC_DETECTOR_FUNCS = {"_Py_NegativeRefcount", "_PyObject_AssertFailed"}
+#
+# The debug allocator's free-time check functions are detectors too: _PyMem_DebugCheckAddress /
+# _PyMem_DebugRawFree / _PyMem_DebugFree *catch* a bad/double free (the "bad ID" fatal), but the
+# real defect is the CALLER doing the bad free (e.g. free_threadstate for OOM-0020). Keying these
+# generic frames lets OOM-0020 absorb any unrelated bad-free crash (the freed block always passes
+# through the same allocator). Skip them so the keyed site is the caller; OOM-0020 still keys on
+# free_threadstate + its specific "bad ID ... API ' '" message. Mirrors oom_dedup._BT_SKIP.
+GENERIC_DETECTOR_FUNCS = {"_Py_NegativeRefcount", "_PyObject_AssertFailed",
+                          "_PyMem_DebugCheckAddress", "_PyMem_DebugRawFree", "_PyMem_DebugFree"}
 
 # Inlined refcount/atomic helper headers: Py_DECREF / Py_XDECREF / _Py_atomic_* expand here,
 # so a frame in one of these files (e.g. refcount.h:520, the negrefcount-detecting Py_DECREF)

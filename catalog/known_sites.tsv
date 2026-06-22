@@ -94,8 +94,10 @@ OOM-0011	abort	line	Python/specialize.c:364
 OOM-0011	abort	line	Python/specialize.c:443
 OOM-0011	abort	line	Python/specialize.c:460
 OOM-0012	abort	assert	Python/instrumentation.c:debug_check_sanity(interp, code)
+OOM-0012	abort	assert	Python/instrumentation.c:debug_check_sanity(tstate->interp, code)
 OOM-0012	abort	func	Python/ceval.h:do_monitor_exc
 OOM-0012	abort	func	Python/instrumentation.c:_Py_call_instrumentation_arg
+OOM-0012	abort	func	Python/instrumentation.c:_Py_call_instrumentation_instruction
 OOM-0012	abort	func	Python/instrumentation.c:call_instrumentation_vector
 OOM-0012	abort	func	Python/instrumentation.c:force_instrument_lock_held
 OOM-0012	abort	func	Python/instrumentation.c:get_tools_for_instruction
@@ -105,6 +107,7 @@ OOM-0012	abort	line	Python/instrumentation.c:1106
 OOM-0012	abort	line	Python/instrumentation.c:1119
 OOM-0012	abort	line	Python/instrumentation.c:1189
 OOM-0012	abort	line	Python/instrumentation.c:1250
+OOM-0012	abort	line	Python/instrumentation.c:1440
 OOM-0012	abort	line	Python/instrumentation.c:1700
 OOM-0012	abort	line	Python/instrumentation.c:1926
 OOM-0013	abort	assert	Python/ceval.c:(res != NULL) ^ (PyErr_Occurred() != NULL)
@@ -188,14 +191,10 @@ OOM-0019	abort	line	Parser/pegen.h:196
 OOM-0019	abort	line	Parser/pegen_errors.c:346
 OOM-0019	abort	line	Parser/pegen_errors.c:363
 OOM-0019	abort	line	Parser/pegen_errors.c:404
-OOM-0020	fatal	func	Objects/obmalloc.c:_PyMem_DebugCheckAddress
-OOM-0020	fatal	func	Objects/obmalloc.c:_PyMem_DebugRawFree
 OOM-0020	fatal	func	Python/crossinterp.c:_PyXI_NewInterpreter
 OOM-0020	fatal	func	Python/pylifecycle.c:new_interpreter
 OOM-0020	fatal	func	Python/pystate.c:free_threadstate
 OOM-0020	fatal	func	Python/pystate.c:new_threadstate
-OOM-0020	fatal	line	Objects/obmalloc.c:3166
-OOM-0020	fatal	line	Objects/obmalloc.c:3347
 OOM-0020	fatal	line	Python/crossinterp.c:3269
 OOM-0020	fatal	line	Python/pylifecycle.c:2728
 OOM-0020	fatal	line	Python/pystate.c:1527

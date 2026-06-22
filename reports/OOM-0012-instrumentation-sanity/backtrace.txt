@@ -36,3 +36,11 @@ Program received signal SIGABRT, Aborted.
 # #3  do_monitor_exc (...) at Python/ceval.h:350
 # #4  _PyEval_MonitorRaise (...) at Python/ceval.c:2429
 # #5  _PyEval_EvalFrameDefault (...) at Python/generated_cases.c.h:13839
+
+# ---------------------------------------------------------------------------
+# Same stale-instrumentation defect reached via a DIFFERENT instrumentation entry
+# point (pdb / per-instruction monitoring). The sanity assert fires in
+# _Py_call_instrumentation_instruction with the `tstate->interp` spelling.
+# Vehicles: fleet pdb-assertion-oomNEW (debug-ft-nojit-asan, commit 1b9fe5c).
+python: Python/instrumentation.c:1440: int _Py_call_instrumentation_instruction(PyThreadState *, _PyInterpreterFrame *, _Py_CODEUNIT *): Assertion `debug_check_sanity(tstate->interp, code)' failed.
+Fatal Python error: Aborted
