@@ -76,6 +76,21 @@ discloses it (gist + an umbrella issue, or a standalone issue for the strong one
 
 ## Techniques worth knowing (hard-won)
 
+- **Threaded-OOM "corruption" is usually a HARNESS ARTIFACT, not a CPython bug (2026-06-22).**
+  `_testcapi.set_nomemory()`/`remove_mem_hooks()` install/restore the failure hook by swapping the
+  process-global allocator via `PyMem_SetAllocator()`, which is **not thread-safe**. The old fusil OOM
+  harness did that swap *every loop iteration* (`finally: remove_mem_hooks()`); when the fuzzed call
+  spawned worker threads, the swap raced their concurrent alloc/free and corrupted the heap. Tells:
+  multi-threaded vehicle (`_thread`, `threading`, multiprocessing `resource_sharer`/`reduction`,
+  `socketserver`) + a *worker-thread* crash whose face is `mimalloc: ... mi_page_usable_size_of`
+  `assertion: "ok"`, `_PyMem_DebugRawFree: bad ID` with **mismatched alloc/free API tags** (e.g.
+  `'o'` vs `'@'` — definitionally a vtable swap; a real over-decref/UAF can't mismatch tags), or a
+  free of an *interior/payload* pointer. **Confirm:** replay the vehicle with the per-iteration
+  `remove_mem_hooks()` stripped (`sed 's/_remove_mem_hooks()/pass/'`) — if the corruption vanishes,
+  it's the artifact. This retired the long-parked **multiprocessing_resource_sharer "nut"** (it was
+  the swap artifact masking the already-cataloged **OOM-0018**) and several batch candidates. **Fix
+  landed in fusil** (install the hook once, disarm via the failure window, never swap under live
+  threads). Single-threaded OOM crashes are unaffected.
 - **UAF producer-pinning:** on a `--with-pymalloc` **+ ASan** build, run with
   `PYTHONMALLOC=malloc` → frees go through ASan → a `heap-use-after-free` report with the
   **freed-by** (the bug) and **allocated-by** (the victim) stacks. This is what cracked
