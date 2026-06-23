@@ -93,6 +93,36 @@ def extract_native_sites(text):
     return out
 
 
+# Funcs to skip when matching a faulthandler-only C stack (func names, innermost first):
+# the asan/dump/eval/run plumbing + the alloc/free + assert detectors + the dealloc dispatch
+# and refcount macros that wrap every dealloc. The first SURVIVING func the catalog keys by
+# name is the crash site. Superset of SKIP + NATIVE_SKIP for the symbol-only case.
+FH_SKIP = re.compile(
+    r'^(___?interceptor\w*|__sanitizer\w*|__asan\w*|_Py_Dump\w*|faulthandler\w*'
+    r'|_PyEval_EvalFrameDefault|_PyEval_EvalFrame|_PyEval_Vector|PyEval_EvalCode|_PyEval_Frame\w*'
+    r'|Py_RunMain|Py_BytesMain|pymain_\w+|_start|__libc_start\w*|run_mod|run_eval_code_obj'
+    r'|pyrun_\w*|_PyRun_\w*|clear_thread_frame|clear_gen_frame'
+    r'|fatal_error\w*|_Py_FatalError\w*|_PyObject_AssertFailed|_Py_NegativeRefcount'
+    r'|_Py_Dealloc|_Py_MergeZeroLocalRefcount|Py_X?DECREF|Py_X?INCREF|_Py_X?DECREF\w*'
+    r'|_PyMem_Debug\w*|PyMem_\w*Free|PyObject_\w*Free|PyMem_\w*Realloc|PyObject_\w*Realloc'
+    r'|hook_f\w+|tracemalloc_\w+)$'
+)
+
+
+def fh_match(text, snap):
+    """Fallback for a SEGV/generic-fatal whose stdout has a faulthandler C stack (func names)
+    but NO ASan ``#N ... file.c:line`` frames (so extract_native_sites is empty) and no gdb
+    resolution. Match the innermost catalog-keyed func BY NAME. Returns (oids, func) or
+    (set(), None)."""
+    for fn in SYM.findall(text):  # faulthandler prints most-recent-call first
+        if FH_SKIP.match(fn):
+            continue
+        hit = snap["funcname"].get(fn)
+        if hit:
+            return set(hit), fn
+    return set(), None
+
+
 def nf(f):
     return f.lstrip("./")
 
@@ -116,7 +146,8 @@ def all_asserts(text):
 def load_snapshot(path):
     by_func, by_assert, by_line = {}, {}, {}
     per_file_lines = collections.defaultdict(list)
-    by_msg, kind_of = [], {}
+    by_funcname = {}  # bare func name -> oids (for faulthandler-only stacks; see fh_match)
+    by_msg, by_msgfam, kind_of = [], [], {}
     for line in pathlib.Path(path).read_text().splitlines():
         if line.startswith("#") or not line.strip():
             continue
@@ -124,16 +155,21 @@ def load_snapshot(path):
         kind_of[oid] = kind
         if kt == "func":
             by_func.setdefault(key, set()).add(oid)
+            fn = key.rsplit(":", 1)[-1]  # "file:func" -> "func"
+            if re.fullmatch(r"\w+", fn):  # clean ident only (skip combined "a/b/c(...)" keys)
+                by_funcname.setdefault(fn, set()).add(oid)
         elif kt == "assert":
             by_assert.setdefault(key, set()).add(oid)
         elif kt == "msg":
             by_msg.append((key, oid))
+        elif kt == "msgfam":
+            by_msgfam.append((key, oid))
         elif kt == "line":
             f, ln = key.rsplit(":", 1); ln = int(ln)
             by_line.setdefault((f, ln), set()).add(oid)
             per_file_lines[f].append((ln, oid))
-    return dict(func=by_func, assert_=by_assert, line=by_line,
-                fl=per_file_lines, msg=by_msg, kind=kind_of)
+    return dict(func=by_func, assert_=by_assert, line=by_line, fl=per_file_lines,
+                msg=by_msg, msgfam=by_msgfam, kind=kind_of, funcname=by_funcname)
 
 
 def match(c, snap):
@@ -143,11 +179,20 @@ def match(c, snap):
         if hit:
             return hit, "assert"
     if c.get("fatal_msg"):
-        # Second clause uses the FULL crash msg (not [:30]) so type-specific keys
-        # (OOM-0007 'Context' vs OOM-0023 '_StoreAction') aren't conflated. Mirrors oom_dedup.match.
-        hit = set(o for k, o in snap["msg"] if c["fatal_msg"].startswith(k) or k.startswith(c["fatal_msg"]))
-        if hit:
-            return hit, "msg"
+        cm = c["fatal_msg"]
+        # Exact-ish msg keys (prefix either way; full msg, not [:30], so type-specific keys like
+        # OOM-0007 'Context' vs OOM-0023 '_StoreAction' aren't conflated). LONGEST match wins so
+        # the most specific type key beats a shorter/family one. Mirrors oom_dedup.match.
+        exact = [(k, o) for k, o in snap["msg"] if cm.startswith(k) or k.startswith(cm)]
+        if exact:
+            maxlen = max(len(k) for k, _ in exact)
+            return set(o for k, o in exact if len(k) == maxlen), "msg"
+        # Family fallback: a substring identifying a bug family (e.g. the generic subtype_dealloc
+        # 'cleared the current exception'), used only when no type-specific key matched -> a new
+        # type dedups to the family instead of oomNEW.
+        fam = set(o for sub, o in snap.get("msgfam", ()) if sub in cm)
+        if fam:
+            return fam, "msgfam"
     if c.get("file") and c.get("func"):
         hit = snap["func"].get(f"{c['file']}:{c['func']}")
         if hit:
@@ -274,7 +319,7 @@ def main():
         candidates = [dict(file=f, line=ln, func=fn, assert_expr=expr, fatal_msg=None)
                       for (f, ln, fn, expr) in asserts]
         if fmsg and not generic and not fmsg.lower().startswith(("segmentation", "aborted")):
-            candidates.append(dict(file=None, line=None, func=None, assert_expr=None, fatal_msg=fmsg[:60]))
+            candidates.append(dict(file=None, line=None, func=None, assert_expr=None, fatal_msg=fmsg))
 
         chain = []
         if has_segv or generic or not asserts:
@@ -292,6 +337,12 @@ def main():
         matched = set()
         for c in candidates:
             matched |= match(c, snap)[0]
+
+        # Faulthandler-only fallback: a SEGV/generic-fatal with no ASan file:line frames and no
+        # gdb resolution still carries func names in the faulthandler C stack -- match the
+        # innermost catalog-keyed func by name (e.g. PyList_New -> OOM-0004) instead of giving up.
+        if not matched and not chain and (has_segv or generic):
+            matched |= fh_match(text, snap)[0]
 
         if matched:
             (known if len(matched) == 1 else ambiguous)[
