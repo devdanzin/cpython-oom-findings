@@ -234,6 +234,7 @@ OOM-0023	fatal	msg	_Py_Dealloc: Deallocator of type 'LogRecord' cleared the cur
 OOM-0023	fatal	msg	_Py_Dealloc: Deallocator of type 'ProxyHandler' cleared the 
 OOM-0023	fatal	msg	_Py_Dealloc: Deallocator of type 'UnknownHandler' cleared th
 OOM-0023	fatal	msg	_Py_Dealloc: Deallocator of type '_StoreAction' cleared the 
+OOM-0023	fatal	msg	_Py_Dealloc: Deallocator of type '_StoreTrueAction' cleared 
 OOM-0024	segv	func	Objects/templateobject.c:template_iter
 OOM-0024	segv	func	Objects/templateobject.c:templateiter_clear
 OOM-0024	segv	func	Objects/templateobject.c:templateiter_dealloc
