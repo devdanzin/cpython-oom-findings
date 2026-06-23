@@ -27,6 +27,7 @@
     "magalu-03/inst-03/python-2/session-32 (urllib.request ProxyHandler, GCC box)",
     "fleet/inst-02/python-12 (profiling.sampling.__main__ _StoreTrueAction)"
   ],
+  "msg_family": ["cleared the current exception"],
   "matrix": {"ft_debug_asan": "fatal", "ft_release": "n/a", "jit": "fatal", "upstream": "n/a"},
   "repro_start": 276,
   "upstream_reported": false,

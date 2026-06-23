@@ -90,6 +90,15 @@ def collect():
     for meta in sorted(REPORTS.glob("*/meta.json")):
         d = json.loads(meta.read_text())
         oid, kind = d["id"], d.get("crash_kind", "?")
+        # msg_family: a substring catch-all for a whole bug FAMILY whose fatal differs only by
+        # a variable token (e.g. OOM-0023's generic subtype_dealloc: "Deallocator of type 'X'
+        # cleared the current exception" for any X). The matcher tries exact msg keys first
+        # (longest wins -> Context->OOM-0007, deque->OOM-0039) and only falls back to msgfam, so
+        # arbitrary new/fuzzer types (Evil, weird_*, _StoreTrueAction, ...) dedup here instead of
+        # re-surfacing as oomNEW. Scoped to the exact suffix so the 'raised'/'overrode' invariant
+        # variants (different defects) are NOT absorbed.
+        for sub in d.get("msg_family", []):
+            rows.add((oid, kind, "msgfam", sub))
         sig = d.get("signature", {})
         frames = [sig.get("site_frame")] + list(sig.get("top_frames", []))
         # clean func@file:line frames from the signature
