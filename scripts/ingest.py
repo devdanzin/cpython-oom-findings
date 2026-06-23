@@ -53,8 +53,12 @@ FRAME = re.compile(r'([A-Za-z_]\w+)@([\w./+-]+\.(?:c|h)):(\d+)')
 # ASan/sanitizer frame already in stdout: "#5 0x.. in func /abs/.../Python/foo.c:123:4".
 # Lets us read the real crash site off the crash's OWN backtrace -- no gdb re-run, so it's
 # deterministic (a re-run can miss under a fresh hash seed / thread timing).
-ASAN_FRAME = re.compile(r'#\d+\s+0x[0-9a-fA-F]+\s+in\s+(\w+)\s+\S*?'
-                        r'/((?:Objects|Python|Modules|Include|Parser)/[\w./+-]+\.(?:c|h)):(\d+)')
+# Source path may be absolute+column (Clang: /abs/Objects/foo.c:68:9) or relative+no-column
+# (GCC: Objects/foo.c:68); make the absolute prefix and the column optional so GCC-built
+# ASan traces parse too (else they fall back to faulthandler's inlined C-stack and known
+# bugs get mislabelled new). Mirrors oom_dedup._ASAN_FRAME.
+ASAN_FRAME = re.compile(r'#\d+\s+0x[0-9a-fA-F]+\s+in\s+(\w+)\s+(?:\S*?/)?'
+                        r'((?:Objects|Python|Modules|Include|Parser)/[\w./+-]+\.(?:c|h)):(\d+)')
 NATIVE_SKIP = re.compile(r'^(fatal_error(_exit)?|_Py_FatalError\w*|_PyObject_AssertFailed'
                          r'|_Py_NegativeRefcount|_Py_DumpStack|faulthandler\w*'
                          r'|_Py_DumpExtensionModules'
@@ -62,6 +66,12 @@ NATIVE_SKIP = re.compile(r'^(fatal_error(_exit)?|_Py_FatalError\w*|_PyObject_Ass
                          # real site is the caller doing the bad free (free_list_items,
                          # free_threadstate, ...). Mirrors oom_dedup._BT_SKIP / gen_known_sites.
                          r'|_PyMem_DebugCheckAddress|_PyMem_DebugRawFree|_PyMem_DebugFree'
+                         # _testcapi set_nomemory injection hooks + PyMem_/PyObject_ free/realloc
+                         # wrappers: pass-through allocator plumbing between the debug checks and
+                         # the real caller -- skip so a bad free resolves to free_list_items
+                         # (OOM-0004), not hook_ffree/PyMem_Free (which read as oomNEW on GCC).
+                         r'|hook_fmalloc|hook_fcalloc|hook_frealloc|hook_ffree'
+                         r'|PyMem_Free|PyMem_RawFree|PyObject_Free|PyMem_Realloc|PyMem_RawRealloc|PyObject_Realloc'
                          # tracemalloc allocator hooks: pass-through layer present in every
                          # alloc/free while tracing is on -- same detector role, skip to the
                          # real caller (e.g. free_list_items = OOM-0004). NB the by-design
