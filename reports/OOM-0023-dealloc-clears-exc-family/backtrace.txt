@@ -12,6 +12,15 @@ Stack (most recent call first):
   File ".../source.py", line 400 in oom_call
   File ".../source.py", line 428 in <module>
 
+--- family vehicles: ONE root (generic subtype_dealloc), type-specific fatal message ---
+# Each documented vehicle type gets its own msg dedup key -> OOM-0023, so a urllib/
+# logging/xml.sax vehicle isn't mislabelled oomNEW (the backtrace alone resolves to the
+# now-keyless _Py_Dealloc dispatch frame; the type-specific fatal message is the real
+# discriminator, exactly as for _StoreAction). All four are the same bug (see report.md).
+Fatal Python error: _Py_Dealloc: Deallocator of type 'UnknownHandler' cleared the current exception
+Fatal Python error: _Py_Dealloc: Deallocator of type 'ProxyHandler' cleared the current exception
+Fatal Python error: _Py_Dealloc: Deallocator of type 'LogRecord' cleared the current exception
+
 --- gdb backtrace (bt 15), abort path ---
 #4  __GI_abort () at ./stdlib/abort.c:77
 #5  fatal_error_exit (status=...) at Python/pylifecycle.c:3517
