@@ -352,3 +352,9 @@ OOM-0038	fatal	line	Objects/exceptions.c:4136
 OOM-0038	fatal	line	Objects/exceptions.c:4158
 OOM-0038	fatal	line	Python/index_pool.c:167
 OOM-0038	fatal	msg	_PyInterpreterState_GET: the function must be called with an
+OOM-0039	fatal	func	Modules/_collectionsmodule.c:deque_clear
+OOM-0039	fatal	func	Modules/_collectionsmodule.c:deque_dealloc
+OOM-0039	fatal	line	Modules/_collectionsmodule.c:1556
+OOM-0039	fatal	line	Modules/_collectionsmodule.c:749
+OOM-0039	fatal	line	Modules/_collectionsmodule.c:751
+OOM-0039	fatal	msg	_Py_Dealloc: Deallocator of type 'collections.deque' cleared

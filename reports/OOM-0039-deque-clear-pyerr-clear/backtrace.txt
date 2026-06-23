@@ -1,0 +1,64 @@
+# Authoritative capture (debug-ft-nojit-asan = ft_debug_asan, commit 1b9fe5c, Clang 21)
+# FATAL (gh-89373 debug-only invariant), not a clean SIGSEGV. Deterministic from the
+# minimal repro.py under the FT debug+ASan build (also reproduces on the jit debug build,
+# and originally on the oca box's GCC 13.3.0 build @27148d0857e).
+
+## Fatal message + faulthandler Python stack (minimal repro.py)
+Fatal Python error: _Py_Dealloc: Deallocator of type 'collections.deque' cleared the current exception
+Python runtime state: initialized
+
+Stack (most recent call first):
+  File ".../repro.py", line 17 in drop_a_deque
+  File ".../repro.py", line 25 in <module>
+
+Extension modules: _testcapi (total: 1)
+
+## ASan native stack at the abort (after deque_dealloc returned; _Py_Dealloc check fires)
+# The check at object.c:3338 runs AFTER the deque's tp_dealloc returns, so deque_clear/
+# deque_dealloc are no longer on the stack here -- the decref site that dropped the deque is.
+==ERROR: AddressSanitizer: ABRT ...
+    #5  fatal_error_exit        Python/pylifecycle.c:3517
+    #7  _Py_FatalErrorFormat    Python/pylifecycle.c:3795
+    #8  _Py_Dealloc             Objects/object.c:3338      <- err "...cleared the current exception", tp_name == "collections.deque"
+    #9  Py_DECREF               ./Include/refcount.h:359
+    #10 type_call               Objects/typeobject.c:2487  <- decref of the half-built deque (its __init__ failed under OOM)
+    #11 _PyObject_MakeTpCall    Objects/call.c:242
+    #12 _Py_VectorCall_StackRefSteal Python/ceval.c:726
+    #13 _PyEval_EvalFrameDefault Python/generated_cases.c.h:4559
+    ... PyEval_EvalCode -> run_mod -> pyrun_file -> Py_RunMain -> main
+
+## C path INTO the bug (gdb, break on _collectionsmodule.c:751 = the PyErr_Clear)
+# The breakpoint is reached only when newblock() returns NULL inside deque_clear -- i.e.
+# exactly the OOM-window-during-teardown condition. Frame #2 shows the enclosing _Py_Dealloc
+# deallocating the deque with the in-flight MemoryError saved as old_exc; the PyErr_Clear()
+# at frame #0 then clears it, and on return the object.c:3338 check fatals.
+Breakpoint 1, deque_clear (self=0x7bffb69ad990) at ./Modules/_collectionsmodule.c:751
+#0  deque_clear        ./Modules/_collectionsmodule.c:751   PyErr_Clear();   (newblock() returned NULL)
+#1  deque_dealloc      ./Modules/_collectionsmodule.c:1556  (void)deque_clear(self)
+#2  _Py_Dealloc        Objects/object.c:3319                op == the deque; old_exc == the pending MemoryError
+#3  Py_DECREF          ./Include/refcount.h:359
+#4  type_call          Objects/typeobject.c:2487            decref of the half-built deque
+#5  _PyObject_MakeTpCall Objects/call.c:242
+# ... continuing from the breakpoint -> the object.c:3338 check fatals (message as above).
+
+## Root-cause source (Modules/_collectionsmodule.c)
+# deque_clear (L722), block-preallocation fast path:
+#   b = newblock(deque);              /* L749 */
+#   if (b == NULL) {
+#       PyErr_Clear();                /* L751  <- clobbers a pre-existing in-flight exception */
+#       goto alternate_method;        /* L752 */
+#   }
+# newblock (L177-189): on PyMem_Malloc failure -> PyErr_NoMemory(); return NULL;  (L187-188)
+# deque_dealloc (L1547) calls (void)deque_clear(self) at L1556, with no exception save/restore.
+
+## Mechanism confirmation (window size k of set_nomemory(start, start+k), 2000-iter sweep)
+# k=0 (fail-forever): FATAL    -- failure persists, newblock() in deque_clear fails -> PyErr_Clear
+# k=1               : SURVIVES -- window closes before teardown; newblock() succeeds; no PyErr_Clear
+# k=2 / k=4 / k=8   : FATAL    -- failure persists into the dealloc
+# => the crash requires newblock() to fail *during* deque_clear (the PyErr_Clear path).
+
+## Build matrix (minimal repro.py, 3x each on release to confirm stability)
+# ft_debug_asan (debug-ft-nojit-asan, Py_DEBUG=1): FATAL "collections.deque cleared the current exception" (rc 134).
+# jit           (debug-gil-jit-asan,  Py_DEBUG=1): FATAL, identical message (rc 134).
+# ft_release    (release-ft-nojit-asan, Py_DEBUG=0): invariant compiled out -> "survived (no crash)" (rc 0). n/a.
+# upstream      (release-gil-nojit-asan, Py_DEBUG=0): same, "survived (no crash)" (rc 0). n/a.

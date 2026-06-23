@@ -1,6 +1,6 @@
 # Fusil OOM-injection findings on CPython — summary
 
-Snapshot: 2026-06-21 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0038) · **38 distinct bugs** (OOM-0001…0038).
+Snapshot: 2026-06-23 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0039) · **39 distinct bugs** (OOM-0001…0039).
 
 **Method.** [Fusil](https://github.com/devdanzin/fusil) fuzzes CPython with `_testcapi.set_nomemory`
 to fail allocations and drive the rarely-tested allocation-failure error paths. Crashes are triaged
@@ -59,8 +59,9 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0036 | `list.append(x)` under `MemoryError` double-frees the item (`_CALL_LIST_APPEND` steals `arg`, then `ERROR_NO_POP`) | abort | release | yes | `bytecodes.c:_CALL_LIST_APPEND` |
 | OOM-0037 | unraisable reporter derefs NULL `UnraisableHookArgs` type-dict finalizing a failed sub-interpreter | segv | release | yes | `errors.c:make_unraisable_hook_args` / `structseq.c:get_type_attr_as_size` |
 | OOM-0038 | sub-interpreter TLBC-index reserve calls `PyErr_NoMemory()` with no active thread state (FT-only) | fatal | release | yes | `index_pool.c:_PyIndexPool_AllocIndex` |
+| OOM-0039 | `deque_clear`'s `newblock`-failure `PyErr_Clear()` clobbers an in-flight exception when run from `deque_dealloc` under OOM | fatal | ASan/jit | yes | `_collectionsmodule.c:deque_clear` / `deque_dealloc` |
 
-**Totals:** 37 bugs — 8 segv, 24 abort, 5 fatal · 12 reproduce on a **release** build · **all 37 have a
+**Totals:** 39 bugs — 8 segv, 24 abort, 7 fatal · 12 reproduce on a **release** build · **all 39 have a
 minimal reproducer** (0 vehicle-confirmed).
 
 **Upstream status** (issue-tracker check 2026-06-19, see `catalog/prior_art.md`): of OOM-0001…0035, only **OOM-0001** is already filed — [#151673](https://github.com/python/cpython/issues/151673) (open); the other 34 had no matching python/cpython issue (appear novel). Since then: **OOM-0036** is filed as [#151818](https://github.com/python/cpython/issues/151818); **OOM-0037** is drafted (not yet filed). **OOM-0020** (gisted) and **OOM-0038** are on **filing-hold** — both are free-threaded sub-interpreter fuzzing crashes, the category [#143232](https://github.com/python/cpython/issues/143232) de-prioritized ("not worth fuzzing [subinterpreters] for now until the known issues are addressed"; cf. [#129824](https://github.com/python/cpython/issues/129824)); cataloged but not to be filed for now (see each report's `filing_hold`). OOM-0037 stays fileable (it also crashes GIL builds and is not a race).

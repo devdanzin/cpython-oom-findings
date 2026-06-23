@@ -4,7 +4,7 @@ Crashes found by allocation-failure fuzzing (`_testcapi.set_nomemory`) of CPytho
 
 **Pick anything to work on** — open a CPython issue if one doesn't exist, comment with the issue/PR, and the Status column will be updated. Reports are deduped by crash signature; one row = one underlying bug (vehicles listed in the report).
 
-_38 unique bug(s). Generated 2026-06-22._
+_39 unique bug(s). Generated 2026-06-23._
 
 _Found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode (fusil originally by Victor Stinner). Reports drafted by Claude Code; reproducers machine-generated._
 
@@ -63,3 +63,4 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 | [OOM-0022](https://gist.github.com/devdanzin/0964a71a7038ee90137f11c2527aad3c) | Fatal: stale `MemoryError` trips `_Py_CheckSlotResult` in `reload_singlephase_extension` (`import.c:2011`) | ft_debug_asan,jit | report |
 | [OOM-0023](https://gist.github.com/devdanzin/dc5123e50ea0402292e841411a294d3d) | Fatal: dealloc clears the in-flight exception in `subtype_dealloc` (`typeobject.c:2719`) | ft_debug_asan,jit | report |
 | [OOM-0038](reports/OOM-0038-indexpool-tlbc-reserve-no-tstate/report.md) | Fatal/segv: `_PyIndexPool_AllocIndex` calls `PyErr_NoMemory()` with no active thread state while reserving a TLBC index during free-threaded sub-interpreter creation (`index_pool.c:167`) | ft_debug_asan,ft_release | draft |
+| [OOM-0039](reports/OOM-0039-deque-clear-pyerr-clear/report.md) | Fatal: `deque_clear` clears the in-flight exception via its `newblock`-failure `PyErr_Clear()` (`_collectionsmodule.c:751`) | ft_debug_asan,jit | draft |
