@@ -1,0 +1,27 @@
+{
+  "id": "OOM-0039",
+  "slug": "deque-clear-pyerr-clear",
+  "title": "Fatal: `deque_clear` clears the in-flight exception via its `newblock`-failure `PyErr_Clear()` (`_collectionsmodule.c:751`)",
+  "description": "`Modules/_collectionsmodule.c` `deque_clear` preallocates a fresh block via `newblock()` to drain the deque safely; on `newblock()` failure it does `PyErr_Clear(); goto alternate_method;`. `deque_clear` is called from `deque_dealloc` (L1556); under OOM a deque is freed with a `MemoryError` in flight AND the heap is still exhausted, so `newblock()` also fails and the `PyErr_Clear()` clobbers the caller's pending exception, tripping the gh-89373 `_Py_Dealloc` debug invariant. Distinct C site/fix from OOM-0007 (`context_tp_dealloc`) and OOM-0023 (generic `subtype_dealloc`).",
+  "crash_kind": "fatal",
+  "sites": ["Modules/_collectionsmodule.c deque_clear:749-752", "Modules/_collectionsmodule.c deque_dealloc:1556", "Objects/object.c _Py_Dealloc:3338"],
+  "signature": {
+    "site_frame": "deque_clear@Modules/_collectionsmodule.c:751",
+    "top_frames": [
+      "deque_dealloc@Modules/_collectionsmodule.c:1556",
+      "_Py_Dealloc@Objects/object.c:3338"
+    ]
+  },
+  "vehicles": [
+    "oca-fleet/python-17/session-3914 (_pyrepl.pager pipe_pager > plain > escape_less, --oom-seq window=4)"
+  ],
+  "matrix": {"ft_debug_asan": "fatal", "ft_release": "n/a", "jit": "fatal", "upstream": "n/a"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-23",
+  "confirmed_commit": "1b9fe5c",
+  "notes": "Fatal message: \"_Py_Dealloc: Deallocator of type 'collections.deque' cleared the current exception\". ROOT: deque_clear (L722) calls newblock() (L749) to preallocate an empty block before draining; newblock() on PyMem_Malloc failure does PyErr_NoMemory()+return NULL (L187-188); deque_clear then does PyErr_Clear() (L751) and falls back. When deque_clear runs from deque_dealloc (L1556) with a caller exception in flight, that PyErr_Clear() clears it -> gh-89373 violation. DISTINCT from OOM-0007 (context_tp_dealloc) and OOM-0023 (generic subtype_dealloc); OOM-0023's subtype_dealloc fix does NOT cover it (proven by a bare-deque repro with no subtype_dealloc on the stack). Three decref paths confirmed reaching the same defect: (1) subtype_dealloc->PyObject_ClearManagedDict->clear_inline_values (the session-3914 vehicle, deque as a managed-dict attribute); (2) bare deque frame local on unwind (_PyFrame_ClearLocals->PyStackRef_XCLOSE); (3) half-built deque whose __init__ failed under OOM (type_call:2487, used by the minimal repro). Mechanism confirmed by window-size sweep: set_nomemory(start,start+k) with k=1 SURVIVES (window closes before teardown; newblock() succeeds; no PyErr_Clear), k=0/2/4/8 FATAL (failure persists into the dealloc). Debug-only signature: invariant is #ifdef Py_DEBUG -> fatal on ft_debug_asan+jit, n/a on ft_release+upstream (minimal repro exits cleanly; the MemoryError is silently swallowed -> latent error-indicator corruption on release). Reproduced on debug-ft-nojit-asan @1b9fe5c (Clang 21) and debug-gil-jit-asan; originally found on the oca box GCC 13.3.0 @27148d0857e -> neither compiler- nor revision-specific. In-loop dedup correctly labeled session-3914 'oomNEW' (msg keys are type-specific; 'collections.deque' was never-seen). Fix: bracket the deque_clear call in deque_dealloc with PyErr_GetRaisedException/PyErr_SetRaisedException (the slot_tp_finalize / OOM-0007 pattern), or save/restore around deque_clear's newblock-failure path. Minimization: full (15-line stdlib-only deterministic repro). Found via fusil --oom-seq OOM-injection fuzzing."
+}
