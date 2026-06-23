@@ -143,7 +143,9 @@ def match(c, snap):
         if hit:
             return hit, "assert"
     if c.get("fatal_msg"):
-        hit = set(o for k, o in snap["msg"] if c["fatal_msg"].startswith(k) or k.startswith(c["fatal_msg"][:30]))
+        # Second clause uses the FULL crash msg (not [:30]) so type-specific keys
+        # (OOM-0007 'Context' vs OOM-0023 '_StoreAction') aren't conflated. Mirrors oom_dedup.match.
+        hit = set(o for k, o in snap["msg"] if c["fatal_msg"].startswith(k) or k.startswith(c["fatal_msg"]))
         if hit:
             return hit, "msg"
     if c.get("file") and c.get("func"):

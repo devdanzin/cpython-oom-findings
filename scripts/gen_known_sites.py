@@ -51,7 +51,15 @@ GENERIC_ASSERTS = {"!PyErr_Occurred()", "!_PyErr_Occurred(tstate)"}
 # generic frames lets OOM-0020 absorb any unrelated bad-free crash (the freed block always passes
 # through the same allocator). Skip them so the keyed site is the caller; OOM-0020 still keys on
 # free_threadstate + its specific "bad ID ... API ' '" message. Mirrors oom_dedup._BT_SKIP.
-GENERIC_DETECTOR_FUNCS = {"_Py_NegativeRefcount", "_PyObject_AssertFailed",
+# `_Py_Dealloc` is the universal deallocation chokepoint (object.c:3319 dispatch; :3338 the
+# "deallocator cleared the exception" fatal). It appears in EVERY dealloc crash, so keying it
+# collides the whole dealloc family -- OOM-0003/0018/0024/0029 all share object.c:_Py_Dealloc +
+# object.c:3319, and OOM-0007/0023 share :3338, so decide()'s sorted()[0] tiebreak silently
+# mislabels e.g. a deque dealloc-clears-exc crash as OOM-0003. It is a detector frame, not the
+# defect: each bug keeps its real site (code_dealloc, templateiter_dealloc, context_tp_dealloc,
+# subtype_dealloc, ...) and the clears-exc family keeps its type-specific fatal msg. With the key
+# gone, oom_dedup/ingest no longer match a crash to a bug via this generic frame.
+GENERIC_DETECTOR_FUNCS = {"_Py_NegativeRefcount", "_PyObject_AssertFailed", "_Py_Dealloc",
                           "_PyMem_DebugCheckAddress", "_PyMem_DebugRawFree", "_PyMem_DebugFree"}
 
 # Inlined refcount/atomic helper headers: Py_DECREF / Py_XDECREF / _Py_atomic_* expand here,
