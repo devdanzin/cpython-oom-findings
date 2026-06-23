@@ -11,10 +11,8 @@ OOM-0002	segv	func	Python/context.c:PyContextVar_Set
 OOM-0002	segv	line	Python/context.c:367
 OOM-0003	abort	func	Objects/codeobject.c:_PyCode_New
 OOM-0003	abort	func	Objects/codeobject.c:code_dealloc
-OOM-0003	abort	func	Objects/object.c:_Py_Dealloc
 OOM-0003	abort	line	Objects/codeobject.c:2440
 OOM-0003	abort	line	Objects/codeobject.c:747
-OOM-0003	abort	line	Objects/object.c:3319
 OOM-0004	abort	assert	Objects/object.c:freelist->size == 0 || freelist->size == -1
 OOM-0004	abort	func	Objects/listobject.c:PyList_New
 OOM-0004	abort	func	Objects/listobject.c:free_list_items
@@ -41,13 +39,11 @@ OOM-0006	abort	line	Objects/abstract.c:2825
 OOM-0006	abort	line	Objects/dictobject.c:5516
 OOM-0006	abort	line	Objects/dictobject.c:5532
 OOM-0007	fatal	func	Objects/cellobject.c:cell_dealloc
-OOM-0007	fatal	func	Objects/object.c:_Py_Dealloc
 OOM-0007	fatal	func	Python/ceval.c:clear_thread_frame
 OOM-0007	fatal	func	Python/context.c:context_tp_clear
 OOM-0007	fatal	func	Python/context.c:context_tp_dealloc
 OOM-0007	fatal	func	Python/frame.c:_PyFrame_ClearLocals
 OOM-0007	fatal	line	Objects/cellobject.c:81
-OOM-0007	fatal	line	Objects/object.c:3338
 OOM-0007	fatal	line	Python/ceval.c:1954
 OOM-0007	fatal	line	Python/context.c:518
 OOM-0007	fatal	line	Python/context.c:535
@@ -178,11 +174,9 @@ OOM-0017	abort	line	Python/pylifecycle.c:2487
 OOM-0018	abort	assert	Objects/dictobject.c:_Py_IsOwnedByCurrentThread((PyObject *)mp) || IS_DICT_SHARED(mp)
 OOM-0018	abort	func	Objects/dictobject.c:PyObject_ClearManagedDict
 OOM-0018	abort	func	Objects/dictobject.c:set_keys
-OOM-0018	abort	func	Objects/object.c:_Py_Dealloc
 OOM-0018	abort	func	Objects/typeobject.c:subtype_dealloc
 OOM-0018	abort	line	Objects/dictobject.c:205
 OOM-0018	abort	line	Objects/dictobject.c:7896
-OOM-0018	abort	line	Objects/object.c:3319
 OOM-0018	abort	line	Objects/typeobject.c:2847
 OOM-0019	abort	func	Parser/pegen.h:RAISE_ERROR_KNOWN_LOCATION
 OOM-0019	abort	func	Parser/pegen_errors.c:_PyPegen_raise_error_known_location
@@ -227,23 +221,19 @@ OOM-0022	fatal	line	Python/import.c:2043
 OOM-0022	fatal	line	Python/import.c:5468
 OOM-0022	fatal	msg	_Py_CheckSlotResult: Slot __delitem__ of type dict succeeded
 OOM-0023	fatal	func	Include/internal/pycore_stackref.h:PyStackRef_XCLOSE
-OOM-0023	fatal	func	Objects/object.c:_Py_Dealloc
 OOM-0023	fatal	func	Objects/typeobject.c:clear_slots/ClearManagedDict/Py_DECREF(dict)
 OOM-0023	fatal	func	Objects/typeobject.c:subtype_dealloc
 OOM-0023	fatal	func	Python/ceval.c:clear_thread_frame
 OOM-0023	fatal	func	Python/frame.c:_PyFrame_ClearLocals
 OOM-0023	fatal	line	Include/internal/pycore_stackref.h:726
-OOM-0023	fatal	line	Objects/object.c:3338
 OOM-0023	fatal	line	Objects/typeobject.c:2719
 OOM-0023	fatal	line	Objects/typeobject.c:2840
 OOM-0023	fatal	line	Python/ceval.c:1954
 OOM-0023	fatal	line	Python/frame.c:101
 OOM-0023	fatal	msg	_Py_Dealloc: Deallocator of type '_StoreAction' cleared the 
-OOM-0024	segv	func	Objects/object.c:_Py_Dealloc
 OOM-0024	segv	func	Objects/templateobject.c:template_iter
 OOM-0024	segv	func	Objects/templateobject.c:templateiter_clear
 OOM-0024	segv	func	Objects/templateobject.c:templateiter_dealloc
-OOM-0024	segv	line	Objects/object.c:3319
 OOM-0024	segv	line	Objects/templateobject.c:232
 OOM-0024	segv	line	Objects/templateobject.c:45
 OOM-0024	segv	line	Objects/templateobject.c:53
@@ -284,11 +274,9 @@ OOM-0028	segv	line	Modules/posixmodule.c:6149
 OOM-0028	segv	line	Objects/unicodeobject.c:5681
 OOM-0028	segv	line	Python/ceval.c:841
 OOM-0029	abort	func	Objects/listobject.c:list_dealloc
-OOM-0029	abort	func	Objects/object.c:_Py_Dealloc
 OOM-0029	abort	func	Objects/tupleobject.c:tuple_dealloc
 OOM-0029	abort	func	Objects/typeobject.c:subtype_dealloc
 OOM-0029	abort	line	Objects/listobject.c:567
-OOM-0029	abort	line	Objects/object.c:3319
 OOM-0029	abort	line	Objects/tupleobject.c:277
 OOM-0029	abort	line	Objects/typeobject.c:2876
 OOM-0030	abort	assert	Include/cpython/unicodeobject.h:data != NULL
