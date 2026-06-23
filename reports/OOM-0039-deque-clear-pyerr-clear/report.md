@@ -82,7 +82,11 @@ Stack (most recent call first):
 - as `tp_clear` (GC) — there is normally no exception in flight, so the `PyErr_Clear()` is harmless; and
 - from `deque_dealloc` (L1556, `(void)deque_clear(self)`) — **here a caller's exception can be in flight**, and clearing it violates gh-89373.
 
-Nowhere in the `deque_dealloc` path is the pending exception saved/restored. (The deque in the reproducer has no weakrefs, so `FT_CLEAR_WEAKREFS` is a no-op; `deque_clear`'s `PyErr_Clear()` is the only error-indicator-touching code in the teardown — confirmed by the gdb breakpoint at L751 firing immediately before the fatal.)
+Nowhere in the `deque_dealloc` path is the pending exception saved/restored. (The deque in the reproducer has no weakrefs, so `FT_CLEAR_WEAKREFS` is a no-op; `deque_clear`'s `PyErr_Clear()` is the only error-indicator-touching code in the teardown — confirmed by the gdb breakpoint at L751 firing immediately before the fatal. The other potentially-clearing path, `PyObject_ClearWeakRefs`, is already protected: it brackets weakref callbacks with `PyErr_GetRaisedException`/`PyErr_SetRaisedException` — `Objects/weakrefobject.c:1053/1095`.)
+
+The `PyErr_Clear()` is **exception-type-agnostic**: it clears whatever `tstate->current_exception` holds, so *any* in-flight exception — not just `MemoryError` — is lost when a non-empty deque is freed while it is pending and `newblock()` fails. `MemoryError` is merely the common victim, because the same exhaustion that makes `newblock()` fail is usually what is propagating. The fatal message names the deallocated object's type (`collections.deque`), never the cleared exception's type.
+
+This fallback (preallocate an empty block; on failure `PyErr_Clear()` + drain via the slow `alternate_method`) was introduced in [bpo-25135](https://bugs.python.org/issue25135) (2015, Python 2.7/3.5/3.6); that discussion covered the re-entrancy and allocation concerns but never the exception-state hazard during deallocation. The `PyErr_Clear()` is legitimate for `deque_clear`'s *other* callers — `tp_clear` (GC), the `.clear()` method, re-`__init__` — where no caller exception is in flight; it is only wrong on the `deque_dealloc` path, which is why the fix belongs in `deque_dealloc` (save/restore around `deque_clear`) rather than in removing the `PyErr_Clear()`.
 
 ## Suggested fix
 
@@ -121,6 +125,10 @@ Found via OOM-injection fuzzing (`_testcapi.set_nomemory`), fusil `--oom-seq` mo
 **Distinct from OOM-0007 and OOM-0023.** Same `Deallocator of type 'X' cleared the current exception` symptom, but OOM-0007 is `context_tp_dealloc` (`Python/context.c`) and OOM-0023 is the generic `subtype_dealloc` (`Objects/typeobject.c`); this is `deque_clear`/`deque_dealloc` (`Modules/_collectionsmodule.c`). OOM-0023's `subtype_dealloc` fix does not cover it (the bare-deque path never touches `subtype_dealloc`).
 
 **Debug-only signature.** The `_Py_Dealloc` invariant is `#ifdef Py_DEBUG`, so it fatals on the `Py_DEBUG` builds (`ft_debug_asan`, `jit`) — identical message on both — and is compiled out on release (`ft_release`, `upstream`), where the minimal repro exits cleanly (the `MemoryError` is silently dropped). Recorded `n/a` for the release builds.
+
+**Reachable without `--oom-fuzz`.** The trigger is a genuine `newblock()` allocation failure, which occurs under any real memory pressure — not only `set_nomemory` injection. In particular fusil caps each child's address space (`RLIMIT_AS`) at its default `process_max_memory` (2 GB) on a *normal* run: a fuzzed program approaching the cap gets real `NULL` from `PyMem_Malloc`, and if a non-empty deque is torn down while an ordinary fuzzer-induced exception (`TypeError`, `ValueError`, `KeyboardInterrupt`, …) is propagating, the same fatal fires with that exception silently cleared. This is consistent with deque-dealloc clears-exc crashes observed in plain (non-OOM) fuzzing runs. On a real production debug build the same holds for any genuine OOM.
+
+**Prior art / precedent.** Not present in the CPython issue tracker as of 2026-06-23 (no report of a deque dealloc clearing the in-flight exception). The same bug *class* — an unconditional `PyErr_Clear()` or teardown swallowing a pending exception, fixed by save/restore — has been handled elsewhere: [python/cpython#131173](https://github.com/python/cpython/issues/131173) (`take_ownership` clears `MemoryError`), [#145966](https://github.com/python/cpython/issues/145966) (`_csv` `DIALECT_GETATTR` masks non-`AttributeError`), [bpo-33713](https://bugs.python.org/issue33713) (memoryview sets an exception in `tp_clear`).
 
 ## Versions
 
