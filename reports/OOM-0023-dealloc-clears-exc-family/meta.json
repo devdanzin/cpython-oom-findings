@@ -24,7 +24,8 @@
     "python-7/urllib_request-fatal_python_error-sigabrt",
     "python-7/xml_sax_saxutils-sigabrt-fatal_python_error",
     "python-7/concurrent_futures_process-sigabrt-fatal_python_error",
-    "magalu-03/inst-03/python-2/session-32 (urllib.request ProxyHandler, GCC box)"
+    "magalu-03/inst-03/python-2/session-32 (urllib.request ProxyHandler, GCC box)",
+    "fleet/inst-02/python-12 (profiling.sampling.__main__ _StoreTrueAction)"
   ],
   "matrix": {"ft_debug_asan": "fatal", "ft_release": "n/a", "jit": "fatal", "upstream": "n/a"},
   "repro_start": 276,

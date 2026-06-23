@@ -20,6 +20,7 @@ Stack (most recent call first):
 Fatal Python error: _Py_Dealloc: Deallocator of type 'UnknownHandler' cleared the current exception
 Fatal Python error: _Py_Dealloc: Deallocator of type 'ProxyHandler' cleared the current exception
 Fatal Python error: _Py_Dealloc: Deallocator of type 'LogRecord' cleared the current exception
+Fatal Python error: _Py_Dealloc: Deallocator of type '_StoreTrueAction' cleared the current exception
 
 --- gdb backtrace (bt 15), abort path ---
 #4  __GI_abort () at ./stdlib/abort.c:77
