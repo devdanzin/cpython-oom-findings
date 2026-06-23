@@ -196,6 +196,48 @@ def resolve_chain(crash_dir, label, cache):
     return [s for s in (fp.split(";") if fp else []) if FRAME.match(s)]
 
 
+# ---- bounded stdout reader ----
+# OOM-verbose / runaway sessions can emit tens of MB of stdout (per-iteration `start=N`
+# spew, or a long binary blob with no newlines). Reading the whole file makes the `.*?`
+# classification regexes above catastrophically backtrack -- a single 67 MB stdout timed a
+# whole batch out. The crash signature always lives at the HEAD (early asserts / import
+# errors) and the TAIL (the Fatal/ASan backtrace that ends the process), never buried in
+# the middle, so read a bounded head+tail. Safe for every signal the matcher uses, and
+# orders of magnitude faster. Override via INGEST_STDOUT_HEAD / INGEST_STDOUT_TAIL (bytes).
+STDOUT_HEAD = int(os.environ.get("INGEST_STDOUT_HEAD", 256 * 1024))
+STDOUT_TAIL = int(os.environ.get("INGEST_STDOUT_TAIL", 1024 * 1024))
+# Per-line cap: real signals (asserts, `Fatal Python error:`, ASan `#N ... file.c:line`)
+# are all short lines; a multi-MB binary blob with no newlines is a single giant "line"
+# that makes the `.*?` regexes backtrack catastrophically even after head+tail bounding.
+# Truncating each line to a few KB keeps every real signal and kills the blowup.
+STDOUT_LINE_CAP = int(os.environ.get("INGEST_STDOUT_LINE_CAP", 4096))
+
+def _cap_lines(text):
+    if STDOUT_LINE_CAP <= 0:
+        return text
+    return "\n".join(ln if len(ln) <= STDOUT_LINE_CAP else ln[:STDOUT_LINE_CAP]
+                     for ln in text.split("\n"))
+
+def read_stdout(path):
+    """Read a crash stdout, bounding huge files to head+tail and capping line length
+    (decoded, errors-replaced) so the classification regexes can't catastrophically
+    backtrack on OOM-verbose spew or embedded binary."""
+    with open(path, "rb") as fh:
+        fh.seek(0, os.SEEK_END)
+        size = fh.tell()
+        if size <= STDOUT_HEAD + STDOUT_TAIL:
+            fh.seek(0)
+            return _cap_lines(fh.read().decode("utf-8", "replace"))
+        fh.seek(0)
+        head = fh.read(STDOUT_HEAD)
+        fh.seek(size - STDOUT_TAIL)
+        tail = fh.read(STDOUT_TAIL)
+    elided = size - STDOUT_HEAD - STDOUT_TAIL
+    return _cap_lines(head.decode("utf-8", "replace")
+                      + f"\n...[{elided} bytes elided by ingest read_stdout]...\n"
+                      + tail.decode("utf-8", "replace"))
+
+
 # ---- main ----
 def main():
     snap = load_snapshot(SNAP)
@@ -216,8 +258,7 @@ def main():
     for d in dirs:
         label = f"{os.path.basename(os.path.dirname(d))}/{os.path.basename(d)}"
         try:
-            with open(os.path.join(d, "stdout"), errors="replace") as _fh:
-                text = _fh.read()
+            text = read_stdout(os.path.join(d, "stdout"))
         except OSError:
             continue
         asserts = all_asserts(text)
