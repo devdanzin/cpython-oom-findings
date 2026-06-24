@@ -1,0 +1,31 @@
+# Authoritative capture (debug-ft-nojit-asan = ft_debug_asan, commit 1b9fe5c, Clang 21).
+# Py_DEBUG-gated assertion abort (gh-89373-style detector). Reproduced from vehicle_source.py
+# (target: inspect). The defect is an over-decref/UAF of exc->traceback elsewhere; this
+# assertion is the detector.
+
+## Assertion + fatal
+python: Python/traceback.c:313: PyObject *_PyTraceBack_FromFrame(PyObject *, PyFrameObject *): Assertion `tb_next == NULL || PyTraceBack_Check(tb_next)' failed.
+Fatal Python error: Aborted
+
+## C stack (paths trimmed to the build root)
+    #13 _PyTraceBack_FromFrame    Python/traceback.c:313:5    <- assert(tb_next==NULL || PyTraceBack_Check(tb_next))
+    #14 PyTraceBack_Here          Python/traceback.c:326:23   <- tb = PyException_GetTraceback(exc); _PyTraceBack_FromFrame(tb, frame)
+    #15 _PyEval_EvalFrameDefault  Python/generated_cases.c.h:13833:21   <- exception propagating out of a frame
+    ... PyEval_EvalCode -> run_eval_code_obj -> pyrun_file   (raised during module exec under the OOM sweep)
+
+## Evidence / invariant
+# exc is a valid exception instance (PyTraceBack_Here's own `assert(PyExceptionInstance_Check(exc))` passes),
+# but tb_next == exc->traceback is neither NULL nor a PyTracebackObject -> PyTraceBack_Check (Py_IS_TYPE vs
+# PyTraceBack_Type) fails. __traceback__ cannot be set to a non-traceback from Python (descriptor type-checks),
+# so this is C-level corruption: the traceback was decref'd to zero while exc still referenced it (over-decref
+# under OOM), freed, and its storage reused for an object of another type.
+
+## To pin the producer (open)
+# gdb against the vehicle: break on the raising point, then `watch -l <exc>->traceback` and continue to catch
+# the decref that drops it to zero while still referenced. Likely a face of an eval-loop over-decref (cf. OOM-0005).
+
+## Build matrix (vehicle_source.py)
+# ft_debug_asan (debug-ft-nojit-asan, Py_DEBUG=1): ABORT, assert as above (rc 134).
+# jit           (debug-gil-jit-asan,  Py_DEBUG=1): ABORT expected (same Py_DEBUG assert; not separately captured).
+# ft_release / upstream (Py_DEBUG=0): assertion compiled out -> dangling tb_next linked into the new traceback
+#                                     and later traversed/freed (latent use-after-free). n/a for this signature.

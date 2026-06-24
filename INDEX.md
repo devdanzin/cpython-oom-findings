@@ -4,7 +4,7 @@ Crashes found by allocation-failure fuzzing (`_testcapi.set_nomemory`) of CPytho
 
 **Pick anything to work on** — open a CPython issue if one doesn't exist, comment with the issue/PR, and the Status column will be updated. Reports are deduped by crash signature; one row = one underlying bug (vehicles listed in the report).
 
-_39 unique bug(s). Generated 2026-06-23._
+_41 unique bug(s). Generated 2026-06-24._
 
 _Found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode (fusil originally by Victor Stinner). Reports drafted by Claude Code; reproducers machine-generated._
 
@@ -23,6 +23,7 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 | [OOM-0033](https://gist.github.com/devdanzin/249032e1746d63406a5f68d7dfdedb79) | Segfault / negative-refcount: over-decreffed `sys.path` entry in `PyType_IsSubtype` (`typeobject.c:2931`) | ft_debug_asan,ft_release,jit,upstream | report |
 | [OOM-0034](https://gist.github.com/devdanzin/9871a21facf4c9c6a415e220f9d10762) | Segfault: unchecked `PyUnicode_AsUTF8` NULL deref in `pegen.c:33` | ft_debug_asan,ft_release,jit,upstream | report |
 | [OOM-0037](reports/OOM-0037-subinterp-unraisable-structseq/report.md) | Segfault: NULL `UnraisableHookArgs` type-dict deref in `PyStructSequence_New`/`make_unraisable_hook_args` during sub-interpreter finalization under OOM (`structseq.c:30`) | ft_debug_asan,gil_debug_asan,jit,ft_release,upstream | draft |
+| [OOM-0040](reports/OOM-0040-extensions-cache-set-null-key/report.md) | SEGV: `_extensions_cache_set` hashes a NULL key under OOM (`hashtable_hash_str`, `import.c:1312`) | ft_debug_asan,ft_release,jit,upstream | draft |
 
 ## Assertion / abort
 
@@ -52,6 +53,7 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 | [OOM-0032](https://gist.github.com/devdanzin/f7e483080647c7b76fbda79bfeb07e9c) | Abort: pending-exception assert from `warn_explicit` normalization (`_warnings.c:799/806`) | ft_debug_asan,ft_release,jit,upstream | report |
 | [OOM-0035](https://gist.github.com/devdanzin/8c86ca358f3711740a692eaac730b527) | Abort / malformed str: invalid `maxchar` in `_PyUnicode_FromUCS4` (`unicodeobject.c:2228`) | ft_debug_asan,ft_release,jit,upstream | report |
 | [OOM-0036](reports/OOM-0036-list-append-oom-double-free/report.md) | Double-free / use-after-free: `list.append(x)` under OOM double-frees the item (`_CALL_LIST_APPEND` steals `arg`, then `ERROR_NO_POP`) | ft_debug_asan,ft_release,jit,upstream | [#151818](https://github.com/python/cpython/issues/151818) |
+| [OOM-0041](reports/OOM-0041-pytraceback-here-nontraceback-tbnext/report.md) | Abort: `PyTraceBack_Here` appends to a non-traceback `__traceback__` under OOM (`traceback.c:313`) | ft_debug_asan,jit | draft |
 
 ## Fatal Python error
 

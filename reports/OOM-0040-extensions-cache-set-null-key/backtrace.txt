@@ -1,0 +1,39 @@
+# Authoritative capture (debug-ft-nojit-asan = ft_debug_asan, commit 1b9fe5c, Clang 21).
+# SEGV (NULL-pointer READ), not a Py_DEBUG assert -- reproduces on release builds too
+# (ft_release + GIL release both SEGV). Reproduced from vehicle_source.py (target: pdb).
+
+## Fatal message + ASan SEGV
+Fatal Python error: Segmentation fault
+==ERROR: AddressSanitizer: SEGV on unknown address 0x03e9001ff735 (...)
+==The signal is caused by a READ memory access.
+
+## C stack (paths trimmed to the build root)
+    #7  hashtable_hash_str              Python/import.c:1312:31   <- Py_HashBuffer(key, strlen(key)); key == NULL
+    #8  _Py_hashtable_get_entry_generic Python/hashtable.c:142:27
+    #9  _Py_hashtable_set               Python/hashtable.c:225:13
+    #10 _extensions_cache_set           Python/import.c:1497:13   <- _Py_hashtable_set(EXTENSIONS.hashtable, key, newvalue)
+    #11 update_global_state_for_extension Python/import.c:1870:18
+    #12 import_run_extension            Python/import.c:2236:22
+    #13 _imp_create_dynamic_impl        Python/import.c:5529:11
+    #14 _imp_create_dynamic             Python/clinic/import.c.h:489:20
+    #15 cfunction_vectorcall_FASTCALL   Objects/methodobject.c:449
+    ... _PyEval_EvalFrameDefault -> (first import of a C extension during the target module's OOM sweep)
+
+## Why key == NULL (frame absent, already returned)
+# hashtable_key_from_2_strings() (import.c ~1280) does `key = PyMem_RawMalloc(size); if (key==NULL){PyErr_NoMemory(); return NULL;}`
+# _extensions_cache_find_unlocked() (import.c:1383) does `key = hashtable_key_from_2_strings(...); if (key==NULL) return NULL;`
+#   -> returns at import.c:1390-1392 BEFORE `*p_key = key` (import.c:1396), so the caller's key stays NULL.
+# _extensions_cache_set() (import.c:1426) `void *key = NULL;` ... entry = find_unlocked(path,name,&key);
+#   entry==NULL (read as "not cached") -> _Py_hashtable_set(..., key==NULL, ...) at import.c:1496-1497 -> SEGV.
+
+## Trigger condition
+# Needs a BOUNDED OOM window (fusil --oom-seq, window>0): the key PyMem_RawMalloc fails, then the later
+# alloc_extensions_cache_value() for `newvalue` SUCCEEDS, so control reaches _Py_hashtable_set. Under a
+# fail-forever sweep the newvalue alloc also fails -> `goto finally` before the bad set -> no crash.
+
+## Build matrix (vehicle_source.py)
+# ft_debug_asan  (debug-ft-nojit-asan):  SEGV in hashtable_hash_str (rc 134 via handle_abort).
+# ft_release     (release-ft-nojit-asan): SEGV (rc 134). Release-crashing -- NOT a debug-only assert.
+# upstream       (release-gil-nojit-asan): SEGV (rc 134). Build-agnostic (GIL release crashes too).
+# jit            (debug-gil-jit-asan):   this vehicle's timing lands on OOM-0022 (_Py_CheckSlotResult)
+#                                        first; import.c code is identical, so the defect is present.
