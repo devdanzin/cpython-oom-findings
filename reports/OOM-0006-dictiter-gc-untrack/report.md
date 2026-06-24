@@ -10,9 +10,35 @@ Creating a **dict item-iterator** (`iter(d.items())`, reversed items) while allo
 
 ## Reproducer
 
-Minimal, stdlib-only (shrinkray-reduced from the vehicle, then cleaned; deterministic,
-re-verified). Triggers an `iter(d.items())` inside `_strptime` under the `set_nomemory`
-sweep, hitting the `dictiter_new` OOM error path.
+**Direct minimal reproducer** (`repro_direct.py`, stdlib-only, no `_strptime`; deterministic,
+verified 8/8 on `ft_debug_asan` @`1b9fe5c`). Creates a dict **item**-iterator directly with
+`iter(d.items())` under the `set_nomemory` sweep, after draining the size-2 tuple freelist so
+`dictiter_new`'s `di_result` allocation (`_PyTuple_FromPairSteal(None, None)`) actually reaches
+the failing allocator instead of being served from the freelist:
+
+```python
+import faulthandler
+faulthandler.enable()
+from _testcapi import set_nomemory
+
+d = {}
+keep = [(x, x) for x in range(500)]   # drain the size-2 tuple freelist (keep refs alive!)
+for start in range(16):
+    set_nomemory(start)
+    try:
+        iter(d.items())
+    except BaseException:
+        pass
+print("done, no crash")
+```
+
+`keep` **must** stay referenced for the whole sweep — if it is freed, its 2-tuples flood the
+freelist and `di_result` is served from it again (no crash). Use the `iter()` builtin (not the
+`GET_ITER` bytecode) to keep the `di == NULL` rung clean and avoid the neighbouring
+`PyStackRef_XCLOSE` negative-refcount bug.
+
+**Realistic stdlib path** (`repro.py`) — the same defect via a natural call, no freelist trick
+needed (`_strptime` internally iterates a dict's items; this is the form published in the gist):
 
 ```python
 import faulthandler, _strptime
@@ -137,22 +163,30 @@ the GC-untracking dealloc:
   `asyncio_runners-assertion` (representative, via `weakref.py:240` `dict.items()`),
   `re-assertion-sigabrt` (via `re/_compiler.py:775`), and
   `zipapp-segmentation_fault` (segv on release+ASan upstream; same assert on debug).
-- **Minimization: partial.** A stdlib-only `iter(d.items())` sweep does not reproduce:
-  in the warm steady state neither `PyObject_GC_New(di)` (pymalloc) nor `tuple_alloc(2)`
-  (size-2 tuple freelist) consults the hooked allocator, so the failure window is never
-  entered. Forcing fresh-pool/freelist churn (fresh dicts per round) trips a *different*
-  OOM bug first (`_Py_NegativeRefcount` assert in `PyStackRef_XCLOSE`,
-  `pycore_stackref.h:726`, from `GET_ITER` error handling). The vehicle remains the
-  reliable reproducer. The C defect itself is build-agnostic and unambiguous.
+- **Minimization: complete.** A *direct* stdlib-only `iter(d.items())` reproducer now exists
+  (`repro_direct.py`); the earlier "partial" status assumed a warm steady state where neither
+  `PyObject_GC_New(di)` nor the size-2 `tuple_alloc` consults the hooked allocator. Two facts
+  beat it: (1) the ASan triage builds are `--without-pymalloc`, so the iterator's
+  `PyObject_GC_New` is already counted by `set_nomemory` and is no longer an obstacle; (2) the
+  only remaining bypass is the **size-2 tuple freelist** that serves `di_result` — holding a
+  list of live 2-tuples drains it so `_PyTuple_FromPairSteal` mallocs and fails on cue. Using
+  the `iter()` builtin (not `GET_ITER`) keeps the `di == NULL` rung clean and avoids the
+  neighbouring `PyStackRef_XCLOSE` negative-refcount bug (`pycore_stackref.h:726`) that the
+  earlier fresh-dict-per-round attempt tripped. The `range(16)` sweep absorbs the per-build
+  offset (`start≈2` on the no-pymalloc ASan builds). The realistic `_strptime` path (`repro.py`)
+  is kept as a natural-code reproducer; the C defect is build-agnostic and unambiguous.
 - Same family as OOM-0001/OOM-0002: an error path acting on a partially-constructed
   object whose intermediate allocation/sequencing was left unchecked under OOM.
 
 ## Versions
 
-- main (3.16.0a0, commit 15d7406). Reproduces (via the vehicle): `ft_debug_asan` ->
-  abort (assert), `jit` -> abort (assert), `upstream` (release+ASan) -> segv in
-  `_Py_Dealloc`. `ft_release` -> no crash in this run (NDEBUG; assert stripped, segv did
-  not manifest on that path). Long-standing code; 3.13-3.15 likely affected (unverified).
+- main (3.16.0a0). Original find on commit `15d7406`; the direct minimal repro re-verified on
+  `1b9fe5c`. Reproduces (via `repro_direct.py`): `ft_debug_asan` / `gil_debug_asan` / `jit` ->
+  abort (assert `dictobject.c:5532`); `release-gil-nojit` (upstream) -> segv (rc 139) in
+  `_Py_Dealloc` via `PyObject_GetIter`; `release-gil-nojit-asan` -> ASan SEGV at
+  `_PyObject_GC_UNTRACK` (identical frames). `ft_release` -> no crash in this run (NDEBUG; assert
+  stripped, segv did not manifest on that path). Long-standing code; 3.13-3.15 likely affected
+  (unverified).
 
 ---
 
