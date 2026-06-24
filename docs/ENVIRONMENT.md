@@ -23,8 +23,9 @@ your exact builds; the **purpose** is what matters.
 
 > **Current layout: a matrix at `~/projects/python_build_matrix/builds/`** with one dir per
 > build named `{debug,release}-{ft,gil}-{nojit,jit}[-asan]`. Map to the purposes below:
-> triage/workhorse = `debug-ft-nojit-asan`; UAF-pinning = `debug-gil-nojit-asan` (GIL ⇒
-> pymalloc, accepts `PYTHONMALLOC=malloc`); FT release = `release-ft-nojit`; JIT =
+> triage/workhorse = `debug-ft-nojit-asan`; UAF-pinning = `debug-gil-nojit-asan` (a **GIL**
+> build accepts `PYTHONMALLOC=malloc` — free-threaded builds reject it; note ASan forces
+> `WITH_PYMALLOC=0`, so neither is actually a pymalloc build); FT release = `release-ft-nojit`; JIT =
 > `debug-gil-jit-asan`; plain release = `release-gil-nojit`. The scripts resolve these via
 > `scripts/env.sh` (override `MATRIX_ROOT`/`OOM_PY`/`MATRIX_BUILDS`). The dir names below are
 > the legacy per-build layout.
@@ -32,7 +33,7 @@ your exact builds; the **purpose** is what matters.
 | build dir | flags (approx.) | purpose |
 |---|---|---|
 | `~/projects/3.16_ft_debug_asan_cpython` | `--with-pydebug --disable-gil --with-address-sanitizer` | **the triage build** — free-threaded, debug asserts, ASan, `_testcapi.set_nomemory`, gdb, source tree. Most reports' `confirmed_commit` (`15d7406`). |
-| `~/projects/3.16_debug_asan_pymalloc` | `--with-pydebug --with-address-sanitizer` (+ pymalloc, GIL) | **UAF producer-pinning build** — accepts `PYTHONMALLOC=malloc`, so frees route through ASan and you get a `heap-use-after-free` report *with the free stack*. (The `ft_debug_asan` build is `--without-pymalloc`, which rejects `PYTHONMALLOC=malloc`.) |
+| `~/projects/3.16_debug_asan_pymalloc` | `--with-pydebug --with-address-sanitizer` (GIL; **not** a pymalloc build despite the dir name — ASan forces `WITH_PYMALLOC=0`) | **UAF producer-pinning build** — as a **GIL** build it accepts `PYTHONMALLOC=malloc`, so frees route through ASan and you get a `heap-use-after-free` report *with the free stack*. (The free-threaded `ft_debug_asan` build pins mimalloc and rejects `PYTHONMALLOC=malloc` — the gating is GIL-vs-free-threaded, not pymalloc.) |
 | `~/projects/3.16_ft_release_cpython` | `--disable-gil` (release) | free-threaded release — checks whether a debug-only assert is latent on release. |
 | `~/projects/jit_cpython` | `--enable-experimental-jit --with-pydebug --with-address-sanitizer` (GIL) | JIT build — Tier-2/JIT path; debug asserts. |
 | `~/projects/upstream_cpython` | release (GIL) | plain release — where release **segfaults** show up (rc 139, no ASan). |

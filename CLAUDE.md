@@ -22,7 +22,7 @@ first.**
 
 ## Current state (keep this updated)
 
-- **36 unique bugs cataloged (OOM-0001..0036), all committed**, each with a minimal
+- **39 unique bugs cataloged (OOM-0001..0039), all committed**, each with a minimal
   deterministic reproducer. `catalog/SUMMARY.md` is the snapshot table.
 - **Published:** OOM-0001..0035 are public gists, tracked from the umbrella issue
   **python/cpython#151763**. **OOM-0036** is filed as its own issue,
@@ -30,6 +30,10 @@ first.**
   `_CALL_LIST_APPEND` bytecode; found by fusil's new `--oom-seq` mode; reproduces *without*
   `_testcapi` via a real `RLIMIT_AS` cap. Watch the issues for fixes → set
   `status: fixed:<commit>` on the relevant `meta.json`.
+- **Newest finds (`drafted`, not yet gisted):** OOM-0037 (subinterpreter unraisable-hook
+  structseq) and OOM-0039 (`deque.clear()` `PyErr_Clear` clobbers an in-flight exception)
+  are filing candidates; **OOM-0038** (FT-subinterpreter indexpool/tlbc reserve) is on
+  `filing_hold` per upstream guidance (#143232). See `reports/NEXT_STEPS.md`.
 - ~11 reproduce on a **release** build (highest-value); the rest are debug-only asserts
   (compiled out under `NDEBUG`, where the same defect is latent UB / UAF).
 - SEGV + deferred-singleton phases done; fleet triages keep deduping to the catalog. Host-
@@ -149,7 +153,7 @@ useful).
 | logical build | legacy path / matrix dir | notes |
 |---|---|---|
 | `ft_debug_asan` | `~/projects/3.16_ft_debug_asan_cpython/python` | free-threaded, debug, ASan + asserts — **the triage build** (gdb, refcount/assert checks, `_testcapi.set_nomemory`, source tree) |
-| `debug_asan_pymalloc` | `~/projects/3.16_debug_asan_pymalloc/python` | GIL, debug, **pymalloc**+ASan — accepts `PYTHONMALLOC=malloc`, so frees route through ASan → **UAF reports with the free stack** (how OOM-0036's producer was pinned; `ft_debug_asan` is `--without-pymalloc` and rejects it) |
+| `debug_asan_pymalloc` | `~/projects/3.16_debug_asan_pymalloc/python` | GIL, debug, ASan. **Dir name is a misnomer** — ASan forces `WITH_PYMALLOC=0`, so it is *not* a pymalloc build. Being a **GIL** build it accepts `PYTHONMALLOC=malloc`, so frees route through ASan → **UAF reports with the free stack** (how OOM-0036's producer was pinned). The free-threaded `ft_debug_asan` build pins mimalloc (required by the FT GC) and rejects `PYTHONMALLOC=malloc` — so the gating is GIL-vs-free-threaded, not pymalloc. |
 | `ft_release` | `~/projects/3.16_ft_release_cpython/python` | free-threaded, release |
 | `jit` | `~/projects/jit_cpython/python` | GIL build, JIT (also ASan here) |
 | `upstream` | `~/projects/upstream_cpython/python` | GIL build, plain release |
