@@ -35,7 +35,7 @@ Both faces are the same underlying bug: a DirEntry's string is freed prematurely
 and a later Py_XDECREF(entry->name/path) (during teardown of the entries list / its holding
 frame) hits the dangling pointer.
 
-=== AUTHORITATIVE: ASan heap-use-after-free (--with-pymalloc build + PYTHONMALLOC=malloc) ===
+=== AUTHORITATIVE: ASan heap-use-after-free (GIL + ASan build, PYTHONMALLOC=malloc) ===
 
   ==ERROR: AddressSanitizer: heap-use-after-free ... in Py_DECREF
   SUMMARY: AddressSanitizer: heap-use-after-free Include/refcount.h:397 in Py_DECREF

@@ -97,7 +97,7 @@ has another live owner (the `E.a` slot above; `entry->path` in the scandir vehic
 owner is left dangling and the next decref of it is a use-after-free, detected as
 `_Py_NegativeRefcount` (debug/JIT) or a SIGSEGV (release).
 
-Confirmed from four independent angles: the ASan free-stack (a `--with-pymalloc` build under
+Confirmed from four independent angles: the ASan free-stack (a **GIL** + ASan build run under
 `PYTHONMALLOC=malloc`) shows the item freed by `PyStackRef_XCLOSE` ← `exception_unwind`; the
 `listobject.c` source shows the decref-on-resize-failure; the disassembly shows
 `out.append(e.a)` specializes to `CALL_LIST_APPEND`; and a control (load `e.a` but don't

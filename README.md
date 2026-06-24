@@ -14,7 +14,7 @@ root-caused set of reports.
 
 ## The findings
 
-- **36 unique bugs** (`reports/OOM-0001` … `OOM-0036`), each with a deterministic,
+- **39 unique bugs** (`reports/OOM-0001` … `OOM-0039`), each with a deterministic,
   standard-library-only reproducer.
 - **[INDEX.md](INDEX.md)** is the table — one row per bug (title, which builds crash,
   status), linking each to its report/gist.
@@ -24,6 +24,10 @@ root-caused set of reports.
   `_CALL_LIST_APPEND` bytecode), found by fusil's stateful-sequence mode and reproducible
   *without any test API* via a real `RLIMIT_AS` cap — is filed as
   **[python/cpython#151818](https://github.com/python/cpython/issues/151818)**.
+- **OOM-0037 … OOM-0039** are the newest finds (drafted): OOM-0037 (subinterpreter
+  unraisable-hook structseq) and OOM-0039 (`deque.clear()` clobbers an in-flight exception)
+  are filing candidates; OOM-0038 is a free-threaded-subinterpreter crash held back per
+  upstream guidance.
 
 ## What's in each report
 

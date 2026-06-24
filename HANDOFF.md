@@ -24,8 +24,10 @@ discloses it (gist + an umbrella issue, or a standalone issue for the strong one
 
 ## Where things stand (milestones)
 
-- **36 unique bugs cataloged** (`OOM-0001..0036`), each with a minimal deterministic repro.
-- **35 published as public gists + an umbrella issue, python/cpython#151763.**
+- **39 unique bugs cataloged** (`OOM-0001..0039`), each with a minimal deterministic repro.
+- **35 published as public gists + an umbrella issue, python/cpython#151763.** OOM-0037 and
+  OOM-0039 are drafted filing candidates; OOM-0038 is an FT-subinterpreter crash on
+  filing-hold (see below).
 - **OOM-0036** is the headline: found by the new `--oom-seq` fuzzing mode, root-caused to a
   real **`list.append()` double-free under `MemoryError`** in the `_CALL_LIST_APPEND`
   bytecode (steals `arg`, then `ERROR_NO_POP()` leaves it for `exception_unwind` to
@@ -91,10 +93,13 @@ discloses it (gist + an umbrella issue, or a standalone issue for the strong one
   the swap artifact masking the already-cataloged **OOM-0018**) and several batch candidates. **Fix
   landed in fusil** (install the hook once, disarm via the failure window, never swap under live
   threads). Single-threaded OOM crashes are unaffected.
-- **UAF producer-pinning:** on a `--with-pymalloc` **+ ASan** build, run with
-  `PYTHONMALLOC=malloc` → frees go through ASan → a `heap-use-after-free` report with the
-  **freed-by** (the bug) and **allocated-by** (the victim) stacks. This is what cracked
-  OOM-0036. (A `--without-pymalloc` ASan build rejects `PYTHONMALLOC=malloc`.)
+- **UAF producer-pinning:** on a **GIL** + ASan build, run with `PYTHONMALLOC=malloc` →
+  frees go through ASan → a `heap-use-after-free` report with the **freed-by** (the bug) and
+  **allocated-by** (the victim) stacks. This is what cracked OOM-0036. The gating is
+  **GIL-vs-free-threaded, not pymalloc**: ASan forces `WITH_PYMALLOC=0` on *both* the GIL and
+  free-threaded ASan builds, but a free-threaded build pins mimalloc (required by the FT GC)
+  and so rejects `PYTHONMALLOC=malloc`, whereas a GIL build accepts it. (The
+  `3.16_debug_asan_pymalloc` dir is misnamed — it's GIL+debug+ASan, not a pymalloc build.)
 - **Abort backtraces without gdb:** `ASAN_OPTIONS=...:handle_abort=1:abort_on_error=1` makes
   ASan print a symbolized C backtrace on an abort (e.g. negative-refcount). fusil sets this
   on its children (PR #89).

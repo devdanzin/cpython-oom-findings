@@ -116,7 +116,7 @@ consumed, the stale `arg` stackref is now dangling. The eval loop's `exception_u
 pops the frame's value stack and `PyStackRef_XCLOSE`s every slot, closing the stale `arg`
 slot — a **second** decref of the item.
 
-(Confirmed with ASan on a `--with-pymalloc` build: the item is freed by `PyStackRef_XCLOSE`
+(Confirmed with ASan on a GIL build run with `PYTHONMALLOC=malloc`: the item is freed by `PyStackRef_XCLOSE`
 ← `_PyEval_EvalFrameDefault` (the `exception_unwind` handler); both the item's allocation and
 the second, use-after-free decref are visible in the report.)
 
