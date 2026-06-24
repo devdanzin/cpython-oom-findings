@@ -1,0 +1,28 @@
+{
+  "id": "OOM-0040",
+  "slug": "extensions-cache-set-null-key",
+  "title": "SEGV: `_extensions_cache_set` hashes a NULL key under OOM (`hashtable_hash_str`, `import.c:1312`)",
+  "description": "First-time import of a C extension under a bounded OOM window: the extensions-cache key alloc (`hashtable_key_from_2_strings` -> `PyMem_RawMalloc`) fails and returns NULL; `_extensions_cache_find_unlocked` returns NULL ('not found') BEFORE writing `*p_key`, so `_extensions_cache_set`'s `key` stays NULL and it passes NULL to `_Py_hashtable_set`; the key-hash callback `hashtable_hash_str` does `strlen(NULL)` -> SEGV. A real NULL deref (crashes release builds), not a Py_DEBUG assert. Needs a windowed OOM (key alloc fails, later `newvalue` alloc succeeds) -- fusil --oom-seq; fail-forever bails before the bad set.",
+  "crash_kind": "segv",
+  "sites": ["Python/import.c hashtable_hash_str:1312", "Python/import.c _extensions_cache_set:1496-1497", "Python/import.c _extensions_cache_find_unlocked:1389-1396"],
+  "signature": {
+    "site_frame": "hashtable_hash_str@Python/import.c:1312",
+    "top_frames": [
+      "_extensions_cache_set@Python/import.c:1497"
+    ]
+  },
+  "vehicles": [
+    "local-fleet inst-01/python-14 pdb-segmentation_fault (also cmd/code/site)",
+    "oca-fleet python-11 (site/pdb/code)",
+    "magalu03 python (code/site)"
+  ],
+  "matrix": {"ft_debug_asan": "segv", "ft_release": "segv", "jit": "segv", "upstream": "segv"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-24",
+  "confirmed_commit": "1b9fe5c",
+  "notes": "RELEASE-CRASHING (high value): a genuine NULL-pointer deref, not a Py_DEBUG assert. SEGV confirmed from vehicle_source.py on ft_debug_asan, ft_release (free-threaded) AND release-gil-nojit-asan (GIL release) -> build-agnostic. On the jit build THIS vehicle's allocation timing lands on OOM-0022 (_Py_CheckSlotResult) first, but the import.c code is identical so the defect is present there too; matrix jit=segv reflects the build-agnostic defect (observed crash on the other 3 configs incl. a GIL release). ROOT: hashtable_key_from_2_strings (import.c ~1280) returns NULL on PyMem_RawMalloc failure + sets MemoryError; _extensions_cache_find_unlocked (import.c:1383) `if (key==NULL) return NULL;` at 1390-1392 returns BEFORE `*p_key=key` (1396); _extensions_cache_set (import.c:1426, `void *key=NULL`) then reads entry==NULL as 'not cached' and calls _Py_hashtable_set(EXTENSIONS.hashtable, key==NULL, newvalue) (1496-1497) -> hashtable_hash_str(NULL)->strlen(NULL) SEGV (import.c:1312). FIX: after find_unlocked, `if (key==NULL) goto finally;` (MemoryError already set), or give find_unlocked an error signal distinct from 'not found'. Needs windowed OOM (--oom-seq window>0): key alloc fails then alloc_extensions_cache_value succeeds; fail-forever bails at goto finally. DISTINCT from OOM-0022 (shares only the generic _imp_create_dynamic_impl extension-import caller; OOM-0022 is a CheckSlotResult fatal, this is a NULL-key SEGV in the cache set) -- signature keyed on hashtable_hash_str/_extensions_cache_set, not _imp_create_dynamic_impl, so no conflation. Recurring across all 3 fleet machines + modules pdb/cmd/code/site (vehicles that trigger a first-time C-extension import during the OOM sweep). Minimization: PARTIAL -- a generic import-C-exts-under-windowed-OOM repro reaches the path but competes with other first-import OOM bugs (GC validate_gc_objects negrefcount; co->_co_unique_id assert) that fire first; no clean isolated stdlib trigger pinned. vehicle_source.py is the reliable reproducer. Found via fusil --oom-seq OOM-injection fuzzing 2026-06-24."
+}

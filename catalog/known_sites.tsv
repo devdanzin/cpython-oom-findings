@@ -363,3 +363,16 @@ OOM-0039	fatal	line	Modules/_collectionsmodule.c:1556
 OOM-0039	fatal	line	Modules/_collectionsmodule.c:749
 OOM-0039	fatal	line	Modules/_collectionsmodule.c:751
 OOM-0039	fatal	msg	_Py_Dealloc: Deallocator of type 'collections.deque' cleared
+OOM-0040	segv	func	Python/import.c:_extensions_cache_find_unlocked
+OOM-0040	segv	func	Python/import.c:_extensions_cache_set
+OOM-0040	segv	func	Python/import.c:hashtable_hash_str
+OOM-0040	segv	line	Python/import.c:1312
+OOM-0040	segv	line	Python/import.c:1389
+OOM-0040	segv	line	Python/import.c:1496
+OOM-0040	segv	line	Python/import.c:1497
+OOM-0041	abort	assert	Python/traceback.c:tb_next == NULL || PyTraceBack_Check(tb_next)
+OOM-0041	abort	func	Python/traceback.c:PyTraceBack_Here
+OOM-0041	abort	func	Python/traceback.c:_PyTraceBack_FromFrame
+OOM-0041	abort	line	Python/traceback.c:313
+OOM-0041	abort	line	Python/traceback.c:317
+OOM-0041	abort	line	Python/traceback.c:326
