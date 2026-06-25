@@ -332,9 +332,9 @@ OOM-0039	fatal	msg	_Py_Dealloc: Deallocator of type 'collections.deque' cleared
 OOM-0040	segv	func	Python/import.c:_extensions_cache_find_unlocked
 OOM-0040	segv	func	Python/import.c:_extensions_cache_set
 OOM-0040	segv	func	Python/import.c:hashtable_hash_str
+OOM-0040	segv	func	Python/import.c:import_run_extension
 OOM-0040	segv	line	Python/import.c:1312
 OOM-0040	segv	line	Python/import.c:1389
 OOM-0040	segv	line	Python/import.c:1496
 OOM-0040	segv	line	Python/import.c:1497
-OOM-0042	abort	func	Python/import.c:import_run_extension
-OOM-0042	abort	line	Python/import.c:2301
+OOM-0040	segv	line	Python/import.c:2301

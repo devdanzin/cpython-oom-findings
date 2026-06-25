@@ -22,10 +22,12 @@ first.**
 
 ## Current state (keep this updated)
 
-- **38 unique bugs cataloged**, all committed, each with a reproducer. IDs run
-  **OOM-0001..0042**; **four ids retired** — OOM-0005, OOM-0029, OOM-0033, OOM-0041 were all
-  `rr`-proven to be **OOM-0036** at different detector sites and folded into it (see the
-  over-decref rule under *Dedup-key curation*). `catalog/SUMMARY.md` is the snapshot table.
+- **36 unique bugs cataloged**, all committed, each with a reproducer. IDs run
+  **OOM-0001..0042**; **six ids retired** — OOM-0005, OOM-0029, OOM-0033, OOM-0041 were all
+  `rr`-proven to be **OOM-0036** at different detector sites and folded into it; OOM-0011 →
+  **OOM-0008** (same `f_back`-swallow); OOM-0042 → **OOM-0040** (same extensions-cache key-alloc
+  failure, GET-path face) — see the over-decref / stale-exception rules under *Dedup-key
+  curation*. `catalog/SUMMARY.md` is the snapshot table.
 - **Published:** OOM-0001..0035 are public gists, tracked from the umbrella issue
   **python/cpython#151763**. **OOM-0036** is filed as its own issue,
   **python/cpython#151818** — a `list.append()` double-free under `MemoryError` in the
@@ -34,11 +36,11 @@ first.**
   rr keeps revealing other entries to be faces of it. Watch the issues for fixes → set
   `status: fixed:<commit>` on the relevant `meta.json`.
 - **Newest finds (`drafted`, not yet gisted):** OOM-0037 (subinterpreter unraisable-hook
-  structseq), OOM-0039 (`deque.clear()` `PyErr_Clear` clobbers an in-flight exception),
-  **OOM-0040** (`_extensions_cache_set` NULL-key `strlen` segv) and **OOM-0042**
-  (`import_run_extension` stale `MemoryError` assert) are filing candidates; **OOM-0038**
-  (FT-subinterpreter indexpool/tlbc reserve) is on `filing_hold` per upstream guidance
-  (#143232). See `reports/NEXT_STEPS.md`.
+  structseq), OOM-0039 (`deque.clear()` `PyErr_Clear` clobbers an in-flight exception), and
+  **OOM-0040** (extensions-cache key-alloc failure under OOM: NULL-key `strlen` segv on the SET
+  path + stale-`MemoryError` `import_run_extension:2301` abort on the GET path — the latter was
+  the `rr`-folded OOM-0042) are filing candidates; **OOM-0038** (FT-subinterpreter indexpool/tlbc
+  reserve) is on `filing_hold` per upstream guidance (#143232). See `reports/NEXT_STEPS.md`.
 - ~12 reproduce on a **release** build (highest-value); the rest are debug-only asserts
   (compiled out under `NDEBUG`, where the same defect is latent UB / UAF).
 - **`rr` works on this box** (after the Zen SpecLockMap workaround) and is now the primary

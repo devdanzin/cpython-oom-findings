@@ -1,6 +1,6 @@
 # Fusil OOM-injection findings on CPython — summary
 
-Snapshot: 2026-06-25 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0042) · **37 distinct bugs** (OOM-0001…0042; OOM-0005, OOM-0029, OOM-0033, OOM-0041 folded into OOM-0036; OOM-0011 folded into OOM-0008).
+Snapshot: 2026-06-25 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0042) · **36 distinct bugs** (OOM-0001…0042; OOM-0005, OOM-0029, OOM-0033, OOM-0041 folded into OOM-0036; OOM-0011 folded into OOM-0008; OOM-0042 folded into OOM-0040).
 
 **Method.** [Fusil](https://github.com/devdanzin/fusil) fuzzes CPython with `_testcapi.set_nomemory`
 to fail allocations and drive the rarely-tested allocation-failure error paths. Crashes are triaged
@@ -56,22 +56,22 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0037 | unraisable reporter derefs NULL `UnraisableHookArgs` type-dict finalizing a failed sub-interpreter | segv | release | yes | `errors.c:make_unraisable_hook_args` / `structseq.c:get_type_attr_as_size` |
 | OOM-0038 | sub-interpreter TLBC-index reserve calls `PyErr_NoMemory()` with no active thread state (FT-only) | fatal | release | yes | `index_pool.c:_PyIndexPool_AllocIndex` |
 | OOM-0039 | `deque_clear`'s `newblock`-failure `PyErr_Clear()` clobbers an in-flight exception when run from `deque_dealloc` under OOM | fatal | ASan/jit | yes | `_collectionsmodule.c:deque_clear` / `deque_dealloc` |
-| OOM-0040 | first-import of a C extension under a windowed OOM passes a NULL cache key to `_Py_hashtable_set` → `strlen(NULL)` | segv | release | no | `import.c:hashtable_hash_str` / `_extensions_cache_set` |
-| OOM-0042 | single-phase C-extension init (`readline`) under OOM leaves a stale `MemoryError`, tripping the post-init `assert(!PyErr_Occurred())` | abort | ASan/jit | no | `import.c:import_run_extension` |
+| OOM-0040 | extensions-cache key-alloc failure under OOM mishandled — NULL cache key → `strlen(NULL)` segv (SET path), and a stale `MemoryError` → post-init `assert(!PyErr_Occurred())` abort (GET path, was OOM-0042) | segv | release | no | `import.c:hashtable_hash_str` / `_extensions_cache_set` / `import_run_extension` |
 
-*(OOM-0041 was retired — folded into OOM-0036; see "Retired IDs" below.)*
+*(OOM-0041 was retired — folded into OOM-0036; OOM-0042 was retired — folded into OOM-0040; see "Retired IDs" below.)*
 
-**Totals:** 37 bugs — 8 segv, 22 abort, 7 fatal · 12 reproduce on a **release** build · **35 of 37 have a
-minimal reproducer** (OOM-0040/0042 are vehicle-confirmed, minimization partial). Five retired ids: OOM-0005,
-OOM-0029, OOM-0033, OOM-0041 → OOM-0036 (rr-proven faces of the `_CALL_LIST_APPEND` double-free) and OOM-0011 →
-OOM-0008 (rr-proven `f_back`-swallow detector face).
+**Totals:** 36 bugs — 8 segv, 21 abort, 7 fatal · 12 reproduce on a **release** build · **35 of 36 have a
+minimal reproducer** (OOM-0040 is vehicle-confirmed, minimization partial). Six retired ids: OOM-0005,
+OOM-0029, OOM-0033, OOM-0041 → OOM-0036 (rr-proven faces of the `_CALL_LIST_APPEND` double-free), OOM-0011 →
+OOM-0008 (rr-proven `f_back`-swallow detector face), and OOM-0042 → OOM-0040 (rr-proven GET-path face of the
+extensions-cache key-alloc failure).
 
 **Upstream status** (refreshed 2026-06-24 from the umbrella [#151763](https://github.com/python/cpython/issues/151763) table + timeline; per-report truth is each `meta.json` `upstream_issue`/`status`). **14 findings filed upstream**, 4 already **fixed**:
 - **Fixed:** OOM-0002 (#151773), OOM-0003 (#152034 + 3.13/3.14/3.15 backports), OOM-0028 (#152058), OOM-0031 (#151842).
 - **Filed, open:** OOM-0001 (#151673), OOM-0006 (#152107, dict item-iter — our sub-issue, repro_direct.py contributed + acked), OOM-0007 (#152083), OOM-0013 (#151968 PR), OOM-0014 (#151902 PR), OOM-0016 (#152130), OOM-0019 (#151931 PR), OOM-0024 (#151815), OOM-0034 (#151798 PR), OOM-0036 (#151818).
 - **Filing-hold** (FT sub-interpreter category, [#143232](https://github.com/python/cpython/issues/143232)): OOM-0020, OOM-0038.
-- **New, drafted (not yet filed):** OOM-0037, OOM-0040, OOM-0042.
-- **Retired ids** (folded into another bug, not reused): OOM-0005, OOM-0029, OOM-0033, OOM-0041 → OOM-0036 (rr-proven faces of the `_CALL_LIST_APPEND` list.append double-free, via different stdlib paths); OOM-0011 → OOM-0008 (rr-proven: same `PyFrame_GetBack` f_back-swallow `MemoryError`, caught at the LOAD_ATTR-specialize assert instead of the type-cache assert).
+- **New, drafted (not yet filed):** OOM-0037, OOM-0040 (now also covers the former OOM-0042 abort face).
+- **Retired ids** (folded into another bug, not reused): OOM-0005, OOM-0029, OOM-0033, OOM-0041 → OOM-0036 (rr-proven faces of the `_CALL_LIST_APPEND` list.append double-free, via different stdlib paths); OOM-0011 → OOM-0008 (rr-proven: same `PyFrame_GetBack` f_back-swallow `MemoryError`, caught at the LOAD_ATTR-specialize assert instead of the type-cache assert); OOM-0042 → OOM-0040 (rr-proven: same extensions-cache key-alloc failure in `_extensions_cache_find_unlocked`, caught at the GET-path post-init `import_run_extension:2301` assert instead of the SET-path NULL-key segv).
 - The rest remain gisted/novel. Two upstream issues without a gist link — [#151905](https://github.com/python/cpython/issues/151905) (`_PyType_LookupStackRefAndVersion` assert, closed) and [#152125](https://github.com/python/cpython/issues/152125) (`clear_freelist` freelist corruption, open) — are unmapped to our catalog (may be others' or need triage).
 
 **Suggested starting points** — crashes a release build **and** has a minimal reproducer (highest
@@ -96,9 +96,14 @@ fires. Three observed clusters:
   can only be disambiguated by `rr`. Known producers: **OOM-0008** = `PyFrame_GetBack` swallows a
   `MemoryError` reading `frame.f_back` — caught at the type-cache assert (`typeobject.c:6343`) *and*
   the LOAD_ATTR-specialize assert (`specialize.c:364`); the retired OOM-0011 was that second face
-  (`rr`-folded). Still distinct (producers not yet rr-checked): OOM-0025 (`specialize.c:378`
-  `unspecialize`, LOAD_GLOBAL keys-version), OOM-0022 (`_Py_CheckSlotResult`, extension reload),
-  OOM-0042 (`import_run_extension:2301`, single-phase import).
+  (`rr`-folded). A second producer is the **extensions-cache key-alloc failure** (OOM-0040):
+  `_extensions_cache_find_unlocked`'s key `PyMem_RawMalloc` fails under OOM and is returned as a
+  plain NULL; on the GET path it leaves a stale `MemoryError` that trips `import_run_extension:2301`
+  — the retired OOM-0042 was that abort face (`rr`-folded into OOM-0040, whose SET path segfaults on
+  the same NULL key). Still distinct (producer rr-checked, kept separate): OOM-0025 (`specialize.c:378`
+  `unspecialize`; producer = `PyImport_AddModuleRef`→`PyUnicode_New` in `sys._baserepl` setup, the
+  LOAD_GLOBAL specializer merely inherits it). Not yet rr-checked: OOM-0022 (`_Py_CheckSlotResult`,
+  extension reload).
 - **dealloc-clears / over-decref `MemoryError`** — OOM-0007 & OOM-0023 (a `tp_dealloc` clears an
   in-flight `MemoryError`: dedicated `context_tp_dealloc` vs generic `subtype_dealloc`), OOM-0029
   (an over-decref leaves a refcount-0 `MemoryError`, caught at tuple teardown), and
