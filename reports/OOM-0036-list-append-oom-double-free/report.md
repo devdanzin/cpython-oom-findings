@@ -208,5 +208,13 @@ slice-assign cleanup → negref) and `PyType_IsSubtype` (import reading a freed 
 segv**). The `sys.path` snippet is a clean pure-stdlib **release** reproducer of this bug,
 preserved in the OOM-0033 tombstone directory.
 
+**OOM-0029 folded in (2026-06-25).** A fourth path: `_pyrepl.utils.disp_str(<mixed control/high
+string>)`, which builds a list of display segments via `list.append`. `rr` showed the over-decref'd
+victim is a `str` segment (the report had wrongly said `MemoryError`), `list.append`-ed with the
+grow failing under OOM — the same `_CALL_LIST_APPEND` double-free, detected later by a
+`tuple_dealloc`/`subtype_dealloc`/`list_dealloc` cascade over the segment tuples. So **four**
+separately-cataloged entries (OOM-0005/0029/0033/0041) were all this one bug, reached via different
+stdlib paths that internally `list.append` a second-referenced object under OOM.
+
 Strong, self-contained upstream candidate (tiny pure-Python repro, release-crashing,
 one-spot fix in `_CALL_LIST_APPEND`).

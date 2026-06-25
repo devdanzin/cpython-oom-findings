@@ -260,12 +260,6 @@ OOM-0028	segv	line	Modules/clinic/posixmodule.c.h:2701
 OOM-0028	segv	line	Modules/posixmodule.c:6149
 OOM-0028	segv	line	Objects/unicodeobject.c:5681
 OOM-0028	segv	line	Python/ceval.c:841
-OOM-0029	abort	func	Objects/listobject.c:list_dealloc
-OOM-0029	abort	func	Objects/tupleobject.c:tuple_dealloc
-OOM-0029	abort	func	Objects/typeobject.c:subtype_dealloc
-OOM-0029	abort	line	Objects/listobject.c:567
-OOM-0029	abort	line	Objects/tupleobject.c:277
-OOM-0029	abort	line	Objects/typeobject.c:2876
 OOM-0030	abort	assert	Include/cpython/unicodeobject.h:data != NULL
 OOM-0030	abort	func	Include/cpython/unicodeobject.h:_PyUnicode_NONCOMPACT_DATA
 OOM-0030	abort	func	Objects/typeobject.c:subtype_dealloc

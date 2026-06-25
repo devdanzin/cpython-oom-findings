@@ -1,28 +1,11 @@
 {
   "id": "OOM-0029",
   "slug": "neg-refcount-memoryerror-oom",
-  "title": "Abort: negative refcount on a `MemoryError` (`tuple_dealloc`, `tupleobject.c:277`)",
-  "description": "Under OOM a MemoryError is decref'd one time too many; the negative refcount is detected later by _Py_NegativeRefcount (Objects/object.c:275) when the object is freed again during an unrelated dealloc cascade (list_dealloc -> subtype_dealloc -> tuple_dealloc), aborting on debug builds. The dealloc cascade is the incidental detection site, not the defect.",
-  "crash_kind": "abort",
-  "sites": ["Objects/object.c _Py_NegativeRefcount:275", "Objects/tupleobject.c tuple_dealloc:277", "Objects/typeobject.c subtype_dealloc:2876", "Objects/listobject.c list_dealloc:567"],
-  "signature": {
-    "site_frame": "tuple_dealloc@Objects/tupleobject.c:277",
-    "top_frames": [
-      "_Py_NegativeRefcount@Objects/object.c:275",
-      "tuple_dealloc@Objects/tupleobject.c:277",
-      "subtype_dealloc@Objects/typeobject.c:2876",
-      "_Py_Dealloc@Objects/object.c:3319",
-      "list_dealloc@Objects/listobject.c:567"
-    ]
-  },
-  "vehicles": ["_pyrepl_utils-sigabrt-assertion-oomNEW"],
-  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort", "upstream": "n/a"},
-  "repro_start": null,
-  "upstream_reported": false,
-  "upstream_issue": null,
-  "gist_url": "https://gist.github.com/devdanzin/10e0fdaf3d89dbe394d94fbf765c70a1",
-  "status": "gisted",
+  "title": "[FOLDED → OOM-0036] Abort: negative refcount on a freed `str` (`tuple_dealloc`, `tupleobject.c:277`)",
+  "status": "folded",
+  "folded_into": "OOM-0036",
   "found_date": "2026-06-19",
-  "confirmed_commit": "15d7406",
-  "notes": "Corrupted object is a MemoryError (from the fatal's 'object type name'). Root cause = an unbalanced Py_DECREF of a MemoryError on an OOM error path (reachable via _pyrepl.utils fuzzing: gen_colors_from_token_stream/iter_display_chars/_ascii_control_repr/...); the _Py_NegativeRefcount detector fires at an incidental later decref (tuple item freed in a list->subtype->tuple teardown), so the dealloc-cascade chain is NOT the defect site and may vary across vehicles. Distinct from OOM-0005 (frame locals, PyStackRef_XCLOSE) and OOM-0019 (pegen parser, Py_XDECREF) -- same negative-refcount family, different subsystem; may share a root (unbalanced decref under OOM). Debug-only abort (Py_DEBUG-gated detector; silent UAF risk on release). Reproduces deterministically on ft_debug_asan/jit (same cascade every run). Minimization DONE (2026-06-19): 8-line stdlib repro `_pyrepl.utils.disp_str(\"\\x004\\x8A\\xD5\\x03\")` under the set_nomemory sweep range(150), 30/30 GIL=1. shrinkray oracle pinned to the tuple_dealloc@tupleobject.c:277 cascade via ASan handle_abort=1 (symbolized C backtrace at crash time, no gdb -- the cascade is byte-identical 10/10). The arg is load-bearing (mix of NUL/control + high bytes; every simpler arg incl. dropping the NUL or the high byte = 0/20). Over-decref LINE still unisolated (root cause partial). Flagged oomNEW by fusil in-loop dedup; host ran a slightly stale fusil. Found 2026-06-19 from a fresh host download."
+  "confirmed_commit": "1b9fe5c",
+  "gist_url": "https://gist.github.com/devdanzin/10e0fdaf3d89dbe394d94fbf765c70a1",
+  "notes": "RETIRED 2026-06-25 — folded into OOM-0036. rr reverse-execution of the repro (`_pyrepl.utils.disp_str(mixed-control/high str)` under the set_nomemory sweep) traced the over-decref'd victim: it is a `str` (a display segment), NOT a MemoryError as this report originally claimed. disp_str builds a list of display segments via list.append; the victim str is appended (self had ob_size=4), the grow fails under OOM (Py_DECREF(newitem==victim)@listobject.c:531 <- `_PyList_AppendTakeRefListResize` <- `_CALL_LIST_APPEND` gen 3981), and the leftover stolen stackref is closed again by exception_unwind (gen 13857) -> double-free = OOM-0036 (python/cpython#151818). The negref is then detected later when a tuple/list dealloc cascade (list_dealloc:567 -> subtype_dealloc:2876 -> tuple_dealloc:277, the segment tuples) Py_XDECREFs the already-freed str. So tuple_dealloc/list_dealloc/subtype_dealloc are only DETECTOR sites. The 'load-bearing mixed-control/high arg' just produces enough list.append segments to land a resize-failure in the sweep window; a single char makes too few segments. Fourth OOM-0036 face found via rr (after OOM-0005/0041/0033) -- same _CALL_LIST_APPEND root, different stdlib path. Gen scripts skip status==folded (keys dropped). DEDUP: OOM-0029's unique keys (tuple_dealloc:277, listobject.c:567) drop; the generic dealloc-cascade frames it shared (subtype_dealloc, list_dealloc, typeobject.c:2876) remain under their real owners (OOM-0023 subtype_dealloc+msg, OOM-0004 list_dealloc+clear_freelist, OOM-0030 subtype_dealloc+unicode_is_singleton) -- a tuple_dealloc negref now resolves ambiguous-known or oomNEW -> rr-triage (almost always OOM-0036). Gist 10e0fdaf should be marked superseded (flagged to maintainer). id NOT reused."
 }

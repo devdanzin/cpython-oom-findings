@@ -4,7 +4,7 @@ Crashes found by allocation-failure fuzzing (`_testcapi.set_nomemory`) of CPytho
 
 **Pick anything to work on** — open a CPython issue if one doesn't exist, comment with the issue/PR, and the Status column will be updated. Reports are deduped by crash signature; one row = one underlying bug (vehicles listed in the report).
 
-_39 unique bug(s). Generated 2026-06-25._
+_38 unique bug(s). Generated 2026-06-25._
 
 _Found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode (fusil originally by Victor Stinner). Reports drafted by Claude Code; reproducers machine-generated._
 
@@ -46,7 +46,6 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 | [OOM-0025](https://gist.github.com/devdanzin/3aaffc18b68ca2ae5fffa72aa6cdb2ea) | Abort: `assert(!PyErr_Occurred())` in `unspecialize` (`specialize.c:378`) | ft_debug_asan,jit | report |
 | [OOM-0026](https://gist.github.com/devdanzin/bf6f784d4bcd21acd471ea45b6f23c70) | Abort: err-code vs `PyErr` desync in `handle_channel_error` (`_interpchannelsmodule.c:398` / `:443`) | ft_debug_asan,jit | report |
 | [OOM-0027](https://gist.github.com/devdanzin/d5c602c29ac3881290269b444d77db3c) | Abort: `assert(PyStackRef_BoolCheck(cond))` in `POP_JUMP_IF_FALSE` (`generated_cases.c.h:11120`) | ft_debug_asan,jit | report |
-| [OOM-0029](https://gist.github.com/devdanzin/10e0fdaf3d89dbe394d94fbf765c70a1) | Abort: negative refcount on a `MemoryError` (`tuple_dealloc`, `tupleobject.c:277`) | ft_debug_asan,jit | report |
 | [OOM-0030](https://gist.github.com/devdanzin/fbfb9d6cd5eeb518e4f9eeab44be3893) | Abort: `Py_DECREF` of NULL-data unicode in `unicode_subtype_new` (`unicodeobject.c:13986`) | ft_debug_asan,jit | report |
 | [OOM-0032](https://gist.github.com/devdanzin/f7e483080647c7b76fbda79bfeb07e9c) | Abort: pending-exception assert from `warn_explicit` normalization (`_warnings.c:799/806`) | ft_debug_asan,ft_release,jit,upstream | report |
 | [OOM-0035](https://gist.github.com/devdanzin/8c86ca358f3711740a692eaac730b527) | Abort / malformed str: invalid `maxchar` in `_PyUnicode_FromUCS4` (`unicodeobject.c:2228`) | ft_debug_asan,ft_release,jit,upstream | report |
