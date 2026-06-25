@@ -79,13 +79,44 @@ Re-running the vehicle on the current build shows the `traceback.c:313` assert w
   corrupted **tuple freelist** entry and reads its type (`PyType_HasFeature`) off a garbage
   pointer — the OOM-0004 freelist-corruption family.
 
-So OOM-0041 is best understood as one **detector face of the eval-loop over-decref / freelist-
-corruption family under OOM** (the same cluster as OOM-0004 / OOM-0005), surfacing at the
-traceback invariant when the freed/over-decref'd object is (or aliases) the in-flight
-exception's `traceback`. The producer — the OOM error path that drops the extra reference — is
-the same unpinned root shared with OOM-0005; it was **not** isolated here. (`rr` reverse-
-execution from the abort to the freeing decref is the clean way to pin it, but is currently
-blocked on this Zen host by the SpecLockMap erratum — it needs a root MSR change.)
+### Producer PINNED via `rr` reverse-execution (`1b9fe5c`, 2026-06-24)
+
+With the Zen SpecLockMap workaround applied, `rr record` captured the `pycore_stackref.h:726`
+negref face deterministically, and `rr replay` + a reverse watchpoint walked from the abort back
+to the freeing decref. The result identifies the producer unambiguously:
+
+- The over-decref'd object (`op`) is an **`inspect.Parameter`** instance (`tp_name == "Parameter"`).
+- Reverse-continuing a hardware watchpoint on `op->ob_type` lands on the **free** that poisoned
+  it (`__memset` `0xdd` ← `_PyMem_DebugRawFree` ← `subtype_dealloc(self=op)` ← `_Py_Dealloc` ←
+  `Py_DECREF` at `refcount.h:359`), called from:
+
+  ```
+  #7 Py_DECREF                          Include/refcount.h:359
+  #8 _PyList_AppendTakeRefListResize    Objects/listobject.c:531      <- the appended item is freed here
+  #9 _PyEval_EvalFrameDefault           Python/generated_cases.c.h:3981  (_CALL_LIST_APPEND)
+  ```
+
+That is **OOM-0036** — the `list.append(x)` double-free under `MemoryError`: `_CALL_LIST_APPEND`
+steals the item into `_PyList_AppendTakeRefListResize`, which (correctly, per take-ref
+semantics) `Py_DECREF`s it when the resize fails under OOM — **but the operand stack still holds
+a `_PyStackRef` to that now-freed item**, and when the frame unwinds, `exception_unwind`'s
+`PyStackRef_XCLOSE` (`generated_cases.c.h:13857`) closes that stale stackref → the second
+free → negative refcount. (OOM-0036 is cataloged keyed on its discovery vehicle's *victim*
+dealloc, `DirEntry_dealloc`; its root is exactly this `_CALL_LIST_APPEND` steal / `ERROR_NO_POP`
+double-free. Filed as python/cpython#151818.)
+
+**Conclusion.** OOM-0041 is a **downstream detector face of OOM-0036**, not an independent bug:
+the `_CALL_LIST_APPEND` double-free frees the appended item, its storage is reused, and a stale
+reference to it later trips whichever invariant reads it first — the `pycore_stackref.h:726`
+negref (the reproducible face here, producer rr-pinned to OOM-0036), the
+`_PyTuple_FromStackRefStealOnSuccess` freelist SEGV on the GIL build, or, at capture time, this
+`traceback.c:313` assert (when the reused storage is/aliases the in-flight exception's
+`traceback`). The traceback face itself was not re-recorded under `rr`, but it is the same
+vehicle's same double-free; the `traceback.c:313` detector keeps its own dedup key here, and the
+entry is a **candidate to fold into OOM-0036** as a documented face. This supersedes the earlier
+"unpinned root shared with OOM-0005" framing: OOM-0005 (`_PyFrame_ClearLocals@frame.c:101`, victim
+a `MemoryError`) is a *different* producer that shares only the stackref-`XCLOSE` detector
+machinery; OOM-0041's actual producer is OOM-0036.
 
 ## Backtrace
 
@@ -119,17 +150,16 @@ Found via OOM-injection fuzzing (`_testcapi.set_nomemory`), fusil `--oom-seq` mo
 
 **Debug-only signature; latent UB on release.** The assertion is `Py_DEBUG`-gated (abort on `ft_debug_asan` + `jit`); on release builds (`ft_release`, `upstream`) it is compiled out and the dangling `tb_next` is linked into the new traceback and later traversed/freed — a latent use-after-free, recorded `n/a` for the release builds.
 
-**Minimization: open; classification refined (2026-06-24).** Vehicle-confirmed; a plain
-raise-under-OOM sweep does not reproduce. The build-pinned diagnostic above **confirms** the
-report's earlier hypothesis: this is a detector face of the eval-loop over-decref / freelist-
-corruption family (cluster with OOM-0004 / OOM-0005), not an independent producer bug — the
-same vehicle now surfaces OOM-0005's `pycore_stackref.h:726` (27/27 FT) and an OOM-0004-family
-tuple-freelist SEGV (8/8 GIL), with the freed object confirmed (`ob_type == 0xdd`). The
-producer (the over-decref under OOM) is the shared, still-unpinned root. Pinning it needs `rr`
-reverse-execution from the abort to the freeing decref (blocked here by the Zen SpecLockMap
-erratum) or a watchpoint approach; a gdb watchpoint on `exc->traceback` is impractical because
-the failing allocation/victim varies run-to-run. Kept as a distinct catalog entry so the
-`traceback.c:313` detector keeps a dedup key, cross-linked to the cluster.
+**Minimization: open; producer PINNED to OOM-0036 (2026-06-24).** Vehicle-confirmed; a plain
+raise-under-OOM sweep does not reproduce. `rr` reverse-execution (see "Producer PINNED" above)
+identified the over-decref producer as **OOM-0036** — the `_CALL_LIST_APPEND` /
+`_PyList_AppendTakeRefListResize` `list.append` double-free under `MemoryError` (the appended
+item, here an `inspect.Parameter`, is freed by the append's resize-failure cleanup while a stale
+operand-stack `_PyStackRef` still points at it). OOM-0041 is therefore a **downstream detector
+face of OOM-0036** (filed python/cpython#151818), surfacing at the traceback invariant when the
+double-freed item's reused storage is/aliases the in-flight exception's `traceback`. Kept as a
+distinct entry so the `traceback.c:313` detector retains a dedup key, but it is a candidate to
+fold into OOM-0036 as a documented face.
 
 ## Versions
 
