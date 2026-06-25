@@ -4,7 +4,7 @@ Crashes found by allocation-failure fuzzing (`_testcapi.set_nomemory`) of CPytho
 
 **Pick anything to work on** — open a CPython issue if one doesn't exist, comment with the issue/PR, and the Status column will be updated. Reports are deduped by crash signature; one row = one underlying bug (vehicles listed in the report).
 
-_38 unique bug(s). Generated 2026-06-25._
+_37 unique bug(s). Generated 2026-06-25._
 
 _Found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode (fusil originally by Victor Stinner). Reports drafted by Claude Code; reproducers machine-generated._
 
@@ -34,7 +34,6 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 | [OOM-0008](https://gist.github.com/devdanzin/3c6690d0561acc62752a953e12b20197) | Abort: `assert(!PyErr_Occurred())` in `_PyType_LookupStackRefAndVersion` (`typeobject.c:6343`) | ft_debug_asan,jit | report |
 | [OOM-0009](https://gist.github.com/devdanzin/34b633230f6d2301ba17dec195ffe4b7) | Abort: stale `release1` flag trips an ownership assert in `replace` (`unicodeobject.c:10783`) | ft_debug_asan,jit | report |
 | [OOM-0010](https://gist.github.com/devdanzin/d3c1d06e95c006a320dbbfffcc210d52) | Abort: `assert(_PyErr_Occurred(tstate))` in `_PyEval_EvalFrameDefault` (`generated_cases.c.h:13817`) | ft_debug_asan | report |
-| [OOM-0011](https://gist.github.com/devdanzin/892b61619c1b3c8c2018331b3f1f4983) | Abort: `assert(!PyErr_Occurred())` in `specialize` (`specialize.c:364`) | ft_debug_asan,jit | report |
 | [OOM-0012](https://gist.github.com/devdanzin/610c147c8e2d42a576bab3c1c2713391) | Abort/Segfault: stale instrumentation in `get_tools_for_instruction` (`instrumentation.c:1106`) | ft_debug_asan,ft_release,jit,upstream | report |
 | [OOM-0013](https://gist.github.com/devdanzin/1736971107bea3aa04ce19db21c90845) | Abort: builtin breaks result/error contract in `_Py_BuiltinCallFastWithKeywords_StackRef` (`ceval.c:843`) | ft_debug_asan,jit | [#151968](https://github.com/python/cpython/issues/151968) |
 | [OOM-0014](https://gist.github.com/devdanzin/ceb4b16662d22b3dcb1b56cd8481c9e7) | Abort/Segfault: unchecked NULL in `channelsmod__channel_id` (`_interpchannelsmodule.c:3487`) | ft_debug_asan,ft_release,jit,upstream | [#151902](https://github.com/python/cpython/issues/151902) |

@@ -111,6 +111,20 @@ Found by OOM-injection fuzzing (`set_nomemory`). The C defect is **build-agnosti
 
 The 16 fuzzer vehicles all abort at the identical `typeobject.c:6343` assertion but via diverse stdlib stack-walkers that read `frame.f_back`: `gettext._as_int2` (warning stacklevel walk), `logging.findCaller`, `asyncio.format_helpers.extract_stack` / `traceback.walk_stack`, `argparse`, `optparse`, and `concurrent.futures`. Each merely walks frames (for a warning or traceback) while a `MemoryError` is injected, so any subsequent `LOAD_ATTR` trips the assert. The same swallow-on-OOM pattern likely affects other lazy frame getters (`f_globals`/`f_locals` raise cleanly here, but `f_back` does not).
 
+**Second detector face — OOM-0011 folded in (2026-06-25).** The retired OOM-0011 (the LOAD_ATTR
+specializer `assert(!PyErr_Occurred())` at `specialize.c:364`) was the *same* f_back-swallow bug
+caught at a different `!PyErr_Occurred()` checkpoint. `rr` on OOM-0011's `optparse.ngettext` repro
+(watch `tstate->current_exception`, reverse to where it was set) traced the stale `MemoryError`
+to the identical producer: `_PyErr_NoMemory` ← `_PyObject_GC_NewVar`(PyFrameObject) ←
+`PyFrame_GetBack` ← `frame_back_get_impl` (reading `f_back`). OOM-0011's run-to-run "drift"
+between `specialize.c:364` and `typeobject.c:6343` was always this one bug hitting two
+checkpoints. **Dedup limitation:** stale-exception crashes are backtrace-undisambiguable — the
+producer (`f_back`) has already returned and is not on the crash stack — so the only usable key
+is the *detector* assert site. This entry now owns both (`typeobject.c:6343` and
+`specialize.c:364`); both are producer-agnostic (almost always this f_back-swallow, since every
+vehicle is a frame-walker), so an unrelated producer reaching them could mislabel here — confirm
+with `rr` if a case looks off.
+
 ## Versions
 
 - main (3.16.0a0, commit 15d7406); aborts on the free-threaded debug+ASan build and the JIT debug build. Release/upstream builds: assertion compiled out (`n/a`); the bug instead leaks a `MemoryError` into an unrelated `SystemError`.

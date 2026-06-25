@@ -1,6 +1,6 @@
 # Fusil OOM-injection findings on CPython — summary
 
-Snapshot: 2026-06-25 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0042) · **38 distinct bugs** (OOM-0001…0042; OOM-0005, OOM-0029, OOM-0033 and OOM-0041 folded into OOM-0036).
+Snapshot: 2026-06-25 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0042) · **37 distinct bugs** (OOM-0001…0042; OOM-0005, OOM-0029, OOM-0033, OOM-0041 folded into OOM-0036; OOM-0011 folded into OOM-0008).
 
 **Method.** [Fusil](https://github.com/devdanzin/fusil) fuzzes CPython with `_testcapi.set_nomemory`
 to fail allocations and drive the rarely-tested allocation-failure error paths. Crashes are triaged
@@ -30,7 +30,6 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0008 | type lookup leaves stale/missing exception; NDEBUG→latent NULL | abort | ASan/jit | yes | `typeobject.c:_PyType_LookupStackRefAndVersion` |
 | OOM-0009 | `str.replace` ASCII→UCS widen desync under OOM | abort | ASan/jit | yes | `unicodeobject.c:replace` |
 | OOM-0010 | eval frame: `profiling.sampling…dump_stack` under OOM | abort | debug | yes | `generated_cases.c.h:_PyEval_EvalFrameDefault` |
-| OOM-0011 | `LOAD_ATTR` specialization under OOM | abort | ASan/jit | yes | `specialize.c:specialize` |
 | OOM-0012 | instrumentation: `_co_monitoring` left NULL → release segv | abort | release | yes | `instrumentation.c:get_tools_for_instruction` |
 | OOM-0013 | `CALL` specialization (builtin fast-with-kwargs) under OOM | abort | ASan/jit | yes | `ceval.c:_Py_BuiltinCallFastWithKeywords_StackRef` |
 | OOM-0014 | `_interpchannels` channel-id alloc under OOM | abort | release | yes | `_interpchannelsmodule.c:channelsmod__channel_id` |
@@ -62,16 +61,17 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 
 *(OOM-0041 was retired — folded into OOM-0036; see "Retired IDs" below.)*
 
-**Totals:** 38 bugs — 8 segv, 23 abort, 7 fatal · 12 reproduce on a **release** build · **36 of 38 have a
-minimal reproducer** (OOM-0040/0042 are vehicle-confirmed, minimization partial). Four retired ids: OOM-0005,
-OOM-0029, OOM-0033 and OOM-0041 (all folded into OOM-0036 — rr-proven faces of the `_CALL_LIST_APPEND` double-free).
+**Totals:** 37 bugs — 8 segv, 22 abort, 7 fatal · 12 reproduce on a **release** build · **35 of 37 have a
+minimal reproducer** (OOM-0040/0042 are vehicle-confirmed, minimization partial). Five retired ids: OOM-0005,
+OOM-0029, OOM-0033, OOM-0041 → OOM-0036 (rr-proven faces of the `_CALL_LIST_APPEND` double-free) and OOM-0011 →
+OOM-0008 (rr-proven `f_back`-swallow detector face).
 
 **Upstream status** (refreshed 2026-06-24 from the umbrella [#151763](https://github.com/python/cpython/issues/151763) table + timeline; per-report truth is each `meta.json` `upstream_issue`/`status`). **14 findings filed upstream**, 4 already **fixed**:
 - **Fixed:** OOM-0002 (#151773), OOM-0003 (#152034 + 3.13/3.14/3.15 backports), OOM-0028 (#152058), OOM-0031 (#151842).
 - **Filed, open:** OOM-0001 (#151673), OOM-0006 (#152107, dict item-iter — our sub-issue, repro_direct.py contributed + acked), OOM-0007 (#152083), OOM-0013 (#151968 PR), OOM-0014 (#151902 PR), OOM-0016 (#152130), OOM-0019 (#151931 PR), OOM-0024 (#151815), OOM-0034 (#151798 PR), OOM-0036 (#151818).
 - **Filing-hold** (FT sub-interpreter category, [#143232](https://github.com/python/cpython/issues/143232)): OOM-0020, OOM-0038.
 - **New, drafted (not yet filed):** OOM-0037, OOM-0040, OOM-0042.
-- **Retired ids** (folded into another bug, not reused): OOM-0005, OOM-0029, OOM-0033 and OOM-0041 → OOM-0036 (all rr-proven downstream faces of the `_CALL_LIST_APPEND` list.append double-free, reached via different stdlib paths that internally `list.append` a second-referenced object under OOM).
+- **Retired ids** (folded into another bug, not reused): OOM-0005, OOM-0029, OOM-0033, OOM-0041 → OOM-0036 (rr-proven faces of the `_CALL_LIST_APPEND` list.append double-free, via different stdlib paths); OOM-0011 → OOM-0008 (rr-proven: same `PyFrame_GetBack` f_back-swallow `MemoryError`, caught at the LOAD_ATTR-specialize assert instead of the type-cache assert).
 - The rest remain gisted/novel. Two upstream issues without a gist link — [#151905](https://github.com/python/cpython/issues/151905) (`_PyType_LookupStackRefAndVersion` assert, closed) and [#152125](https://github.com/python/cpython/issues/152125) (`clear_freelist` freelist corruption, open) — are unmapped to our catalog (may be others' or need triage).
 
 **Suggested starting points** — crashes a release build **and** has a minimal reproducer (highest
@@ -90,12 +90,15 @@ fires. Three observed clusters:
   OOM-0019 (`pegen_errors.c` error-line double-free), OOM-0021 (`call.c:43` `_Py_CheckFunctionResult`
   NULL). `compile()` / `ast.parse` / direct-builtin paths each trip a different one, so `ast.parse`
   is the natural readable entry for OOM-0019 rather than an incidental vehicle.
-- **stale-pending-`MemoryError`** — eval-loop: OOM-0008 (`typeobject.c:6343` type cache), OOM-0011
-  (`specialize.c:364`), OOM-0025 (`specialize.c:378` `unspecialize`); C-extension import:
-  OOM-0022 (`_Py_CheckSlotResult`, extension reload, `import.c:2011`), OOM-0042
-  (`import_run_extension:2301`, single-phase import). All are `!PyErr_Occurred()` /
-  "succeeded-with-exception" checks that fire after a stale `MemoryError`; the OOM-0011 repro's
-  run-to-run drift between its own site and OOM-0008's is the same effect *within* one repro.
+- **stale-pending-`MemoryError`** — these are `!PyErr_Occurred()` / "succeeded-with-exception"
+  **detector** asserts; the bug is the *producer* (an alloc that fails under OOM and leaves the
+  exception unpropagated), which is **not on the crash stack** (it has already returned), so these
+  can only be disambiguated by `rr`. Known producers: **OOM-0008** = `PyFrame_GetBack` swallows a
+  `MemoryError` reading `frame.f_back` — caught at the type-cache assert (`typeobject.c:6343`) *and*
+  the LOAD_ATTR-specialize assert (`specialize.c:364`); the retired OOM-0011 was that second face
+  (`rr`-folded). Still distinct (producers not yet rr-checked): OOM-0025 (`specialize.c:378`
+  `unspecialize`, LOAD_GLOBAL keys-version), OOM-0022 (`_Py_CheckSlotResult`, extension reload),
+  OOM-0042 (`import_run_extension:2301`, single-phase import).
 - **dealloc-clears / over-decref `MemoryError`** — OOM-0007 & OOM-0023 (a `tp_dealloc` clears an
   in-flight `MemoryError`: dedicated `context_tp_dealloc` vs generic `subtype_dealloc`), OOM-0029
   (an over-decref leaves a refcount-0 `MemoryError`, caught at tuple teardown), and
