@@ -181,9 +181,10 @@ discovery face), a `pycore_stackref.h:726` negative-refcount (the `exception_unw
 `PyStackRef_XCLOSE`), a `tuple_alloc` freelist SEGV, or the `traceback.c:313` assert (reported
 separately as **OOM-0041**, a downstream detector face of this bug). These are one bug
 (`_CALL_LIST_APPEND` steal / `ERROR_NO_POP`), many victims/detectors. rr also showed that
-OOM-0005's `repro.py` (`xml.dom.minidom.parse(0)` under the `set_nomemory` sweep) reproduces
-**this** bug — another simple stdlib trigger (its refcount history runs through
-`_PyList_AppendTakeRefListResize@listobject.c:531`).
+`xml.dom.minidom.parse(0)` under the `set_nomemory` sweep reproduces **this** bug — another
+simple stdlib trigger (its refcount history runs through
+`_PyList_AppendTakeRefListResize@listobject.c:531`). It was previously mis-filed as OOM-0005's
+minimal repro and has been moved here as **`repro_xml_minidom.py`**.
 
 Strong, self-contained upstream candidate (tiny pure-Python repro, release-crashing,
 one-spot fix in `_CALL_LIST_APPEND`).
