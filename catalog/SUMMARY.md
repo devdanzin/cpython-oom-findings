@@ -91,19 +91,27 @@ fires. Three observed clusters:
   NULL). `compile()` / `ast.parse` / direct-builtin paths each trip a different one, so `ast.parse`
   is the natural readable entry for OOM-0019 rather than an incidental vehicle.
 - **stale-pending-`MemoryError`** — these are `!PyErr_Occurred()` / "succeeded-with-exception"
-  **detector** asserts; the bug is the *producer* (an alloc that fails under OOM and leaves the
-  exception unpropagated), which is **not on the crash stack** (it has already returned), so these
-  can only be disambiguated by `rr`. Known producers: **OOM-0008** = `PyFrame_GetBack` swallows a
+  **detector** asserts; the real defect is elsewhere and **not on the crash stack** (it has already
+  returned), so these can only be disambiguated by `rr`. Two sub-classes: a *swallowed* producer
+  (an alloc fails and the `MemoryError` is left unpropagated — OOM-0008, OOM-0040), or a
+  *cleanly-raised* `MemoryError` whose **consumer** then runs an object slot / de-opt without
+  clearing it (OOM-0022, OOM-0025). Known producers: **OOM-0008** = `PyFrame_GetBack` swallows a
   `MemoryError` reading `frame.f_back` — caught at the type-cache assert (`typeobject.c:6343`) *and*
   the LOAD_ATTR-specialize assert (`specialize.c:364`); the retired OOM-0011 was that second face
   (`rr`-folded). A second producer is the **extensions-cache key-alloc failure** (OOM-0040):
   `_extensions_cache_find_unlocked`'s key `PyMem_RawMalloc` fails under OOM and is returned as a
   plain NULL; on the GET path it leaves a stale `MemoryError` that trips `import_run_extension:2301`
   — the retired OOM-0042 was that abort face (`rr`-folded into OOM-0040, whose SET path segfaults on
-  the same NULL key). Still distinct (producer rr-checked, kept separate): OOM-0025 (`specialize.c:378`
-  `unspecialize`; producer = `PyImport_AddModuleRef`→`PyUnicode_New` in `sys._baserepl` setup, the
-  LOAD_GLOBAL specializer merely inherits it). Not yet rr-checked: OOM-0022 (`_Py_CheckSlotResult`,
-  extension reload).
+  the same NULL key). Still distinct (producer rr-checked, kept separate): **OOM-0025**
+  (`specialize.c:378` `unspecialize`; producer = `PyImport_AddModuleRef`→`PyUnicode_New` in
+  `sys._baserepl` setup, the LOAD_GLOBAL specializer merely inherits it — a *cleanly-raised*
+  `MemoryError`, the bug is the de-opt path's intolerance of it) and **OOM-0022**
+  (`_Py_CheckSlotResult`, single-phase extension reload; producer rr-confirmed =
+  `_modules_by_index_set`'s `PyList_Append`→`list_resize` (`import.c:590`/`import.c:2010`), again
+  a *cleanly-raised* `MemoryError`, the bug is the L2011 cleanup `PyMapping_DelItem` running the
+  dict `__delitem__` slot without saving/clearing it). Both are the inverse of OOM-0008's
+  swallow: the producer is well-behaved, the *consumer* (specializer de-opt / cleanup delete)
+  fails to tolerate a pending exception.
 - **dealloc-clears / over-decref `MemoryError`** — OOM-0007 & OOM-0023 (a `tp_dealloc` clears an
   in-flight `MemoryError`: dedicated `context_tp_dealloc` vs generic `subtype_dealloc`), OOM-0029
   (an over-decref leaves a refcount-0 `MemoryError`, caught at tuple teardown), and

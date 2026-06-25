@@ -125,6 +125,29 @@ Two fuzzer vehicles reach the identical fatal: `python-7/pdb-fatal_python_error`
 `readline` extension under OOM and abort at `Objects/call.c:80` with
 "Slot __delitem__ of type dict succeeded with an exception set".
 
+**Producer rr-confirmed (2026-06-25).** `rr` reverse-execution (break at the detector
+`Objects/call.c:88`, watch `tstate->current_exception`, `reverse-continue` to its set) pins
+the pending `MemoryError` to exactly the path this report describes:
+
+```
+_PyErr_SetRaisedException        Python/errors.c:27        (tstate->current_exception = MemoryError)
+  <- _PyErr_NoMemory             Objects/exceptions.c:4160
+  <- list_resize                 Objects/listobject.c:149  (ob_item realloc fails under OOM)
+  <- _PyList_AppendTakeRefListResize / PyList_Append       Objects/listobject.c:530/544 (appending Py_None)
+  <- _modules_by_index_set       Python/import.c:590
+  <- reload_singlephase_extension Python/import.c:2010      (the call right before the L2011 cleanup delete)
+```
+
+So the failing allocation is the `PyList_Append(modules_by_index, Py_None)` resize (not the
+`PyList_New`), and the `MemoryError` it raises is **correctly propagated** up to
+`reload_singlephase_extension`; the defect is solely that the L2011 cleanup `PyMapping_DelItem`
+then runs the dict `__delitem__` slot without saving/clearing it. This makes OOM-0022 **distinct**
+within the stale-`MemoryError` family: its producer is a *cleanly-raised* `MemoryError` (unlike
+OOM-0008's `f_back`-swallow, where the producer fails to propagate, and unlike OOM-0040's
+extensions-cache key-alloc). It is also **not** OOM-0036 — the appended item is the immortal
+`Py_None` (no stolen-ref double-free; this is a real `list_resize` allocation failure, via
+`PyList_Append`, not the `_CALL_LIST_APPEND` bytecode).
+
 ## Versions
 
 - main (3.16.0a0, commit 15d7406). Aborts on the free-threaded debug+ASan build and
