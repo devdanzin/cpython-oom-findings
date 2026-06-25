@@ -1,38 +1,46 @@
-# Authoritative gdb backtrace (3.16_ft_debug_asan, commit 15d7406)
-# vehicle: python-4/multiprocessing_spawn-assertion-sigabrt/source.py
-# Assertion: ./Include/internal/pycore_stackref.h:726: _Py_NegativeRefcount:
-#            "object has negative ref count"  (over-decref'd object: a MemoryError instance)
-# Identical top frames seen on concurrent_futures_process, xml_dom_minidom,
-# _pyrepl_main, importlib_resources, zoneinfo__tzpath, profiling_sampling__sync_coordinator.
-Program received signal SIGABRT, Aborted.
-#0  __pthread_kill_implementation () at ./nptl/pthread_kill.c:44
-#1  __pthread_kill_internal () at ./nptl/pthread_kill.c:89
-#2  __GI___pthread_kill () at ./nptl/pthread_kill.c:100
-#3  __GI_raise (sig=...) at ../sysdeps/posix/raise.c:26
-#4  __GI_abort () at ./stdlib/abort.c:77
-#5  fatal_error_exit (status=...) at Python/pylifecycle.c:3517
-#6  fatal_error (...) at Python/pylifecycle.c:3742
-#7  _Py_FatalErrorFunc (func=..., msg=...) at Python/pylifecycle.c:3765
-#8  _PyObject_AssertFailed (obj=..., expr=..., msg=..., file=..., line=..., function=...) at Objects/object.c:3278
-#9  _Py_NegativeRefcount (filename=..., lineno=..., op=...) at Objects/object.c:275
-#10 Py_DECREF (op=...) at ./Include/refcount.h:354
-#11 PyStackRef_XCLOSE (ref=...) at ./Include/internal/pycore_stackref.h:726   <- closes a stale/already-dead stackref
-#12 _PyFrame_ClearLocals (frame=...) at Python/frame.c:101
-#13 _PyFrame_ClearExceptCode (frame=...) at Python/frame.c:126
-#14 clear_thread_frame (tstate=..., frame=...) at Python/ceval.c:1954
-#15 _PyEval_EvalFrameDefault (...) at Python/generated_cases.c.h:13908   <- LABEL(exit_unwind): tearing down a dying frame
-#16 _PyEval_EvalFrame (...) at ./Include/internal/pycore_ceval.h:122
-#17 _PyEval_Vector (...) at Python/ceval.c:2141
-#18 PyEval_EvalCode (co=..., globals=..., locals=...) at Python/ceval.c:679
-#19 run_eval_code_obj (...) at Python/pythonrun.c:1369
-...
-#29 Py_BytesMain (argc=..., argv=...) at Modules/main.c:850
+OOM-0005 use-after-free face. Same over-decref as the negative-refcount abort (backtrace.txt),
+caught here as a clean heap-use-after-free because the freed local is ALSO referenced elsewhere.
 
-# (gdb) frame 12 ; the dying frame's value stack still holds a _PyStackRef to an
-# object whose refcount is already 0, so PyStackRef_XCLOSE -> Py_DECREF drives it
-# below zero.  From the fatal dump: "object type name: MemoryError".
+Reduced repro: repro_uaf.py  (pkgutil.get_importer(str) -> os.fsdecode -> os.fspath, under set_nomemory).
 
-# Release builds (assert compiled out) instead corrupt the heap: the underflowed
-# refcount frees a live object and a later access faults. concurrent_futures_process
-# segfaults 5/5 on both ft_release and upstream (rc=139), faulting later via a
-# use-after-free downstream of the same StackRef close path.
+============================================================================================
+(A) debug-gil-nojit-asan -- AddressSanitizer: heap-use-after-free (commit 1b9fe5c)
+    SUMMARY: heap-use-after-free Include/refcount.h:286 in Py_INCREF
+
+READ of size 4 (the later use of the freed object):
+  #0 Py_INCREF                  Include/refcount.h:286
+  #1 Py_XINCREF                 Include/refcount.h:510
+  #2 _Py_XNewRef                Include/refcount.h:542
+  #3 _Py_dict_lookup_threadsafe Objects/dictobject.c:1729
+  #4 _PyDict_SubscriptKnownHash Objects/dictobject.c:3711
+  #5 _PyEval_EvalFrameDefault   Python/generated_cases.c.h:686
+
+FREED by (the OOM-0005 over-decref -- identical to backtrace.txt):
+  #1 unicode_dealloc            Objects/unicodeobject.c:1710
+  #2 _Py_Dealloc                Objects/object.c:3319
+  #3 Py_DECREF_MORTAL           Include/internal/pycore_object.h:419
+  #4 PyStackRef_XCLOSE          Include/internal/pycore_stackref.h:726   <- the bug
+  #5 _PyFrame_ClearLocals       Python/frame.c:101                       <- the bug
+  #6 _PyFrame_ClearExceptCode   Python/frame.c:126
+  #7 clear_thread_frame         Python/ceval.c:1954
+  #8 _PyEval_EvalFrameDefault   Python/generated_cases.c.h:13908         (exit_unwind)
+
+PREVIOUSLY ALLOCATED (the victim object = str(0), "0"):
+  #1 _PyMem_DebugRawMalloc      Objects/obmalloc.c:3136
+  #4 PyUnicode_New              Objects/unicodeobject.c:1326
+  #5 long_to_decimal_string_internal Objects/longobject.c:2233
+  #6 long_to_decimal_string     Objects/longobject.c:2323
+  #7 PyObject_Str               Objects/object.c:826
+
+============================================================================================
+(B) debug-ft-nojit-asan -- the same freed local is instead used by os.fspath -> SIGSEGV
+    (faulthandler: "Fatal Python error: Segmentation fault"; gdb: path->ob_type == 0xdddddddddddddddd)
+
+  #5 PyType_HasFeature          Include/object.h:755    reads Py_TYPE(path)->tp_flags on the freed arg
+  #6 PyOS_FSPath                Modules/posixmodule.c:17168
+  #7 os_fspath_impl             Modules/posixmodule.c:17214
+  #8 os_fspath                  Modules/clinic/posixmodule.c.h:12574
+  #9 _Py_BuiltinCallFastWithKeywords_StackRef  Python/ceval.c:841   (pkgutil.get_importer -> os.fsdecode)
+
+So PyOS_FSPath / os.fspath is NOT a distinct bug: it is one downstream USE of the local that
+_PyFrame_ClearLocals over-decrefs. The over-decref (frames #4-#8 of stack A) is OOM-0005.

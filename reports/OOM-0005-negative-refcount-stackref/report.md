@@ -14,76 +14,105 @@ This is a genuine refcount-underflow / memory-safety bug, not merely a debug ass
 
 `frame.c:101` (`_PyFrame_ClearLocals` → `PyStackRef_XCLOSE`) is a **detector** — it closes a stale
 stackref that an *upstream* error path left on the value stack. `rr` reverse-execution (record the
-crash, watchpoint the victim's refcount, `reverse-continue` through its history) shows this report's
-two reproducers are driven by **two different upstream producers**:
+crash, watchpoint the victim's refcount, `reverse-continue` through its history) untangled what were,
+in fact, **two different bugs** previously filed together under OOM-0005:
 
-- **`repro.py` (`xml.dom.minidom.parse(0)`) → this is actually [OOM-0036](../OOM-0036-list-append-oom-double-free/report.md).**
-  The victim's refcount history is: `PyStackRef_DUP` (+1) → **`_PyList_AppendTakeRefListResize`
+- **The former `xml.dom.minidom.parse(0)` reproducer is actually [OOM-0036](../OOM-0036-list-append-oom-double-free/report.md), not this bug.**
+  Its victim's refcount history is: `PyStackRef_DUP` (+1) → **`_PyList_AppendTakeRefListResize`
   (`listobject.c:531`, from `_CALL_LIST_APPEND`, gen 3981)** decrefs it on resize-failure (−1) →
   `exception_unwind` `XCLOSE` frees it (−1) → `_PyFrame_ClearLocals` `XCLOSE` underflows it (negref).
   That is exactly OOM-0036's `list.append`-under-`MemoryError` double-free (`_CALL_LIST_APPEND` steals
-  the item then `ERROR_NO_POP` leaves it on the stack). **So this "minimal repro" demonstrates OOM-0036,
-  not OOM-0005's distinct defect** — a mislabel to fix (the gist's minimal repro is affected; see Notes).
+  the item then `ERROR_NO_POP` leaves it on the stack). It has been **moved to the OOM-0036 report**
+  as `repro_xml_minidom.py`; OOM-0005's `repro.py` was replaced with the genuine reproducer below.
 
-- **`repro_uaf.py` (`pkgutil.get_importer(str)`) → a genuinely distinct over-decref.** No `list.append`
-  is involved. The `str` argument is threaded through many references (the holding dict, several call
-  frames' args/locals, the raised `OSError`'s fields, an args tuple); under the OOM unwind a dealloc
-  *cascade* — `_PyFrame_ClearLocals`×N, `OSError_clear`/`OSError_dealloc` (`exceptions.c:2312`),
+- **The genuine OOM-0005 bug is the `pkgutil.get_importer(str)` over-decref** (now `repro.py`). No
+  `list.append` is involved. The `str` argument is threaded through many references (the holding dict,
+  several call frames' args/locals, the raised `OSError`'s fields, an args tuple); under the OOM unwind
+  a dealloc *cascade* — `_PyFrame_ClearLocals`×N, `OSError_clear`/`OSError_dealloc` (`exceptions.c:2312`),
   `tuple_dealloc`, `frame_dealloc` — decrefs it **one time too many**, freeing it while the dict still
   holds it → use-after-free (the later `_Py_dict_lookup_threadsafe` / `PyOS_FSPath` touch freed memory).
-  This is OOM-0005's real, distinct bug; the single missing-incref in the cascade was not isolated to
-  one line, but it is clearly **not** the `_CALL_LIST_APPEND` path.
+  The single missing-incref in the cascade was not isolated to one line, but it is clearly **not** the
+  `_CALL_LIST_APPEND` path.
 
-The over-decref'd **object type varies by run** (the original discovery capture: a `MemoryError`; both
-rr-traced repros above: a `str`) — consistent with "whatever stale value the error path left on the
-stack," so the victim type is not itself diagnostic. **Net:** OOM-0005 remains a real distinct bug
-(the `repro_uaf.py` cascade), but `repro.py` should be replaced — it is an OOM-0036 reproducer.
+The over-decref'd **object type varies by run** (the original discovery capture: a `MemoryError`; the
+rr-traced runs: a `str`) — consistent with "whatever stale value the error path left on the stack," so
+the victim type is not itself diagnostic. **Net:** OOM-0005 is a real distinct bug (the `pkgutil`
+cascade in `repro.py`); the old `xml.dom.minidom` repro was OOM-0036 and has been moved there.
 
 ## Reproducer
 
-Minimal, stdlib-only (shrinkray-reduced from the `xml.dom.minidom` vehicle, then
-hand-cleaned). Deterministic — aborts on every run (20/20 with `PYTHON_GIL=1`, 8/8 with
-`PYTHON_GIL=0`); requires a debug build. See `repro.py`:
+Minimal, stdlib-only (`repro.py`). Deterministic (≥5/5) on the free-threaded and GIL debug+ASan
+builds; requires a debug build exposing `_testcapi.set_nomemory`. The freed object is the `str`
+argument threaded through `pkgutil.get_importer(s) → os.fsdecode(s) → os.fspath(s)`, also kept
+alive in a dict so the over-decref frees it while still referenced → use-after-free:
 
 ```python
-import xml.dom.minidom
-from _testcapi import set_nomemory, remove_mem_hooks
+import pkgutil
+import faulthandler
+faulthandler.enable()
+from _testcapi import set_nomemory
 
-for start in range(100):
-    set_nomemory(start, 0)
-    try:
+d = {"s": str}
+d["arg"] = d["s"](0)            # a heap str ("0"), also kept alive by this dict
+
+def sweep(thunk):
+    for start in range(60):
+        set_nomemory(start)     # fail every allocation from #start onward
         try:
-            xml.dom.minidom.parse(0)
-        finally:
-            remove_mem_hooks()
-    except:
-        pass
+            thunk()
+        except BaseException:
+            pass
+
+def call_get_importer():
+    pkgutil.get_importer(d["arg"])   # -> os.fsdecode -> os.fspath; the arg is freed mid-unwind
+
+sweep(call_get_importer)
 ```
 
-`xml.dom.minidom.parse(0)` fails with `MemoryError` partway through under the sweep; the
-exception unwinds a frame whose operand stack still holds a now-dead stackref, and
-`_PyFrame_ClearLocals` closes it -> refcount underflow on the `MemoryError` instance.
+On `debug-gil-nojit-asan` this gives a clean ASan **heap-use-after-free** (freed-by stack =
+`PyStackRef_XCLOSE`@`pycore_stackref.h:726` ← `_PyFrame_ClearLocals`@`frame.c:101`, `exit_unwind`;
+the later read is a `Py_INCREF` via a dict lookup; the alloc is the victim `str`). On
+`debug-ft-nojit-asan` the same freed local is instead used by `PyOS_FSPath` →
+`PyType_HasFeature` reading `Py_TYPE()` on freed memory (`ob_type == 0xdd`) → SIGSEGV. The
+nested-frame structure (the `sweep(thunk)` wrapper) matters — it matches how the fuzzer's
+`oom_run(thunk)` invokes the call; a flat module-level loop does not reproduce.
 
-shrinkray reduced the 511-line vehicle but could not delete the fuzzer's `weird_classes`
-setup because the final call's argument referenced it; substituting a trivial argument (`0`)
-freed that setup for removal. Unlike the older multiprocessing.spawn/runpy reduction — which
-tripped a *sibling* `code_dealloc` assert first (hence the previous "partial" status, see
-Notes) — the `xml.dom.minidom` path deterministically hits *this* stackref underflow.
-Minimization **complete**.
+(The former `xml.dom.minidom.parse(0)` reproducer was removed: `rr` reverse-execution showed it
+actually reproduces **OOM-0036** — the `_CALL_LIST_APPEND` `list.append` double-free — not this
+bug. It now lives in the OOM-0036 report as `repro_xml_minidom.py`. See the rr investigation
+section above.)
 
 ## Backtrace
 
+From `repro.py` on `debug-gil-nojit-asan`, ASan reports a clean heap-use-after-free (full trace in `backtrace.txt`):
+
 ```
-#9  _Py_NegativeRefcount        Objects/object.c:275       (op = a MemoryError, refcount underflowed)
-#10 Py_DECREF_MORTAL            Include/refcount.h (BITS_TO_PTR(ref))
-#11 PyStackRef_XCLOSE           Include/internal/pycore_stackref.h:726
-#12 _PyFrame_ClearLocals        Python/frame.c:101         (while (sp > locals) PyStackRef_XCLOSE(*sp))
-#13 _PyFrame_ClearExceptCode    Python/frame.c:126
-#14 clear_thread_frame          Python/ceval.c:1954
-#15 _PyEval_EvalFrameDefault    Python/generated_cases.c.h:13908   (LABEL exit_unwind -> _PyEval_FrameClearAndPop)
+heap-use-after-free  Include/refcount.h:286 in Py_INCREF
+
+FREED by (the over-decref -- THE BUG):
+  #4 PyStackRef_XCLOSE      Include/internal/pycore_stackref.h:726   <- the over-decref
+  #5 _PyFrame_ClearLocals   Python/frame.c:101                       <- closes a stale operand-stack slot
+  #6 _PyFrame_ClearExceptCode Python/frame.c:126
+  #7 clear_thread_frame     Python/ceval.c:1954
+  #8 _PyEval_EvalFrameDefault Python/generated_cases.c.h:13908       (exit_unwind)
+
+READ of freed memory (a later use of the same str):
+  #0 Py_INCREF              Include/refcount.h:286
+  #3 _Py_dict_lookup_threadsafe Objects/dictobject.c:1729            (the dict still holds it)
+
+ALLOCATED (the victim = str(0), "0"):
+  #4 PyUnicode_New          Objects/unicodeobject.c:1326
+  #7 PyObject_Str           Objects/object.c:826
 ```
 
-Fatal dump: `object type name: MemoryError`. The minimal `xml.dom.minidom` repro hits frames #11-#15 deterministically (10/10) on `ft_debug_asan`. Several other OOM vehicles (multiprocessing_spawn, _pyrepl_main, importlib_resources, zoneinfo__tzpath, …) produce a *similar* negative-refcount abort, but were not individually re-confirmed to share this exact stackref-close site on the current binary — and the originally-headlined `concurrent_futures_process` vehicle actually hits a **different** `list_dealloc` segv (see Notes), so the "single group" framing is not relied on here.
+The victim is the `str` argument; the over-decref (frames #4–#8) is the bug, and the dict still
+holding the string is what turns it into a use-after-free. On `debug-ft-nojit-asan` the same freed
+local is instead read by `PyOS_FSPath` → `PyType_HasFeature` (`ob_type == 0xdd`) → SIGSEGV.
+
+The over-decref'd object's **type varies by run** — the original debug-build capture reported
+`object type name: MemoryError`, while the `repro.py` runs free a `str` — consistent
+with "whatever stale value the failing error path left on the stack," so the victim type is not
+itself diagnostic.
 
 ## Root cause
 
@@ -112,29 +141,22 @@ This is correct *only if* `frame->stackpointer` accurately reflects the set of o
 
 The MemoryError itself being the over-decref'd object suggests the offending opcode is one that puts the just-raised exception (or a value derived alongside it) onto the stack and mishandles its ownership on the error path (CALL/`*_VECTORCALL` steal paths, `BINARY_OP`, `BUILD_*`, or the `FOR_ITER`/`SEND`/`CLEANUP_THROW` family), or one of the generated `pop_N_error:` / `error:` exit stubs miscounting the live stack depth.
 
-## Use-after-free face (confirmed 2026-06-22)
+## Use-after-free: not free-threading-specific, not assert-only
 
-The "latent use-after-free" predicted above is now **directly demonstrated**, not just inferred.
-When the over-decref'd local is *also* referenced elsewhere, the underflow frees it while it is
-still live, and a later access touches freed memory. `repro_uaf.py` (shrinkray-reduced from a
-`pkgutil` fuzzing vehicle) threads a heap `str` through
-`pkgutil.get_importer(s) -> os.fsdecode(s) -> os.fspath(s)` while keeping a second reference to
-it in a dict:
+The over-decref is a genuine memory-safety hazard, not merely a debug assertion: `repro.py`
+demonstrates it as a real use-after-free reachable through ordinary stdlib (`pkgutil.get_importer`).
+Because the freed `str` is *also* referenced by the holding dict, the underflow frees a still-live
+object and a later access touches freed memory — confirmed on two builds (see `backtrace.txt`):
 
-- **debug-gil-nojit-asan**: ASan reports a clean `heap-use-after-free`. Its *freed-by* stack is
-  this exact over-decref — `PyStackRef_XCLOSE` (`stackref.h:726`) <- `_PyFrame_ClearLocals`
-  (`frame.c:101`), `exit_unwind` — the *read* is a later `Py_INCREF` via a dict lookup, and the
-  *allocated-by* is the victim `str(0)`. So the bug is **not** free-threading-specific and **not**
-  assert-only.
-- **debug-ft-nojit-asan**: the same freed local is instead used by `PyOS_FSPath`
-  (`posixmodule.c:17168`) -> `PyType_HasFeature` reads `Py_TYPE(path)->tp_flags` on the freed
-  object (`ob_type == 0xdd`, the debug freed-fill) -> SIGSEGV.
+- **debug-gil-nojit-asan**: ASan reports a clean `heap-use-after-free`; freed-by =
+  `PyStackRef_XCLOSE`@`stackref.h:726` ← `_PyFrame_ClearLocals`@`frame.c:101` (`exit_unwind`), read =
+  a later `Py_INCREF` via a dict lookup, allocated-by = the victim `str(0)`.
+- **debug-ft-nojit-asan**: the same freed local is instead read by `PyOS_FSPath`
+  (`posixmodule.c:17168`) → `PyType_HasFeature` on `Py_TYPE(path)` (`ob_type == 0xdd`) → SIGSEGV.
 
-See `repro_uaf.py` and `backtrace_uaf.txt`. This pins the memory-safety hazard to *this* site (a
-genuine UAF reachable through ordinary stdlib such as `pkgutil.get_importer`), upgrading the
-release behaviour from "latent / not pinned" to a demonstrated use-after-free. Which downstream
-*use* faults (dict-lookup `Py_INCREF` vs `os.fspath` type read) depends on build/timing — the
-defect is the single `_PyFrame_ClearLocals` over-decref, not any particular use site.
+Which downstream *use* faults (dict-lookup `Py_INCREF` vs `os.fspath` type read) depends on
+build/timing — the defect is the single `_PyFrame_ClearLocals` over-decref, not any particular use
+site. This upgrades the release behaviour from "latent / not pinned" to a demonstrated UAF.
 
 ## Suggested fix
 
