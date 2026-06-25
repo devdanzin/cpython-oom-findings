@@ -144,9 +144,46 @@ Found via OOM-injection fuzzing (`_testcapi.set_nomemory`), fusil `--oom-seq` wi
 
 **Minimization: partial.** A generic "import C extensions under a windowed OOM" reproducer reaches this path but competes with other first-import OOM bugs (GC `validate_gc_objects` negative-refcount; the `co->_co_unique_id` assert) that can fire first; no clean isolated stdlib trigger was pinned. `vehicle_source.py` is the reliable reproducer.
 
+## Second face — stale-`MemoryError` abort (OOM-0042 folded in, 2026-06-25)
+
+The same key-allocation failure has a **second face** when it happens on the cache *lookup*
+(GET) path rather than the *insert* (SET) path. `import_find_extension` calls
+`_extensions_cache_find_unlocked` to check whether the extension is already cached; if the
+key-builder allocation fails there, the helper returns `NULL` ("not found") **with
+`MemoryError` set**, the importer concludes the extension isn't cached and proceeds to run its
+init, and execution reaches the post-init invariant in `import_run_extension`:
+
+```c
+    /* Python/import.c, import_run_extension, SINGLEPHASE branch */
+    if (_PyImport_CheckSubinterpIncompatibleExtensionAllowed(name_buf) < 0) {
+        goto error;
+    }
+    assert(!PyErr_Occurred());          /* import.c:2301 <- fires with the stale MemoryError */
+```
+
+This was cataloged separately as **OOM-0042** (abort, debug-only) until `rr` proved it shares
+this bug's producer. Recording an OOM-0042 vehicle and watching `tstate->current_exception`,
+then `reverse-continue`-ing to where it was set, lands on
+`hashtable_key_from_2_strings` (`import.c:1297`) ← `_extensions_cache_find_unlocked`
+(`import.c:1389`) failing under OOM — **not** an allocation inside `readline`'s `PyInit_*`, as
+the original OOM-0042 report had hypothesized. So both faces are the *same* mishandled
+`_extensions_cache_find_unlocked` key-alloc failure:
+
+| face | caller path | mishandling | symptom | builds |
+|------|-------------|-------------|---------|--------|
+| **SET** (this report) | `_extensions_cache_set` | NULL key passed to `_Py_hashtable_set` | `strlen(NULL)` **SEGV** (`import.c:1312`) | release + debug |
+| **GET** (was OOM-0042) | `import_find_extension` lookup | stale `MemoryError` left pending, import proceeds | `assert(!PyErr_Occurred())` **abort** (`import.c:2301`) | debug-only |
+
+The **suggested fix above covers both**: once `_extensions_cache_find_unlocked` distinguishes
+"key allocation failed (OOM)" from "entry not found", the SET path bails before the NULL
+deref and the GET path surfaces the `MemoryError` as a clean import failure instead of leaving
+it pending for the post-init assert. OOM-0042's `import_run_extension:2301` dedup key now lives
+on this report, and its vehicles (`code`/`pdb`/`site`/`sys`, which transitively first-import the
+single-phase C extension `readline`) are preserved in the OOM-0042 tombstone directory.
+
 ## Versions
 
-- main (3.16.0a0), commit `1b9fe5c` (free-threaded debug+ASan, Clang 21). SEGV reproduced from the vehicle on `ft_debug_asan` and `ft_release` (free-threaded) and on the GIL release build — a real production crash, not debug-only.
+- main (3.16.0a0), commit `1b9fe5c` (free-threaded debug+ASan, Clang 21). SEGV reproduced from the vehicle on `ft_debug_asan` and `ft_release` (free-threaded) and on the GIL release build — a real production crash, not debug-only. The folded-in abort face (OOM-0042) is `Py_DEBUG`-only (the `import_run_extension:2301` assert is compiled out under `NDEBUG`, where the stale `MemoryError` propagates out of the import instead).
 
 ---
 

@@ -24,10 +24,15 @@ discloses it (gist + an umbrella issue, or a standalone issue for the strong one
 
 ## Where things stand (milestones)
 
-- **39 unique bugs cataloged** (`OOM-0001..0039`), each with a minimal deterministic repro.
-- **35 published as public gists + an umbrella issue, python/cpython#151763.** OOM-0037 and
-  OOM-0039 are drafted filing candidates; OOM-0038 is an FT-subinterpreter crash on
+- **36 unique bugs cataloged** (ids `OOM-0001..0042`; six retired/folded — see below), each
+  with a deterministic repro (35 of 36 minimal; OOM-0040 is vehicle-confirmed).
+- **35 published as public gists + an umbrella issue, python/cpython#151763.** OOM-0037,
+  OOM-0039 and OOM-0040 are drafted filing candidates; OOM-0038 is an FT-subinterpreter crash on
   filing-hold (see below).
+- **Six ids retired (folded, not reused):** OOM-0005, OOM-0029, OOM-0033, OOM-0041 → **OOM-0036**
+  (rr-proven `_CALL_LIST_APPEND` double-free faces); OOM-0011 → **OOM-0008** (`f_back`-swallow);
+  OOM-0042 → **OOM-0040** (extensions-cache key-alloc failure, GET-path stale-`MemoryError` face).
+  `catalog/SUMMARY.md` is the authoritative snapshot.
 - **OOM-0036** is the headline: found by the new `--oom-seq` fuzzing mode, root-caused to a
   real **`list.append()` double-free under `MemoryError`** in the `_CALL_LIST_APPEND`
   bytecode (steals `arg`, then `ERROR_NO_POP()` leaves it for `exception_unwind` to
