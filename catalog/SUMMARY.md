@@ -1,6 +1,6 @@
 # Fusil OOM-injection findings on CPython — summary
 
-Snapshot: 2026-06-25 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0042) · **39 distinct bugs** (OOM-0001…0042; OOM-0005, OOM-0033 and OOM-0041 folded into OOM-0036).
+Snapshot: 2026-06-25 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0042) · **38 distinct bugs** (OOM-0001…0042; OOM-0005, OOM-0029, OOM-0033 and OOM-0041 folded into OOM-0036).
 
 **Method.** [Fusil](https://github.com/devdanzin/fusil) fuzzes CPython with `_testcapi.set_nomemory`
 to fail allocations and drive the rarely-tested allocation-failure error paths. Crashes are triaged
@@ -48,7 +48,6 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0026 | `_interpchannels` int-error vs `PyErr` desync | abort | ASan/jit | yes | `_interpchannelsmodule.c:handle_channel_error` |
 | OOM-0027 | `POP_JUMP_IF_FALSE` non-bool stackref assert | abort | ASan/jit | yes | `generated_cases.c.h:_PyEval_EvalFrameDefault` |
 | OOM-0028 | `os._path_normpath(bytes)` → unchecked encode → NULL deref | segv | release | yes | `unicodeobject.c:unicode_encode_utf8` |
-| OOM-0029 | negative refcount (over-decref) on `MemoryError` path (`disp_str`) | abort | ASan/jit | yes | `tupleobject.c:tuple_dealloc` |
 | OOM-0030 | `str` subclass instantiation frees a unicode with NULL data | abort | ASan/jit | yes | `unicodeobject.c:unicode_is_singleton` |
 | OOM-0031 | `_interpreters.capture_exception` frees an invalid cross-interp excinfo → UAF | segv | release | yes | `crossinterp.c:_excinfo_clear_type` |
 | OOM-0032 | warning emitted with a pending exception (`!_PyErr_Occurred`) | abort | ASan/jit | yes | `typeobject.c:type_call` / `object.c:PyObject_Str` |
@@ -63,16 +62,16 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 
 *(OOM-0041 was retired — folded into OOM-0036; see "Retired IDs" below.)*
 
-**Totals:** 39 bugs — 8 segv, 24 abort, 7 fatal · 12 reproduce on a **release** build · **37 of 39 have a
-minimal reproducer** (OOM-0040/0042 are vehicle-confirmed, minimization partial). Three retired ids: OOM-0005,
-OOM-0033 and OOM-0041 (all folded into OOM-0036).
+**Totals:** 38 bugs — 8 segv, 23 abort, 7 fatal · 12 reproduce on a **release** build · **36 of 38 have a
+minimal reproducer** (OOM-0040/0042 are vehicle-confirmed, minimization partial). Four retired ids: OOM-0005,
+OOM-0029, OOM-0033 and OOM-0041 (all folded into OOM-0036 — rr-proven faces of the `_CALL_LIST_APPEND` double-free).
 
 **Upstream status** (refreshed 2026-06-24 from the umbrella [#151763](https://github.com/python/cpython/issues/151763) table + timeline; per-report truth is each `meta.json` `upstream_issue`/`status`). **14 findings filed upstream**, 4 already **fixed**:
 - **Fixed:** OOM-0002 (#151773), OOM-0003 (#152034 + 3.13/3.14/3.15 backports), OOM-0028 (#152058), OOM-0031 (#151842).
 - **Filed, open:** OOM-0001 (#151673), OOM-0006 (#152107, dict item-iter — our sub-issue, repro_direct.py contributed + acked), OOM-0007 (#152083), OOM-0013 (#151968 PR), OOM-0014 (#151902 PR), OOM-0016 (#152130), OOM-0019 (#151931 PR), OOM-0024 (#151815), OOM-0034 (#151798 PR), OOM-0036 (#151818).
 - **Filing-hold** (FT sub-interpreter category, [#143232](https://github.com/python/cpython/issues/143232)): OOM-0020, OOM-0038.
 - **New, drafted (not yet filed):** OOM-0037, OOM-0040, OOM-0042.
-- **Retired ids** (folded into another bug, not reused): OOM-0005, OOM-0033 and OOM-0041 → OOM-0036 (all rr-proven downstream faces of the `_CALL_LIST_APPEND` list.append double-free, reached via different stdlib paths that internally `list.append` a second-referenced object under OOM).
+- **Retired ids** (folded into another bug, not reused): OOM-0005, OOM-0029, OOM-0033 and OOM-0041 → OOM-0036 (all rr-proven downstream faces of the `_CALL_LIST_APPEND` list.append double-free, reached via different stdlib paths that internally `list.append` a second-referenced object under OOM).
 - The rest remain gisted/novel. Two upstream issues without a gist link — [#151905](https://github.com/python/cpython/issues/151905) (`_PyType_LookupStackRefAndVersion` assert, closed) and [#152125](https://github.com/python/cpython/issues/152125) (`clear_freelist` freelist corruption, open) — are unmapped to our catalog (may be others' or need triage).
 
 **Suggested starting points** — crashes a release build **and** has a minimal reproducer (highest
@@ -104,7 +103,7 @@ fires. Three observed clusters:
   vivid example of "one producer, many detectors": `rr` reverse-execution pinned the
   formerly-separate **OOM-0041** (`traceback.c:313`), **OOM-0005** (`frame.c:101` negref /
   `pycore_stackref.h:726` / `PyOS_FSPath` SEGV) and **OOM-0033** (`list_ass_slice` negref /
-  `PyType_IsSubtype` release SEGV) — plus the `tuple_alloc` freelist SEGV face — all to OOM-0036's
+  `PyType_IsSubtype` release SEGV) and **OOM-0029** (`_pyrepl.utils.disp_str` → `tuple_dealloc` negref) — plus the `tuple_alloc` freelist SEGV face — all to OOM-0036's
   double-freed appended item, reused and then read by whichever invariant gets there first. All
   three reached the same append-machinery `_CALL_LIST_APPEND` via different stdlib paths and were
   folded into OOM-0036.
