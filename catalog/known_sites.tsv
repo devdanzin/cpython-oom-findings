@@ -337,7 +337,9 @@ OOM-0035	abort	line	Modules/_io/stringio.c:866
 OOM-0035	abort	line	Objects/unicodeobject.c:2228
 OOM-0035	abort	line	Objects/unicodeobject.c:673
 OOM-0036	abort	func	Modules/posixmodule.c:DirEntry_dealloc
+OOM-0036	abort	func	Python/traceback.c:_PyTraceBack_FromFrame
 OOM-0036	abort	line	Modules/posixmodule.c:16199
+OOM-0036	abort	line	Python/traceback.c:313
 OOM-0037	segv	func	Objects/structseq.c:PyStructSequence_New
 OOM-0037	segv	func	Objects/structseq.c:get_type_attr_as_size
 OOM-0037	segv	func	Python/errors.c:PyErr_FormatUnraisable
@@ -370,11 +372,5 @@ OOM-0040	segv	line	Python/import.c:1312
 OOM-0040	segv	line	Python/import.c:1389
 OOM-0040	segv	line	Python/import.c:1496
 OOM-0040	segv	line	Python/import.c:1497
-OOM-0041	abort	assert	Python/traceback.c:tb_next == NULL || PyTraceBack_Check(tb_next)
-OOM-0041	abort	func	Python/traceback.c:PyTraceBack_Here
-OOM-0041	abort	func	Python/traceback.c:_PyTraceBack_FromFrame
-OOM-0041	abort	line	Python/traceback.c:313
-OOM-0041	abort	line	Python/traceback.c:317
-OOM-0041	abort	line	Python/traceback.c:326
 OOM-0042	abort	func	Python/import.c:import_run_extension
 OOM-0042	abort	line	Python/import.c:2301

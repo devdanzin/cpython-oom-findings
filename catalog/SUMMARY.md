@@ -1,6 +1,6 @@
 # Fusil OOM-injection findings on CPython — summary
 
-Snapshot: 2026-06-24 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0042) · **42 distinct bugs** (OOM-0001…0042).
+Snapshot: 2026-06-24 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0042) · **41 distinct bugs** (OOM-0001…0042; OOM-0041 folded into OOM-0036).
 
 **Method.** [Fusil](https://github.com/devdanzin/fusil) fuzzes CPython with `_testcapi.set_nomemory`
 to fail allocations and drive the rarely-tested allocation-failure error paths. Crashes are triaged
@@ -61,17 +61,20 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0038 | sub-interpreter TLBC-index reserve calls `PyErr_NoMemory()` with no active thread state (FT-only) | fatal | release | yes | `index_pool.c:_PyIndexPool_AllocIndex` |
 | OOM-0039 | `deque_clear`'s `newblock`-failure `PyErr_Clear()` clobbers an in-flight exception when run from `deque_dealloc` under OOM | fatal | ASan/jit | yes | `_collectionsmodule.c:deque_clear` / `deque_dealloc` |
 | OOM-0040 | first-import of a C extension under a windowed OOM passes a NULL cache key to `_Py_hashtable_set` → `strlen(NULL)` | segv | release | no | `import.c:hashtable_hash_str` / `_extensions_cache_set` |
-| OOM-0041 | `PyTraceBack_Here` appends a frame to a non-traceback `exc.__traceback__` (over-decref/UAF) under OOM — rr-pinned as a **downstream face of OOM-0036** | abort | ASan/jit | no | `traceback.c:_PyTraceBack_FromFrame` / `PyTraceBack_Here` |
 | OOM-0042 | single-phase C-extension init (`readline`) under OOM leaves a stale `MemoryError`, tripping the post-init `assert(!PyErr_Occurred())` | abort | ASan/jit | no | `import.c:import_run_extension` |
 
-**Totals:** 42 bugs — 9 segv, 26 abort, 7 fatal · 13 reproduce on a **release** build · **39 of 42 have a
-minimal reproducer** (OOM-0040/0041/0042 are vehicle-confirmed, minimization partial/open).
+*(OOM-0041 was retired — folded into OOM-0036; see "Retired IDs" below.)*
+
+**Totals:** 41 bugs — 9 segv, 25 abort, 7 fatal · 13 reproduce on a **release** build · **39 of 41 have a
+minimal reproducer** (OOM-0040/0042 are vehicle-confirmed, minimization partial). One retired id: OOM-0041
+(folded into OOM-0036).
 
 **Upstream status** (refreshed 2026-06-24 from the umbrella [#151763](https://github.com/python/cpython/issues/151763) table + timeline; per-report truth is each `meta.json` `upstream_issue`/`status`). **14 findings filed upstream**, 4 already **fixed**:
 - **Fixed:** OOM-0002 (#151773), OOM-0003 (#152034 + 3.13/3.14/3.15 backports), OOM-0028 (#152058), OOM-0031 (#151842).
 - **Filed, open:** OOM-0001 (#151673), OOM-0006 (#152107, dict item-iter — our sub-issue, repro_direct.py contributed + acked), OOM-0007 (#152083), OOM-0013 (#151968 PR), OOM-0014 (#151902 PR), OOM-0016 (#152130), OOM-0019 (#151931 PR), OOM-0024 (#151815), OOM-0034 (#151798 PR), OOM-0036 (#151818).
 - **Filing-hold** (FT sub-interpreter category, [#143232](https://github.com/python/cpython/issues/143232)): OOM-0020, OOM-0038.
-- **New, drafted (not yet filed):** OOM-0037, OOM-0040, OOM-0041, OOM-0042.
+- **New, drafted (not yet filed):** OOM-0037, OOM-0040, OOM-0042.
+- **Retired ids** (folded into another bug, not reused): OOM-0041 → OOM-0036 (rr-proven downstream face).
 - The rest remain gisted/novel. Two upstream issues without a gist link — [#151905](https://github.com/python/cpython/issues/151905) (`_PyType_LookupStackRefAndVersion` assert, closed) and [#152125](https://github.com/python/cpython/issues/152125) (`clear_freelist` freelist corruption, open) — are unmapped to our catalog (may be others' or need triage).
 
 **Suggested starting points** — crashes a release build **and** has a minimal reproducer (highest
