@@ -4,11 +4,11 @@ Crashes found by allocation-failure fuzzing (`_testcapi.set_nomemory`) of CPytho
 
 **Pick anything to work on** — open a CPython issue if one doesn't exist, comment with the issue/PR, and the Status column will be updated. Reports are deduped by crash signature; one row = one underlying bug (vehicles listed in the report).
 
-_36 unique bug(s). Generated 2026-06-25._
+_36 unique bug(s) (+6 folded duplicate(s), marked 🔁). Generated 2026-06-25._
 
 _Found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode (fusil originally by Victor Stinner). Reports drafted by Claude Code; reproducers machine-generated._
 
-Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (issue open) · **FIXED** `commit` · `dup:OOM-####` · `false alarm`.
+Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (issue open) · **FIXED** `commit` · 🔁 `dup of OOM-####` (folded duplicate — don't pursue) · `false alarm`.
 
 
 ## Segfaults
@@ -17,12 +17,17 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 |---|---|---|---|
 | [OOM-0001](https://gist.github.com/devdanzin/464cef74ca8186843f33a38078476ac4) | Segfault: `Py_DECREF` of a NULL `filename` in `do_warn` (`_warnings.c:1139`) | ft_debug_asan,ft_release,jit,upstream | [#151673](https://github.com/python/cpython/issues/151673) |
 | [OOM-0002](https://gist.github.com/devdanzin/2dfeabe7508f8e98f27f6df7e381f1cf) | Segfault: `Py_DECREF(NULL)` in `PyContextVar_Set` (`context.c:367`) | ft_debug_asan,ft_release,jit,upstream | **FIXED** |
+| [OOM-0005](reports/OOM-0005-negative-refcount-stackref/report.md) | ~~[FOLDED → OOM-0036] Abort: negative-refcount over-decref in `_PyFrame_ClearLocals` (`frame.c:101`)~~ _(superseded)_ |  | 🔁 dup of OOM-0036 → [#151818](https://github.com/python/cpython/issues/151818) |
+| [OOM-0011](https://gist.github.com/devdanzin/892b61619c1b3c8c2018331b3f1f4983) | ~~[FOLDED → OOM-0008] Abort: `assert(!PyErr_Occurred())` in `specialize` (`specialize.c:364`)~~ _(superseded)_ |  | 🔁 dup of OOM-0008 |
 | [OOM-0024](https://gist.github.com/devdanzin/acf15ad4117c6343b48ed8fdfe7ad167) | Segfault: dealloc of uninitialized iterator in `template_iter` (`templateobject.c:232`) | ft_debug_asan,jit | [#151815](https://github.com/python/cpython/issues/151815) |
 | [OOM-0028](https://gist.github.com/devdanzin/774867b89b3de8d36d7e2ac405034577) | Segfault: NULL deref in `os__path_normpath_impl` (`posixmodule.c:6149`) | ft_debug_asan,ft_release,jit,upstream | **FIXED** |
+| [OOM-0029](https://gist.github.com/devdanzin/10e0fdaf3d89dbe394d94fbf765c70a1) | ~~[FOLDED → OOM-0036] Abort: negative refcount on a freed `str` (`tuple_dealloc`, `tupleobject.c:277`)~~ _(superseded)_ |  | 🔁 dup of OOM-0036 → [#151818](https://github.com/python/cpython/issues/151818) |
 | [OOM-0031](https://gist.github.com/devdanzin/44ffdf25538575e497fd80552ea5d467) | Segfault: NULL `info` deref in `_excinfo_clear_type` (`crossinterp.c:1319`) | ft_debug_asan,ft_release,jit,upstream | **FIXED** |
+| [OOM-0033](https://gist.github.com/devdanzin/249032e1746d63406a5f68d7dfdedb79) | ~~[FOLDED → OOM-0036] Segfault / negative-refcount: over-decreffed `sys.path` entry in `PyType_IsSubtype` (`typeobject.c:2931`)~~ _(superseded)_ |  | 🔁 dup of OOM-0036 → [#151818](https://github.com/python/cpython/issues/151818) |
 | [OOM-0034](https://gist.github.com/devdanzin/9871a21facf4c9c6a415e220f9d10762) | Segfault: unchecked `PyUnicode_AsUTF8` NULL deref in `pegen.c:33` | ft_debug_asan,ft_release,jit,upstream | [#151798](https://github.com/python/cpython/issues/151798) |
 | [OOM-0037](reports/OOM-0037-subinterp-unraisable-structseq/report.md) | Segfault: NULL `UnraisableHookArgs` type-dict deref in `PyStructSequence_New`/`make_unraisable_hook_args` during sub-interpreter finalization under OOM (`structseq.c:30`) | ft_debug_asan,gil_debug_asan,jit,ft_release,upstream | draft |
 | [OOM-0040](reports/OOM-0040-extensions-cache-set-null-key/report.md) | SEGV: `_extensions_cache_set` hashes a NULL key under OOM (`hashtable_hash_str`, `import.c:1312`) | ft_debug_asan,ft_release,jit,upstream | draft |
+| [OOM-0041](reports/OOM-0041-pytraceback-here-nontraceback-tbnext/report.md) | ~~[FOLDED → OOM-0036] Abort: `PyTraceBack_Here` appends to a non-traceback `__traceback__` under OOM (`traceback.c:313`)~~ _(superseded)_ |  | 🔁 dup of OOM-0036 → [#151818](https://github.com/python/cpython/issues/151818) |
 
 ## Assertion / abort
 
@@ -49,6 +54,7 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 | [OOM-0032](https://gist.github.com/devdanzin/f7e483080647c7b76fbda79bfeb07e9c) | Abort: pending-exception assert from `warn_explicit` normalization (`_warnings.c:799/806`) | ft_debug_asan,ft_release,jit,upstream | report |
 | [OOM-0035](https://gist.github.com/devdanzin/8c86ca358f3711740a692eaac730b527) | Abort / malformed str: invalid `maxchar` in `_PyUnicode_FromUCS4` (`unicodeobject.c:2228`) | ft_debug_asan,ft_release,jit,upstream | report |
 | [OOM-0036](reports/OOM-0036-list-append-oom-double-free/report.md) | Double-free / use-after-free: `list.append(x)` under OOM double-frees the item (`_CALL_LIST_APPEND` steals `arg`, then `ERROR_NO_POP`) | ft_debug_asan,ft_release,jit,upstream | [#151818](https://github.com/python/cpython/issues/151818) |
+| [OOM-0042](reports/OOM-0042-import-run-extension-stale-memoryerror/report.md) | ~~Abort: stale `MemoryError` trips `assert(!PyErr_Occurred())` in `import_run_extension` (`import.c:2301`)~~ _(superseded)_ | ft_debug_asan,jit | 🔁 dup of OOM-0040 |
 
 ## Fatal Python error
 
