@@ -1,7 +1,8 @@
-OOM-0005 use-after-free face. Same over-decref as the negative-refcount abort (backtrace.txt),
-caught here as a clean heap-use-after-free because the freed local is ALSO referenced elsewhere.
+OOM-0005 -- eval-loop stackref over-decref under OOM, caught as a clean heap-use-after-free
+because the over-decref'd local is ALSO referenced elsewhere (on a plain debug build the same
+over-decref surfaces earlier as a _Py_NegativeRefcount abort at the PyStackRef_XCLOSE site).
 
-Reduced repro: repro_uaf.py  (pkgutil.get_importer(str) -> os.fsdecode -> os.fspath, under set_nomemory).
+Reduced repro: repro.py  (pkgutil.get_importer(str) -> os.fsdecode -> os.fspath, under set_nomemory).
 
 ============================================================================================
 (A) debug-gil-nojit-asan -- AddressSanitizer: heap-use-after-free (commit 1b9fe5c)
@@ -15,7 +16,7 @@ READ of size 4 (the later use of the freed object):
   #4 _PyDict_SubscriptKnownHash Objects/dictobject.c:3711
   #5 _PyEval_EvalFrameDefault   Python/generated_cases.c.h:686
 
-FREED by (the OOM-0005 over-decref -- identical to backtrace.txt):
+FREED by (the OOM-0005 over-decref -- THE BUG):
   #1 unicode_dealloc            Objects/unicodeobject.c:1710
   #2 _Py_Dealloc                Objects/object.c:3319
   #3 Py_DECREF_MORTAL           Include/internal/pycore_object.h:419
