@@ -89,6 +89,8 @@ def collect():
     rows = set()  # (oom_id, kind, keytype, key)
     for meta in sorted(REPORTS.glob("*/meta.json")):
         d = json.loads(meta.read_text())
+        if d.get("status") == "folded":
+            continue  # retired ID, merged into another bug which carries the dedup keys
         oid, kind = d["id"], d.get("crash_kind", "?")
         # msg_family: a substring catch-all for a whole bug FAMILY whose fatal differs only by
         # a variable token (e.g. OOM-0023's generic subtype_dealloc: "Deallocator of type 'X'

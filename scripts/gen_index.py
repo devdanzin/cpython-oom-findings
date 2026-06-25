@@ -37,6 +37,9 @@ def report_link(d):
 def main():
     metas = sorted((json.loads(p.read_text()) for p in REPORTS.glob("*/meta.json")),
                    key=lambda d: d["id"])
+    # 'folded' entries are retired IDs merged into another bug (which carries the keys);
+    # exclude them from the listing and the unique-bug count.
+    metas = [d for d in metas if d.get("status") != "folded"]
     by_kind = {}
     for d in metas:
         by_kind.setdefault(d.get("crash_kind", "segv"), []).append(d)
