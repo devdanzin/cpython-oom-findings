@@ -135,6 +135,23 @@ decref of the victim ⇒ it's OOM-0036, **fold it** (`status: "folded"`, `folded
 `PyObject` offsets: `ob_ref_local@+0xc`, `ob_ref_shared@+0x10`, `ob_type@+0x18`; for a SEGV
 victim, `handle SIGSEGV nostop noprint pass` before `reverse-continue`.
 
+**Rule (when `rr` is worth it — go/no-go).** `rr`'s power is finding the **last write** to a
+location, so it enriches *only* bugs whose defect is an **errant write / errant state-set far
+from the crash**: over-decref / double-free / UAF (an errant decref → OOM-0036) and
+stale-pending-exception where a producer **swallowed or left-set** an exception (OOM-0008's
+`f_back` swallow). **Skip `rr`** for **"missing-operation" bugs** — there is no producing write
+to reverse to: a missing NULL-check (OOM-0028, OOM-0034), a missing init / uninitialized read
+(OOM-0035), a missing GC-track (OOM-0006), or a **local-invariant** assert whose causal chain is
+one frame (OOM-0009). Validated 2026-06-25 by running `rr` on all five of those — **0/5 enriched**
+(reverse-watch had nothing to bite on; reverse-step just walked back within the same frame to the
+report-named call). **Note:** "producer off-stack" is *necessary but not sufficient* — OOM-0035's
+producer *is* off-stack (an earlier write phase) yet `rr` still can't help, because uninitialized
+memory is the *absence* of a write. For these, the static backtrace already holds the whole
+story; root-cause by reading the crash frame, not by recording a trace. (Stale-pending-exception
+of the *cleanly-raised-but-bad-consumer* kind — OOM-0022, OOM-0025 — is a borderline middle case:
+`rr` *can* pin which clean alloc raised it, but the consumer/detector is already on the stack, so
+it only upgrades a hypothesis to confirmed; do it only when the producer's identity is disputed.)
+
 ## Triage / mint a new bug (lifecycle)
 
 1. **Reproduce + backtrace** across the build matrix (`scripts/triage_matrix.sh`, or by
