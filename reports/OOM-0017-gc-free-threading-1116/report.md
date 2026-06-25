@@ -103,6 +103,19 @@ Per the OOM-catalog convention for assert-based aborts, the non-debug builds (`f
 
 Three fuzzer vehicles, all in the `socket` target driving `recv_fds`/`send_fds` under OOM, abort at the identical `validate_gc_objects` / `gc_get_refs(op) >= 0` assertion on the FT debug build.
 
+**Root cause re-confirmed (`1b9fe5c`, 2026-06-24).** A later review questioned whether this
+analysis is stale, on the theory that `array.array` is now *immortal* (which would make
+`array_dealloc`'s `Py_DECREF(tp)` a no-op). That theory is incorrect on this build:
+`_testcapi.is_immortal(array.array)` is `False`, `_testinternalcapi.has_deferred_refcount(array.array)`
+is `True`, and the type's reported refcount **moves with live references** (adding 1000 strong
+refs raises it by exactly 1000, removing them restores it). The `~2^60` figure is the
+free-threaded **deferred-refcount base shared by every heap type** (a bare `class H: pass` reads
+`0x1000000000000002`), not an immortality marker — exactly the "deferred base" this report already
+names. So `Py_DECREF(tp)` is a real shared-refcount decrement and the deferred-vs-strong mismatch
+root cause holds; the repro still aborts 6/6 here. (That a bare `array.array("i")` sweep does not
+reproduce is the documented allocation-window effect — `recv_fds` lands the failure at the right
+offset — not a sign of immortality.)
+
 ## Versions
 
 - main (3.16.0a0, commit 15d7406); aborts on the free-threaded debug+ASan build at `gc_free_threading.c:1116` and on the jit debug build at `gc.c:96`. ft_release/upstream: assertion compiled out (`n/a`, clean exit).

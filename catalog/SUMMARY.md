@@ -80,6 +80,26 @@ confidence, lowest effort to verify): **OOM-0001, 0002, 0012, 0014, 0020, 0028, 
 (**OOM-0005** is the most severe defect — an eval-loop stackref over-decref / memory-safety bug — but its
 minimal repro is confirmed only on the debug build, so it's listed under debug-only, not here.)
 
+**Sibling clusters (why some vehicles resist primitive reduction).** Several findings sit on
+tightly-coupled C error paths: reducing a vehicle to primitives often just re-routes the failure
+to a *neighbouring* bug, because the vehicle's specific allocation profile selects which sibling
+fires. Three observed clusters:
+- **pegen error-recovery** — OOM-0013 (`ceval.c:843`, CALL specialize result/error contract),
+  OOM-0019 (`pegen_errors.c` error-line double-free), OOM-0021 (`call.c:43` `_Py_CheckFunctionResult`
+  NULL). `compile()` / `ast.parse` / direct-builtin paths each trip a different one, so `ast.parse`
+  is the natural readable entry for OOM-0019 rather than an incidental vehicle.
+- **stale-pending-`MemoryError`** — OOM-0008 (`typeobject.c:6343` type cache), OOM-0011
+  (`specialize.c:364`), OOM-0025 (`specialize.c:378` `unspecialize`), OOM-0022 (`_Py_CheckSlotResult`
+  via `DELETE_SUBSCR`). All are `!PyErr_Occurred()` / "succeeded-with-exception" asserts checked after
+  a stale `MemoryError`; the OOM-0011 repro's run-to-run drift between its own site and OOM-0008's is
+  the same effect *within* one repro.
+- **dealloc-clears / over-decref `MemoryError`** — OOM-0007 & OOM-0023 (a `tp_dealloc` clears an
+  in-flight `MemoryError`: dedicated `context_tp_dealloc` vs generic `subtype_dealloc`), OOM-0005 &
+  OOM-0029 (an over-decref leaves a refcount-0 `MemoryError`, caught at frame/tuple teardown).
+
+A vehicle that looks "incidental" is often load-bearing precisely because its allocation count lands
+the failure on the intended sibling rather than a neighbour.
+
 Notes:
 - The `ASan/jit` rows are mostly `Py_DEBUG` assertions compiled out under `-DNDEBUG`; several reports note
   the release behavior is then a *latent* NULL-deref/UB rather than a clean crash (e.g. OOM-0008, OOM-0012).
