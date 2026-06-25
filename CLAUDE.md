@@ -22,20 +22,28 @@ first.**
 
 ## Current state (keep this updated)
 
-- **39 unique bugs cataloged (OOM-0001..0039), all committed**, each with a minimal
-  deterministic reproducer. `catalog/SUMMARY.md` is the snapshot table.
+- **38 unique bugs cataloged**, all committed, each with a reproducer. IDs run
+  **OOM-0001..0042**; **four ids retired** — OOM-0005, OOM-0029, OOM-0033, OOM-0041 were all
+  `rr`-proven to be **OOM-0036** at different detector sites and folded into it (see the
+  over-decref rule under *Dedup-key curation*). `catalog/SUMMARY.md` is the snapshot table.
 - **Published:** OOM-0001..0035 are public gists, tracked from the umbrella issue
   **python/cpython#151763**. **OOM-0036** is filed as its own issue,
   **python/cpython#151818** — a `list.append()` double-free under `MemoryError` in the
-  `_CALL_LIST_APPEND` bytecode; found by fusil's new `--oom-seq` mode; reproduces *without*
-  `_testcapi` via a real `RLIMIT_AS` cap. Watch the issues for fixes → set
+  `_CALL_LIST_APPEND` bytecode; found by fusil's `--oom-seq` mode; reproduces *without*
+  `_testcapi` via a real `RLIMIT_AS` cap. **It is the catalog's most prolific duplicator** —
+  rr keeps revealing other entries to be faces of it. Watch the issues for fixes → set
   `status: fixed:<commit>` on the relevant `meta.json`.
 - **Newest finds (`drafted`, not yet gisted):** OOM-0037 (subinterpreter unraisable-hook
-  structseq) and OOM-0039 (`deque.clear()` `PyErr_Clear` clobbers an in-flight exception)
-  are filing candidates; **OOM-0038** (FT-subinterpreter indexpool/tlbc reserve) is on
-  `filing_hold` per upstream guidance (#143232). See `reports/NEXT_STEPS.md`.
-- ~11 reproduce on a **release** build (highest-value); the rest are debug-only asserts
+  structseq), OOM-0039 (`deque.clear()` `PyErr_Clear` clobbers an in-flight exception),
+  **OOM-0040** (`_extensions_cache_set` NULL-key `strlen` segv) and **OOM-0042**
+  (`import_run_extension` stale `MemoryError` assert) are filing candidates; **OOM-0038**
+  (FT-subinterpreter indexpool/tlbc reserve) is on `filing_hold` per upstream guidance
+  (#143232). See `reports/NEXT_STEPS.md`.
+- ~12 reproduce on a **release** build (highest-value); the rest are debug-only asserts
   (compiled out under `NDEBUG`, where the same defect is latent UB / UAF).
+- **`rr` works on this box** (after the Zen SpecLockMap workaround) and is now the primary
+  tool for pinning over-decref/UAF *producers* — see the over-decref rule under *Dedup-key
+  curation* and the recipe in *Getting a backtrace*.
 - SEGV + deferred-singleton phases done; fleet triages keep deduping to the catalog. Host-
   only candidates → `catalog/host_only_candidates.md` (HOC-1 likely fixed by GH-150516);
   withdrawn non-bugs (harness artifacts) → `catalog/non_bugs.md`.
@@ -86,7 +94,7 @@ catch for a malformed-JSON note).
 ±12), `assert` (`file:expr`), and `msg` (fatal prefix). The deduper matches a crash
 against ALL keys and, on a tie, `decide()` picks `sorted(matched)[0]` (lowest id). So a
 **generic detector/plumbing key shared by several bugs causes a mislabel** to the
-lowest-numbered one. We have fixed this class of bug **three times**:
+lowest-numbered one. We have fixed this class of bug **repeatedly**:
 
 - `!PyErr_Occurred()` / `!_PyErr_Occurred(tstate)` asserts (OOM-0011 vs 0025) →
   `GENERIC_ASSERTS` denylist in `gen_known_sites.py`.
@@ -94,13 +102,36 @@ lowest-numbered one. We have fixed this class of bug **three times**:
   `Include/refcount.h:*`, `object.c:275`, the `object has negative ref count` assert) —
   shared by OOM-0005/0019/0029 → `GENERIC_DETECTOR_FUNCS` + `DETECTOR_FILE` +
   `_generic_assert()` (mirrors `oom_dedup._BT_SKIP`/`_BT_SKIP_FILE`).
+- the **eval-loop operand-stack teardown** frames (`PyStackRef_XCLOSE`,
+  `_PyFrame_ClearLocals`, `_PyFrame_ClearExceptCode`, `clear_thread_frame`) — shared by
+  OOM-0007/0023 and the (now-folded) OOM-0005; keying them mislabeled OOM-0036 as a
+  separate "OOM-0005". Added to `GENERIC_DETECTOR_FUNCS`. A bare `frame.c:101` over-decref
+  abort now correctly surfaces as `oomNEW` → triage.
 
 **Rule:** detector/plumbing frames (the assert machinery, `Py_DECREF`/atomics in
-`refcount.h`/`pyatomic*.h`/`object.h`, the generic dealloc dispatch) *catch* corruption —
-they are never the defect and must not be discriminating keys. **After `gen_known_sites`,
-grep the new bug's keys and prune any generic/shared frame before committing.** The real
-discriminator is the bug's own site (the cascade frame, the parser frame, the specific
-assert), reached via the resolved backtrace chain.
+`refcount.h`/`pyatomic*.h`/`object.h`, the generic dealloc dispatch, the eval-loop
+stack-teardown) *catch* corruption — they are never the defect and must not be
+discriminating keys. **After `gen_known_sites`, grep the new bug's keys and prune any
+generic/shared frame before committing.** The real discriminator is the bug's own site
+(the cascade frame, the parser frame, the specific assert), reached via the resolved
+backtrace chain.
+
+**Rule (over-decref / negref / double-free / UAF): `rr`-check the *producer* before
+minting it as a new bug.** These crashes surface at a *detector* (a later
+dealloc/teardown/refcount-check tripping over an already-corrupted object); the detector
+site is **not** the bug and varies by which path holds the second reference. Reverse-execution
+is the only reliable way to find the producer — and in practice it is *very often*
+[OOM-0036](reports/OOM-0036-list-append-oom-double-free/report.md), the `_CALL_LIST_APPEND`
+`list.append()`-under-`MemoryError` double-free: **four** separately-cataloged entries
+(OOM-0005/0029/0033/0041) turned out to be OOM-0036 reached via different stdlib paths that
+internally `list.append` a second-referenced object under OOM. **Procedure** (needs the Zen
+SpecLockMap workaround; see *Local environment*): record the vehicle under `rr`, break at the
+detector, `watch -l` the victim's `ob_ref_local` (`+0xc`) and `reverse-continue` through its
+full incref/decref ledger **back to allocation** (do not stop early — a partial trace twice
+mislabeled OOM-0036); a `_PyList_AppendTakeRefListResize@listobject.c:531` ← `_CALL_LIST_APPEND`
+decref of the victim ⇒ it's OOM-0036, **fold it** (`status: "folded"`, `folded_into`). FT
+`PyObject` offsets: `ob_ref_local@+0xc`, `ob_ref_shared@+0x10`, `ob_type@+0x18`; for a SEGV
+victim, `handle SIGSEGV nostop noprint pass` before `reverse-continue`.
 
 ## Triage / mint a new bug (lifecycle)
 
@@ -109,6 +140,11 @@ assert), reached via the resolved backtrace chain.
    (and negrefcount/generic-assert aborts) resolve the C site — see *Getting a backtrace*.
 2. **Dedupe** against `known_sites.tsv` (run `ingest.py` over the dir, or check by hand).
    MATCH → add the dir to that report's `meta.json` `vehicles[]` and stop. NEW → continue.
+   **If it's an over-decref / negref / double-free / UAF, `rr`-check the producer before
+   treating it as NEW** (see the over-decref rule above) — it is very often OOM-0036 at a
+   new detector site. A confirmed-duplicate existing entry is *folded*, not deleted: set its
+   `meta.json` `status: "folded"` + `folded_into: "OOM-####"`, leave a redirect `report.md`,
+   keep its artifacts; the generators skip `status == "folded"` (not counted, emits no keys).
 3. **Minimize** to a deterministic stdlib-only repro — **`docs/MINIMIZATION.md`**.
 4. **Root-cause** by reading CPython source at the faulting frame; write the defect + a
    suggested fix.
