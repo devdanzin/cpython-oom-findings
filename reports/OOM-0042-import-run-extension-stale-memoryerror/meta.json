@@ -1,0 +1,25 @@
+{
+  "id": "OOM-0042",
+  "slug": "import-run-extension-stale-memoryerror",
+  "title": "Abort: stale `MemoryError` trips `assert(!PyErr_Occurred())` in `import_run_extension` (`import.c:2301`)",
+  "description": "Importing a single-phase C extension under OOM: the init runs and `import_run_extension` reaches its post-init invariant `assert(!PyErr_Occurred())` (Python/import.c:2301, in the `_Py_ext_module_kind_SINGLEPHASE` branch, just after `_PyImport_CheckSubinterpIncompatibleExtensionAllowed`) with a stale `MemoryError` still pending, and aborts. The single-phase init returned success without leaving a clean error state under allocation failure. Stale-pending-exception class (cf. OOM-0008/0011/0021/0022), in the C-extension import path.",
+  "crash_kind": "abort",
+  "sites": ["Python/import.c import_run_extension:2301"],
+  "signature": {
+    "site_frame": "import_run_extension@Python/import.c:2301",
+    "top_frames": ["import_run_extension@Python/import.c:2301"]
+  },
+  "vehicles": [
+    "local-fleet inst-03/04 code/pdb/site-assertion (import readline single-phase under OOM)",
+    "oca inst-01/02 python-11 code/pdb-assertion"
+  ],
+  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort", "upstream": "n/a"},
+  "repro_start": null,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-06-24",
+  "confirmed_commit": "1b9fe5c",
+  "notes": "Stale-pending-exception DETECTOR assert in the single-phase C-extension import path. import_run_extension (Python/import.c, def at :2095) runs _PyImport_RunModInitFunc (the legacy PyInit_*), and on the no-error SINGLEPHASE path does `if (_PyImport_CheckSubinterpIncompatibleExtensionAllowed(name_buf) < 0) goto error; assert(!PyErr_Occurred());` at :2301. Under OOM an allocation in the single-phase init leaves a MemoryError pending while the init still reports success (res.kind==SINGLEPHASE, no main_error) -> the assert fires. gdb (debug-ft-nojit-asan @1b9fe5c): pending exception type == MemoryError; the importing extension is `readline` (p0 == PyInit_readline); call path import_run_extension:2301 <- _imp_create_dynamic_impl:5529 <- _imp_create_dynamic <- cfunction_vectorcall_FASTCALL. Vehicle modules code/pdb/site/sys all transitively first-import readline (a single-phase C ext) during the fuzz run. Reproduces 6/6 on debug-ft-nojit-asan from the vehicle. DISTINCT from: OOM-0040 (segv at hashtable_hash_str/import.c:1312 in _extensions_cache_set, AFTER successful init; shares only the _imp_create_dynamic_impl caller -- keyed on import_run_extension:2301 here, NOT the shared caller, to avoid conflation); OOM-0022 (_Py_CheckSlotResult in reload_singlephase_extension import.c:2011, the multi-phase/reload slot-result check); OOM-0021 (_Py_CheckFunctionResult call.c:43). All are siblings in the stale-pending-MemoryError / success-with-exception family but at distinct sites. Py_DEBUG-only abort (ft_debug_asan + jit, both Py_DEBUG=1); on release (ft_release, upstream; NDEBUG) the assert is compiled out and the stale MemoryError propagates out of the import (a spurious/late MemoryError or cleared downstream) -> n/a for this signature. MINIMIZATION PARTIAL/vehicle-confirmed: a bare `import readline` under a windowed set_nomemory sweep in fresh processes (start 0..120, window 8) did NOT reproduce -- the failing allocation must land inside readline's init, which the vehicle's broader allocation profile achieves but a bare import does not (same first-import-under-OOM isolation difficulty as OOM-0040; a C ext only runs PyInit once, so single-process sweeps can't re-arm it). Producer (the exact init allocation that fails and is left pending) not pinned. Found via fusil --oom-seq OOM-injection fuzzing 2026-06-24; recurring across 3 machines (local fleet + oca), 11+ candidate dirs."
+}

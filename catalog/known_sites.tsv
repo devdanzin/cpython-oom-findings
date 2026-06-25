@@ -376,3 +376,5 @@ OOM-0041	abort	func	Python/traceback.c:_PyTraceBack_FromFrame
 OOM-0041	abort	line	Python/traceback.c:313
 OOM-0041	abort	line	Python/traceback.c:317
 OOM-0041	abort	line	Python/traceback.c:326
+OOM-0042	abort	func	Python/import.c:import_run_extension
+OOM-0042	abort	line	Python/import.c:2301

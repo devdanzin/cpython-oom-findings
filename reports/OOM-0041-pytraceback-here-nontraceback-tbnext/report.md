@@ -33,7 +33,7 @@ This is the same over-decref / stale-reference class as the eval-loop OOM bugs (
 
 ## Reproducer
 
-Vehicle-confirmed; **minimization open** (see Notes). The preserved fuzzer vehicle `vehicle_source.py` (target module `inspect`) aborts deterministically with this assertion. A plain "raise through several frames under an OOM sweep" does **not** reproduce — the corruption requires the specific over-decref of the traceback object, which is not yet isolated:
+Vehicle-confirmed; **minimization open** (see Notes). The preserved fuzzer vehicle `vehicle_source.py` (target module `inspect`) reliably crashes under the `--oom-seq` sweep, but the *detector site it hits is build- and timing-dependent* — see the build-pinned diagnostic below. A plain "raise through several frames under an OOM sweep" does **not** reproduce — the corruption requires the specific over-decref of a stack/exception object, which is not isolated to a primitive trigger:
 
 ```python
 # Does NOT reproduce on its own (survives): plain exception propagation under OOM does not
@@ -57,6 +57,35 @@ for start in range(3000):
         pass
 print("survived (no crash)")
 ```
+
+### Build-pinned diagnostic (`1b9fe5c`, 2026-06-24)
+
+Re-running the vehicle on the current build shows the `traceback.c:313` assert was the
+**capture-time face** of a broader over-decref; the same `vehicle_source.py` now lands on
+*sibling* detectors of the same underlying corruption, depending on build:
+
+- **`debug-ft-nojit-asan` → `pycore_stackref.h:726` negative-refcount, 27/27** (inspect,
+  `_pyrepl_render`, `xmlrpc_server` vehicles). gdb at the abort: the over-decref'd object's
+  `ob_type` is `0xdddddddddddd…` (debug freed-fill) — i.e. an **already-freed object**
+  decref'd again. The decref is `_PyEval_EvalFrameDefault → PyStackRef_XCLOSE` inside
+  `LABEL(exception_unwind)` (`generated_cases.c.h:13857`, the loop that pops & `XCLOSE`s every
+  operand-stack slot when an exception unwinds a frame). That is a **sibling of OOM-0005**
+  (whose `XCLOSE` over-decref is the `_PyFrame_ClearLocals@frame.c:101` loop). Crucially, this
+  `XCLOSE` is the statement that runs **immediately after** the `PyTraceBack_Here(f)` call
+  (`generated_cases.c.h:13833`) in the *same* exception-raise block — so the traceback assert
+  and this negref are consecutive consumers of objects the OOM over-decref left dangling.
+- **`debug-gil-nojit-asan` → SEGV in `tuple_alloc` (`tupleobject.c:48`) via
+  `_PyTuple_FromStackRefStealOnSuccess`, 8/8**: a `BUILD_TUPLE`-style stack-steal op pops a
+  corrupted **tuple freelist** entry and reads its type (`PyType_HasFeature`) off a garbage
+  pointer — the OOM-0004 freelist-corruption family.
+
+So OOM-0041 is best understood as one **detector face of the eval-loop over-decref / freelist-
+corruption family under OOM** (the same cluster as OOM-0004 / OOM-0005), surfacing at the
+traceback invariant when the freed/over-decref'd object is (or aliases) the in-flight
+exception's `traceback`. The producer — the OOM error path that drops the extra reference — is
+the same unpinned root shared with OOM-0005; it was **not** isolated here. (`rr` reverse-
+execution from the abort to the freeing decref is the clean way to pin it, but is currently
+blocked on this Zen host by the SpecLockMap erratum — it needs a root MSR change.)
 
 ## Backtrace
 
@@ -90,7 +119,17 @@ Found via OOM-injection fuzzing (`_testcapi.set_nomemory`), fusil `--oom-seq` mo
 
 **Debug-only signature; latent UB on release.** The assertion is `Py_DEBUG`-gated (abort on `ft_debug_asan` + `jit`); on release builds (`ft_release`, `upstream`) it is compiled out and the dangling `tb_next` is linked into the new traceback and later traversed/freed — a latent use-after-free, recorded `n/a` for the release builds.
 
-**Minimization: open.** Vehicle-confirmed; a plain raise-under-OOM sweep does not reproduce (the over-decref trigger is unisolated). Recommended next step: gdb watchpoint on `exc->traceback` against the vehicle to pin the freeing decref, then catalog the producer (it may turn out to be a face of an existing eval-loop over-decref bug such as OOM-0005).
+**Minimization: open; classification refined (2026-06-24).** Vehicle-confirmed; a plain
+raise-under-OOM sweep does not reproduce. The build-pinned diagnostic above **confirms** the
+report's earlier hypothesis: this is a detector face of the eval-loop over-decref / freelist-
+corruption family (cluster with OOM-0004 / OOM-0005), not an independent producer bug — the
+same vehicle now surfaces OOM-0005's `pycore_stackref.h:726` (27/27 FT) and an OOM-0004-family
+tuple-freelist SEGV (8/8 GIL), with the freed object confirmed (`ob_type == 0xdd`). The
+producer (the over-decref under OOM) is the shared, still-unpinned root. Pinning it needs `rr`
+reverse-execution from the abort to the freeing decref (blocked here by the Zen SpecLockMap
+erratum) or a watchpoint approach; a gdb watchpoint on `exc->traceback` is impractical because
+the failing allocation/victim varies run-to-run. Kept as a distinct catalog entry so the
+`traceback.c:313` detector keeps a dedup key, cross-linked to the cluster.
 
 ## Versions
 

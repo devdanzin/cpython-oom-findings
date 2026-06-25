@@ -1,0 +1,39 @@
+# Authoritative capture (debug-ft-nojit-asan = ft_debug_asan, commit 1b9fe5c, Clang 21).
+# Py_DEBUG-gated assertion abort. Reproduced from vehicle_source.py (target: code; the
+# crashing import is the single-phase C extension `readline`, pulled in transitively).
+
+## Assertion + fatal
+python: Python/import.c:2301: PyObject *import_run_extension(PyThreadState *, PyModInitFunction, struct _Py_ext_module_loader_info *, PyObject *, PyObject *): Assertion `!PyErr_Occurred()' failed.
+Fatal Python error: Aborted
+
+## C stack (gdb, break __assert_fail)
+#0  __assert_fail                 assertion="!PyErr_Occurred()", file="Python/import.c", line=2301,
+                                  function=import_run_extension
+#1  import_run_extension          Python/import.c:2301   <- assert(!PyErr_Occurred()) in the SINGLEPHASE branch,
+                                  (tstate=..., p0=PyInit_readline, info=..., spec=..., modules=...)
+#2  _imp_create_dynamic_impl      Python/import.c:5529
+#3  _imp_create_dynamic           Python/clinic/import.c.h:489
+#4  cfunction_vectorcall_FASTCALL Objects/methodobject.c:449
+#5  _PyVectorcall_Call            Objects/call.c:273
+#6  _PyEval_EvalFrameDefault      Python/generated_cases.c.h:2831   (the `import readline` statement)
+
+## Evidence
+# gdb at the assert: tstate->current_exception->ob_type->tp_name == "MemoryError"
+#   (the pending exception is a stale MemoryError from a failed allocation during readline's
+#    single-phase init; the init nonetheless reported success -> the post-init invariant fires).
+# p0 (the module init function) == PyInit_readline -> a single-phase C extension.
+
+## Source context (Python/import.c, import_run_extension, SINGLEPHASE branch)
+#   assert(res.kind == _Py_ext_module_kind_SINGLEPHASE);
+#   assert_singlephase_def(def);
+#   if (_PyImport_CheckSubinterpIncompatibleExtensionAllowed(name_buf) < 0) {
+#       goto error;
+#   }
+#   assert(!PyErr_Occurred());          /* line 2301 -- fires under OOM */
+
+## Build matrix (vehicle_source.py)
+# ft_debug_asan (Py_DEBUG=1): ABORT, assert as above (rc 134), 6/6.
+# jit           (Py_DEBUG=1): ABORT expected (same Py_DEBUG assert; not separately captured).
+# ft_release / upstream (Py_DEBUG=0): assert compiled out -> the stale MemoryError propagates
+#                                     out of the import (spurious/late MemoryError or cleared
+#                                     downstream). n/a for this signature.
