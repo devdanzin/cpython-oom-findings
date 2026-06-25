@@ -1,33 +1,11 @@
 {
   "id": "OOM-0011",
   "slug": "specialize-pyerr",
-  "title": "Abort: `assert(!PyErr_Occurred())` in `specialize` (`specialize.c:364`)",
-  "description": "`Python/specialize.c`: the adaptive `LOAD_ATTR` specializer runs before the attribute load and never checks `PyErr_Occurred()`, so under OOM a stale `MemoryError` from an earlier allocation is still pending when it reaches `specialize(instr, LOAD_ATTR_MODULE)`, tripping the debug assert `!PyErr_Occurred()` (specialize.c:364) and aborting",
-  "crash_kind": "abort",
-  "sites": ["Python/specialize.c specialize:364", "Python/specialize.c specialize_module_load_attr_lock_held:443", "Python/specialize.c _Py_Specialize_LoadAttr:1010"],
-  "signature": {
-    "site_frame": "specialize@Python/specialize.c:364",
-    "top_frames": ["specialize@Python/specialize.c:364", "specialize_module_load_attr_lock_held@Python/specialize.c:443", "specialize_module_load_attr@Python/specialize.c:460", "_Py_Specialize_LoadAttr@Python/specialize.c:1010", "_PyEval_EvalFrameDefault@Python/generated_cases.c.h:8761"]
-  },
-  "vehicles": [
-    "python-4/argparse-assertion",
-    "python-5/bdb-assertion",
-    "python-5/bdb-assertion-sigabrt",
-    "python-5/bdb-sigabrt-assertion",
-    "python-5/optparse-assertion-2",
-    "python-5/optparse-assertion",
-    "python-7/argparse-assertion-sigabrt",
-    "python-7/bdb-sigabrt-assertion",
-    "python-7/bdb-assertion",
-    "python-7/gettext-assertion-sigabrt"
-  ],
-  "matrix": {"ft_debug_asan": "abort", "ft_release": "n/a", "jit": "abort", "upstream": "n/a"},
-  "repro_start": 54,
-  "upstream_reported": false,
-  "upstream_issue": null,
-  "gist_url": "https://gist.github.com/devdanzin/892b61619c1b3c8c2018331b3f1f4983",
-  "status": "gisted",
+  "title": "[FOLDED → OOM-0008] Abort: `assert(!PyErr_Occurred())` in `specialize` (`specialize.c:364`)",
+  "status": "folded",
+  "folded_into": "OOM-0008",
   "found_date": "2026-06-18",
-  "confirmed_commit": "15d7406",
-  "notes": "assert-based abort in the adaptive specializer. _SPECIALIZE_LOAD_ATTR (generated_cases.c.h:8761) calls _Py_Specialize_LoadAttr at the start of the LOAD_ATTR opcode, before the attribute is loaded; neither it nor specialize_module_load_attr_lock_held checks PyErr_Occurred(). Under set_nomemory, an earlier allocation leaves a MemoryError pending, so specialize() (specialize.c:364) and the type cache (typeobject.c:6342-6343) both hit their assert(!PyErr_Occurred()). Crashes on assertion-enabled builds: ft_debug_asan=abort, jit=abort; ft_release/upstream define NDEBUG so the assert is compiled out (n/a, clean exit -- specialized opcode is written with the error still pending, propagated normally). Confirmed crashing opcode 190 = LOAD_ATTR_MODULE; pending exception is MemoryError (gdb). Fix: bail out of specialization (unspecialize + return) when PyErr_Occurred() at the _Py_Specialize_* entry points, or don't invoke the specializer while tstate has a pending error. MINIMAL REPRO (shrinkray-reduced from the vehicle, then cleaned; deterministic, re-verified): `optparse.ngettext(0.0, 0, \"\")` (the `import asyncio` is load-bearing — it shifts the allocation window so a LOAD_ATTR specialization fails under OOM) under the set_nomemory sweep. BUILD NOTE (1b9fe5c, 2026-06-24): the committed repro is FLAKY between two sibling !PyErr_Occurred() sites but still fires at its OWN site on the MAJORITY of runs -- ~75-80% at specialize.c:364 (this bug), ~20-25% at _PyType_LookupStackRefAndVersion typeobject.c:6343 (OOM-0008's site); e.g. 16/20 own vs 4/20 sibling (corroborated by another instance's 9/12 own). Same defect family (stale MemoryError pending at a !PyErr_Occurred() assert); the alloc window drifted across 15d7406->1b9fe5c so the sweep occasionally lands on the type-cache assert first. Window-drift flakiness, NOT a new bug or deterministic mislabel; NO re-pin required. To pin deterministically, tighten the sweep so the failure precedes the type-cache lookup. repro.py and signature/sites unchanged. (An earlier 5/10 sample read as ~50/50 was small-sample noise; larger N shows clear own-site majority.)"
+  "confirmed_commit": "1b9fe5c",
+  "gist_url": "https://gist.github.com/devdanzin/892b61619c1b3c8c2018331b3f1f4983",
+  "notes": "RETIRED 2026-06-25 — folded into OOM-0008. `specialize`@specialize.c:364's `assert(!PyErr_Occurred())` is a GENERIC stale-pending-exception DETECTOR, not the bug. rr reverse-execution of the repro (`optparse.ngettext` + the load-bearing `import asyncio`) watched `tstate->current_exception` and reversed to where the stale MemoryError was set: `_PyErr_SetRaisedException` <- `_PyErr_NoMemory` <- `_PyObject_GC_NewVar`(PyFrameObject) <- `_PyFrame_MakeAndSetFrameObject`/`PyFrame_GetBack` <- `frame_back_get_impl` (reading frame.f_back). That is EXACTLY OOM-0008's bug: PyFrame_GetBack swallows a MemoryError under OOM (returns NULL without propagating; frame_back_get_impl maps NULL->None), leaving the exception pending so the NEXT `!PyErr_Occurred()` checkpoint aborts. OOM-0008 catches it at the type-cache lookup (typeobject.c:6343); this repro catches it at the LOAD_ATTR specializer (specialize.c:364) -- same producer, different detector (the OOM-0011 flakiness/drift between :364 and :6343 was always the same f_back-swallow). All of OOM-0011's vehicles (optparse/bdb/argparse/gettext) are frame-walkers that read f_back, like OOM-0008's 16. KEY LIMITATION: stale-exception crashes are backtrace-undisambiguable (the producer f_back already returned before the assert; it is NOT on the crash stack), so dedup can only key the DETECTOR assert site. OOM-0008 now owns BOTH detector sites (typeobject.c:6343 and specialize.c:364 + specialize_module_load_attr_lock_held + _Py_Specialize_LoadAttr, moved here); a stale-exception crash at either -> OOM-0008. AUDIT CAVEAT: these are producer-agnostic detectors -- almost always f_back-swallow (OOM-0008), but a stale exception from a DIFFERENT producer reaching them would mislabel; rr-confirm if behavior seems off. Gen scripts skip status==folded. Gist 892b6161 should be marked superseded. id NOT reused."
 }

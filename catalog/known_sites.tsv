@@ -44,12 +44,18 @@ OOM-0008	abort	func	Objects/object.c:_PyObject_GenericGetAttrWithDict
 OOM-0008	abort	func	Objects/object.c:_PyObject_GetAttrStackRef
 OOM-0008	abort	func	Objects/typeobject.c:_PyType_LookupStackRefAndVersion
 OOM-0008	abort	func	Python/generated_cases.c.h:_PyEval_EvalFrameDefault
+OOM-0008	abort	func	Python/specialize.c:_Py_Specialize_LoadAttr
+OOM-0008	abort	func	Python/specialize.c:specialize
+OOM-0008	abort	func	Python/specialize.c:specialize_module_load_attr_lock_held
 OOM-0008	abort	line	Objects/frameobject.c:1118
 OOM-0008	abort	line	Objects/frameobject.c:2404
 OOM-0008	abort	line	Objects/object.c:1369
 OOM-0008	abort	line	Objects/object.c:1919
 OOM-0008	abort	line	Objects/typeobject.c:6343
 OOM-0008	abort	line	Python/generated_cases.c.h:8786
+OOM-0008	abort	line	Python/specialize.c:1010
+OOM-0008	abort	line	Python/specialize.c:364
+OOM-0008	abort	line	Python/specialize.c:443
 OOM-0009	abort	assert	Objects/unicodeobject.c:release1 == (buf1 != PyUnicode_DATA(str1))
 OOM-0009	abort	func	Objects/clinic/unicodeobject.c.h:unicode_replace
 OOM-0009	abort	func	Objects/unicodeobject.c:replace
@@ -67,16 +73,6 @@ OOM-0010	abort	line	Objects/typeobject.c:11174
 OOM-0010	abort	line	Objects/typeobject.c:3100
 OOM-0010	abort	line	Python/ceval.c:2141
 OOM-0010	abort	line	Python/generated_cases.c.h:13106
-OOM-0011	abort	func	Python/generated_cases.c.h:_PyEval_EvalFrameDefault
-OOM-0011	abort	func	Python/specialize.c:_Py_Specialize_LoadAttr
-OOM-0011	abort	func	Python/specialize.c:specialize
-OOM-0011	abort	func	Python/specialize.c:specialize_module_load_attr
-OOM-0011	abort	func	Python/specialize.c:specialize_module_load_attr_lock_held
-OOM-0011	abort	line	Python/generated_cases.c.h:8761
-OOM-0011	abort	line	Python/specialize.c:1010
-OOM-0011	abort	line	Python/specialize.c:364
-OOM-0011	abort	line	Python/specialize.c:443
-OOM-0011	abort	line	Python/specialize.c:460
 OOM-0012	abort	assert	Python/instrumentation.c:debug_check_sanity(interp, code)
 OOM-0012	abort	assert	Python/instrumentation.c:debug_check_sanity(tstate->interp, code)
 OOM-0012	abort	func	Python/ceval.h:do_monitor_exc
