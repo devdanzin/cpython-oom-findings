@@ -171,5 +171,16 @@ Dedup: the fleet vehicle keys on `DirEntry_dealloc@Modules/posixmodule.c:16199`;
 generic, so other victims (other holders of the appended item) will surface at different
 dealloc sites and won't auto-dedupe to this entry.
 
+**Downstream faces confirmed (rr, 2026-06-24).** `rr` reverse-execution on an OOM-0041 vehicle
+(`inspect` fuzzing) pinned that crash's over-decref producer to exactly this bug: the appended
+item (an `inspect.Parameter`) is freed by `_PyList_AppendTakeRefListResize@Objects/listobject.c:531`
+from `_CALL_LIST_APPEND` (`generated_cases.c.h:3981`), and the stale operand-stack `_PyStackRef`
+to it is then closed during `exception_unwind` → second free. Depending on what reuses the freed
+storage, the same double-free surfaces at *different detectors*: `DirEntry_dealloc` (the cataloged
+discovery face), a `pycore_stackref.h:726` negative-refcount (the `exception_unwind`
+`PyStackRef_XCLOSE`), a `tuple_alloc` freelist SEGV, or the `traceback.c:313` assert (reported
+separately as **OOM-0041**, a downstream detector face of this bug). These are one bug
+(`_CALL_LIST_APPEND` steal / `ERROR_NO_POP`), many victims/detectors.
+
 Strong, self-contained upstream candidate (tiny pure-Python repro, release-crashing,
 one-spot fix in `_CALL_LIST_APPEND`).

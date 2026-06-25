@@ -61,7 +61,7 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0038 | sub-interpreter TLBC-index reserve calls `PyErr_NoMemory()` with no active thread state (FT-only) | fatal | release | yes | `index_pool.c:_PyIndexPool_AllocIndex` |
 | OOM-0039 | `deque_clear`'s `newblock`-failure `PyErr_Clear()` clobbers an in-flight exception when run from `deque_dealloc` under OOM | fatal | ASan/jit | yes | `_collectionsmodule.c:deque_clear` / `deque_dealloc` |
 | OOM-0040 | first-import of a C extension under a windowed OOM passes a NULL cache key to `_Py_hashtable_set` → `strlen(NULL)` | segv | release | no | `import.c:hashtable_hash_str` / `_extensions_cache_set` |
-| OOM-0041 | `PyTraceBack_Here` appends a frame to a non-traceback `exc.__traceback__` (over-decref/UAF) under OOM | abort | ASan/jit | no | `traceback.c:_PyTraceBack_FromFrame` / `PyTraceBack_Here` |
+| OOM-0041 | `PyTraceBack_Here` appends a frame to a non-traceback `exc.__traceback__` (over-decref/UAF) under OOM — rr-pinned as a **downstream face of OOM-0036** | abort | ASan/jit | no | `traceback.c:_PyTraceBack_FromFrame` / `PyTraceBack_Here` |
 | OOM-0042 | single-phase C-extension init (`readline`) under OOM leaves a stale `MemoryError`, tripping the post-init `assert(!PyErr_Occurred())` | abort | ASan/jit | no | `import.c:import_run_extension` |
 
 **Totals:** 42 bugs — 9 segv, 26 abort, 7 fatal · 13 reproduce on a **release** build · **39 of 42 have a
@@ -97,10 +97,17 @@ fires. Three observed clusters:
   run-to-run drift between its own site and OOM-0008's is the same effect *within* one repro.
 - **dealloc-clears / over-decref `MemoryError`** — OOM-0007 & OOM-0023 (a `tp_dealloc` clears an
   in-flight `MemoryError`: dedicated `context_tp_dealloc` vs generic `subtype_dealloc`), OOM-0005 &
-  OOM-0029 (an over-decref leaves a refcount-0 `MemoryError`, caught at frame/tuple teardown).
+  OOM-0029 (an over-decref leaves a refcount-0 `MemoryError`, caught at frame/tuple teardown), and
+  OOM-0036 (the `_CALL_LIST_APPEND` `list.append` double-free under `MemoryError`). The last is a
+  vivid example of "one producer, many detectors": `rr` reverse-execution pinned OOM-0041
+  (`traceback.c:313`) — and the `pycore_stackref.h:726` negref / `tuple_alloc` freelist SEGV faces of
+  the same vehicle — to OOM-0036's double-freed appended item, reused and then read by whichever
+  invariant gets there first.
 
 A vehicle that looks "incidental" is often load-bearing precisely because its allocation count lands
-the failure on the intended sibling rather than a neighbour.
+the failure on the intended sibling rather than a neighbour. **`rr` reverse-execution** (record the
+crash, watchpoint the victim, `reverse-continue` to the freeing decref) is the tool that turns these
+"detector face" guesses into a pinned producer — it is what linked OOM-0041 → OOM-0036.
 
 Notes:
 - The `ASan/jit` rows are mostly `Py_DEBUG` assertions compiled out under `-DNDEBUG`; several reports note
