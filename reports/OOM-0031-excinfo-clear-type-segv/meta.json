@@ -18,10 +18,10 @@
   "vehicles": ["fleet inst-04 _interpreters-segmentation_fault-exitcode1-oomNEW"],
   "matrix": {"ft_debug_asan": "segv", "ft_release": "segv", "jit": "segv", "upstream": "segv"},
   "repro_start": null,
-  "upstream_reported": false,
-  "upstream_issue": null,
+  "upstream_reported": true,
+  "upstream_issue": "151842",
   "gist_url": "https://gist.github.com/devdanzin/44ffdf25538575e497fd80552ea5d467",
-  "status": "gisted",
+  "status": "fixed",
   "found_date": "2026-06-19",
   "confirmed_commit": "15d7406",
   "notes": "NULL deref (NOT uninitialized/dangling -- gdb on the debug build shows info==0x0). _PyXI_NewExcInfo (crossinterp.c:1683) RawCallocs its struct and on ANY failure RawFrees it and returns NULL; it never returns a half-built struct. _interpreters_capture_exception_impl (Modules/_interpretersmodule.c:1522-1544) does `if (info==NULL) goto finally;` and the finally unconditionally calls _PyXI_FreeExcInfo(info) at L1544 with info==NULL; _PyXI_FreeExcInfo (crossinterp.c:1710) has NO NULL guard -> _PyXI_excinfo_clear -> _excinfo_clear_type derefs &NULL->type (offset 0) at L1319. Reproduces on ALL four builds (not assert-gated). The ASan fault address 0x03e8.. is a red herring from ASan's signal trampoline; gdb shows info=0x0. Fix (fully pinned): a one-line NULL guard -- `if (info != NULL) _PyXI_FreeExcInfo(info);` at _interpretersmodule.c:1544, OR `if (info==NULL) return;` at the top of _PyXI_FreeExcInfo; 1544 is the ONLY direct caller of _PyXI_FreeExcInfo in the tree. Distinct from OOM-0014/0016 (_interpchannels/_interpqueues) and OOM-0026 (handle_channel_error). MINIMAL REPRO (shrinkray-reduced, deterministic 10/10 all builds): `_interpreters.capture_exception(Exception())` under the set_nomemory sweep. shrinkray reduced the original _interpreters.exec vehicle to capture_exception; the crash site belongs to capture_exception -- _interpreters.exec goes through _PyXI_Enter/_PyXI_Exit (a different err struct) and does NOT reach this _PyXI_FreeExcInfo(NULL) path, so the bug is filed against capture_exception. Found by the LOCAL systemd fleet against the then-29-bug catalog."
