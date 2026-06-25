@@ -186,5 +186,19 @@ simple stdlib trigger (its refcount history runs through
 `_PyList_AppendTakeRefListResize@listobject.c:531`). It was previously mis-filed as OOM-0005's
 minimal repro and has been moved here as **`repro_xml_minidom.py`**.
 
+**OOM-0005 folded in (2026-06-25).** OOM-0005 (the `_PyFrame_ClearLocals`@`frame.c:101` /
+`PyStackRef_XCLOSE`@`pycore_stackref.h:726` negative-refcount over-decref, and its
+`pkgutil.get_importer` → `PyOS_FSPath` use-after-free face) was retired into this bug: `rr` proved
+**both** of its reproducers are this `_CALL_LIST_APPEND` double-free (the victim is `list.append`-ed
+with a second live reference; the grow fails under OOM; the leftover stolen stackref is closed
+again during the unwind). `frame.c:101` / `PyStackRef_XCLOSE` are **generic over-decref detector**
+frames (they were spuriously keyed across OOM-0005/0007/0023 — the cause of this very mislabel),
+so they are now **skip-listed** and are never dedup keys for any bug. A bare `frame.c:101`
+over-decref *abort* — this bug's negref face — therefore surfaces as `oomNEW` for `rr`-triage:
+almost always OOM-0036, but confirm the producer is `_CALL_LIST_APPEND` before labeling
+(OOM-0005's original capture had a `MemoryError` victim, an unreproduced possible-distinct
+producer at this detector). The `pkgutil` UAF reproducer is preserved in the folded OOM-0005
+tombstone directory.
+
 Strong, self-contained upstream candidate (tiny pure-Python repro, release-crashing,
 one-spot fix in `_CALL_LIST_APPEND`).

@@ -4,7 +4,7 @@ Crashes found by allocation-failure fuzzing (`_testcapi.set_nomemory`) of CPytho
 
 **Pick anything to work on** — open a CPython issue if one doesn't exist, comment with the issue/PR, and the Status column will be updated. Reports are deduped by crash signature; one row = one underlying bug (vehicles listed in the report).
 
-_41 unique bug(s). Generated 2026-06-24._
+_40 unique bug(s). Generated 2026-06-25._
 
 _Found with [fusil](https://github.com/devdanzin/fusil)'s OOM-injection mode (fusil originally by Victor Stinner). Reports drafted by Claude Code; reproducers machine-generated._
 
@@ -31,7 +31,6 @@ Status legend: `draft` (not yet filed) · `report` (gist published) · `#N` (iss
 |---|---|---|---|
 | [OOM-0003](https://gist.github.com/devdanzin/b628c59722820b55c61a400a973771d5) | Abort: uninitialized `_co_unique_id` assert in `code_dealloc` (`codeobject.c:2440`) | ft_debug_asan | **FIXED** |
 | [OOM-0004](https://gist.github.com/devdanzin/315e83b2da6a5809ce5ae1d748cdd0ae) | Abort/Segfault: corrupted object freelist in `clear_freelist` (`object.c:909`) | ft_debug_asan | report |
-| [OOM-0005](https://gist.github.com/devdanzin/22b71f61343c81df5bea9b7fca798e87) | Abort: negative-refcount over-decref in `_PyFrame_ClearLocals` (`frame.c:101`) | ft_debug_asan | report |
 | [OOM-0006](https://gist.github.com/devdanzin/c809eb4072c0c787c0c890f54ba1c843) | Abort/Segfault: `_PyObject_GC_UNTRACK` assert on untracked iterator in `dictiter_dealloc` (`dictobject.c:5532`) | ft_debug_asan,jit,upstream | [#152107](https://github.com/python/cpython/issues/152107) |
 | [OOM-0008](https://gist.github.com/devdanzin/3c6690d0561acc62752a953e12b20197) | Abort: `assert(!PyErr_Occurred())` in `_PyType_LookupStackRefAndVersion` (`typeobject.c:6343`) | ft_debug_asan,jit | report |
 | [OOM-0009](https://gist.github.com/devdanzin/34b633230f6d2301ba17dec195ffe4b7) | Abort: stale `release1` flag trips an ownership assert in `replace` (`unicodeobject.c:10783`) | ft_debug_asan,jit | report |
