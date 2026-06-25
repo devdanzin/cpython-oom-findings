@@ -92,6 +92,27 @@ tolerate or clear it. (`_PyDict_GetKeysVersionForCurrentState` is **not** involv
 callee `get_next_dict_keys_version` does no allocation and never sets an exception; it is
 already exception-neutral and is not even reached on the crashing run.)
 
+**Where the pending `MemoryError` comes from (rr-pinned, 2026-06-25).** `rr` reverse-execution
+of the repro — record, watch `tstate->current_exception`, `reverse-continue` to where it is set
+— shows the `MemoryError` is produced by a perfectly well-behaved allocation *inside the
+`func(*args)` call* (`sys._baserepl`), not by the specializer:
+
+```
+_PyErr_NoMemory          <- PyUnicode_New        (alloc fails under OOM)
+  <- unicode_decode_utf8
+  <- PyImport_AddModuleRef                        (setting up __main__ for the base REPL)
+  <- _PyRun_SimpleFileObject  (sys._baserepl)
+```
+
+`sys._baserepl` correctly *raises* that `MemoryError`; it propagates out of the `try`, and the
+`finally:` block then runs **with the exception still in flight**. The `undefined_name`
+`LOAD_GLOBAL` in the `finally` is what invokes the specializer, so it inherits the pending
+`MemoryError` — i.e. the specializer is entered with a *legitimately* pending exception, and
+`unspecialize`'s `assert(!PyErr_Occurred())` is the wrong invariant. The producer is not a bug;
+the de-opt path's intolerance of a pending exception is. This keeps OOM-0025 **distinct** from
+the swallowed-exception producers in the same family (OOM-0008's `f_back` swallow,
+OOM-0040's extensions-cache key-alloc), whose producers are themselves defective.
+
 ## Suggested fix
 
 The adaptive specializer's de-opt/backoff path must tolerate a pre-existing pending
