@@ -10,6 +10,35 @@ When an allocation fails (`MemoryError`) in the middle of a bytecode instruction
 
 This is a genuine refcount-underflow / memory-safety bug, not merely a debug assertion. It is confirmed deterministically on the `ft_debug_asan` build by the minimal `xml.dom.minidom` reproducer below (10/10). The OOM sweep also trips several *other* distinct latent bugs, so other vehicles that produce a similar negative-refcount abort are listed only as *possibly related* (not individually confirmed to share this exact site — see Notes).
 
+## rr investigation (2026-06-24) — the two repros have DIFFERENT producers
+
+`frame.c:101` (`_PyFrame_ClearLocals` → `PyStackRef_XCLOSE`) is a **detector** — it closes a stale
+stackref that an *upstream* error path left on the value stack. `rr` reverse-execution (record the
+crash, watchpoint the victim's refcount, `reverse-continue` through its history) shows this report's
+two reproducers are driven by **two different upstream producers**:
+
+- **`repro.py` (`xml.dom.minidom.parse(0)`) → this is actually [OOM-0036](../OOM-0036-list-append-oom-double-free/report.md).**
+  The victim's refcount history is: `PyStackRef_DUP` (+1) → **`_PyList_AppendTakeRefListResize`
+  (`listobject.c:531`, from `_CALL_LIST_APPEND`, gen 3981)** decrefs it on resize-failure (−1) →
+  `exception_unwind` `XCLOSE` frees it (−1) → `_PyFrame_ClearLocals` `XCLOSE` underflows it (negref).
+  That is exactly OOM-0036's `list.append`-under-`MemoryError` double-free (`_CALL_LIST_APPEND` steals
+  the item then `ERROR_NO_POP` leaves it on the stack). **So this "minimal repro" demonstrates OOM-0036,
+  not OOM-0005's distinct defect** — a mislabel to fix (the gist's minimal repro is affected; see Notes).
+
+- **`repro_uaf.py` (`pkgutil.get_importer(str)`) → a genuinely distinct over-decref.** No `list.append`
+  is involved. The `str` argument is threaded through many references (the holding dict, several call
+  frames' args/locals, the raised `OSError`'s fields, an args tuple); under the OOM unwind a dealloc
+  *cascade* — `_PyFrame_ClearLocals`×N, `OSError_clear`/`OSError_dealloc` (`exceptions.c:2312`),
+  `tuple_dealloc`, `frame_dealloc` — decrefs it **one time too many**, freeing it while the dict still
+  holds it → use-after-free (the later `_Py_dict_lookup_threadsafe` / `PyOS_FSPath` touch freed memory).
+  This is OOM-0005's real, distinct bug; the single missing-incref in the cascade was not isolated to
+  one line, but it is clearly **not** the `_CALL_LIST_APPEND` path.
+
+The over-decref'd **object type varies by run** (the original discovery capture: a `MemoryError`; both
+rr-traced repros above: a `str`) — consistent with "whatever stale value the error path left on the
+stack," so the victim type is not itself diagnostic. **Net:** OOM-0005 remains a real distinct bug
+(the `repro_uaf.py` cascade), but `repro.py` should be replaced — it is an OOM-0036 reproducer.
+
 ## Reproducer
 
 Minimal, stdlib-only (shrinkray-reduced from the `xml.dom.minidom` vehicle, then
