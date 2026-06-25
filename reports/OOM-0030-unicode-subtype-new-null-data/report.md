@@ -1,6 +1,6 @@
 # Abort: `Py_DECREF` of NULL-data unicode in `unicode_subtype_new` (`unicodeobject.c:13986`)
 
-*A failing data-buffer allocation in `unicode_subtype_new` sends it to `onError: Py_DECREF(self)` while `self`'s data pointer is still NULL; `unicode_dealloc` -> `unicode_is_singleton` then asserts `data != NULL`. Triggered by parsing a header value containing a NUL byte, which instantiates a `str` subclass.*
+*A failing data-buffer allocation in `unicode_subtype_new` sends it to `onError: Py_DECREF(self)` while `self`'s data pointer is still NULL; `unicode_dealloc` -> `unicode_is_singleton` then asserts `data != NULL`. Triggered by instantiating any non-empty `str` subclass under allocation failure (directly, or via a stdlib path such as `email`'s header parser).*
 
 _AI Disclaimer: this gist was drafted by Claude Code, which also generated the reduced reproducer._
 
@@ -15,7 +15,43 @@ pressure, `unicode_subtype_new` jumps to `onError: Py_DECREF(self)` while
 
 ## Reproducer
 
-Minimal, stdlib-only (shrinkray-reduced from the vehicle; deterministic, re-verified 40×):
+**Direct minimal reproducer** (`repro_direct.py`, stdlib-only, no `email`; deterministic,
+verified 10/10 on `ft_debug_asan` @`1b9fe5c`). Instantiate a `str` subclass directly under the
+`set_nomemory` sweep:
+
+```python
+import faulthandler
+faulthandler.enable()
+from _testcapi import set_nomemory, remove_mem_hooks
+
+class S(str):                              # str subclass -> unicode_subtype_new path
+    pass
+
+for start in range(0, 80):
+    try:
+        set_nomemory(start, 0)
+        try:
+            S("\x00")                      # data-buffer alloc fails -> NULL-data str subclass freed
+        finally:
+            remove_mem_hooks()
+    except BaseException:
+        pass
+    finally:
+        try: remove_mem_hooks()
+        except Exception: pass
+```
+
+The instance must be **non-empty** so a data buffer is actually allocated: `S("\x00")` and
+`S("a")` both reproduce (the character is irrelevant — the `"\x00"` only mirrors the email
+vehicle's trigger), whereas `S("")` returns the interned empty-string singleton and never
+allocates, so it does not crash. The `start` sweep is what lands the data-buffer allocation
+failure inside `unicode_subtype_new`. (An earlier hand reduction that fixed a single `start`
+simply missed that window — *not* a limitation of the str-subclass form itself — which is why
+the vehicle was originally reduced via shrinkray to the `email.get_value` trigger below.)
+
+**Realistic stdlib path** (`repro.py`) — the same defect via a natural call (`email`'s header
+parser instantiates `str`-subclass tokens), no explicit subclass needed; this is the form
+published in the gist:
 
 ```python
 import faulthandler, email._header_value_parser as hvp
@@ -35,10 +71,7 @@ for start in range(0, 40):
         except Exception: pass
 ```
 
-Parsing a header value with a NUL byte instantiates a `str` subclass; under allocation
-failure it is freed with `self->data == NULL`. (An earlier hand reduction
-`class S(str): S("…")` exercised `unicode_subtype_new` but didn't hit the window; shrinkray
-found the `email.get_value` trigger.) The full fuzzer vehicle is preserved as `vehicle_source.py`.
+The full fuzzer vehicle is preserved as `vehicle_source.py`.
 
 ## Backtrace
 

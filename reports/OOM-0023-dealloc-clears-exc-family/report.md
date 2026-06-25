@@ -12,7 +12,45 @@ This is **one generic root cause** for the whole non-`Context` family (distinct 
 
 ## Reproducer
 
-Stdlib-only, deterministic on the FT debug+ASan build (crashes around `start=276` within the sweep). `http.server._main` builds an `argparse` parser; under the OOM sweep an allocation fails mid-construction and a half-built `_StoreAction` (held on the unwinding frame) is deallocated with the `MemoryError` in flight. The single up-front warm call is required so the OOM lands inside parser construction rather than during the lazy imports `_main` triggers (which would hit the unrelated import-time abort, OOM-0003).
+**Minimal reproducer** (`repro_minimal.py`, stdlib-only, no `http.server`; deterministic, 10/10
+on `ft_debug_asan` @`1b9fe5c`). A trivial pure-Python instance (no `__del__`, so it inherits the
+generic `subtype_dealloc`) is held as a live local while a mid-frame allocation fails and raises
+`MemoryError`. As the frame unwinds, the local is decref'd with the exception in flight; tearing
+down its **materialized** managed dict takes the same `detach_dict_from_object` →
+`PyErr_FormatUnraisable` OOM-recovery path as OOM-0018, which clears
+`tstate->current_exception`, so the gh-89373 `_Py_Dealloc` invariant fatals — here naming type
+`'C'`:
+
+```python
+import faulthandler
+faulthandler.enable()
+from _testcapi import set_nomemory, remove_mem_hooks
+class C: pass
+def f():
+    o = C(); o.x = 1
+    o.__dict__                       # materialize the managed dict
+    dict(zip(range(99), range(99)))  # alloc fails under OOM -> MemoryError while o is a live local
+for start in range(500):
+    set_nomemory(start, 0)
+    try:
+        f()                          # frame unwind clears o -> subtype_dealloc clears the MemoryError
+    except BaseException:
+        pass
+    remove_mem_hooks()
+print("done, no crash")
+```
+
+The instance needs the **materialized** managed dict (`o.__dict__`): without it the teardown does
+not take the exception-clearing path (verified: dropping the `o.__dict__` line → 0/8, no crash).
+The `start` sweep is required (the exact failing allocation index depends on swept state).
+
+**Published path** (`repro.py`, stdlib-only via `http.server`; the form in the gist) —
+deterministic on the FT debug+ASan build (crashes around `start=276` within the sweep).
+`http.server._main` builds an `argparse` parser; under the OOM sweep an allocation fails
+mid-construction and a half-built `_StoreAction` (held on the unwinding frame) is deallocated
+with the `MemoryError` in flight. The single up-front warm call is required so the OOM lands
+inside parser construction rather than during the lazy imports `_main` triggers (which would hit
+the unrelated import-time abort, OOM-0003).
 
 ```python
 import http.server
@@ -40,7 +78,7 @@ for start in range(1000):
         pass
 ```
 
-Crashes on the FT debug+ASan build with `Fatal Python error: _Py_Dealloc: Deallocator of type '_StoreAction' cleared the current exception`. A single fixed `set_nomemory(276, 0)` does **not** reproduce — the exact allocation index depends on the swept state, so the sweep form is the reliable trigger.
+Crashes on the FT debug+ASan build with `Fatal Python error: _Py_Dealloc: Deallocator of type '_StoreAction' cleared the current exception`. A single fixed `set_nomemory(276, 0)` does **not** reproduce — the exact allocation index depends on the swept state, so the sweep form is the reliable trigger. (`backtrace.txt` and the `## Backtrace` block below are this vehicle's authoritative trace; the minimal repro hits the identical `subtype_dealloc` / `_Py_Dealloc` frames, only naming type `'C'`.)
 
 ## Backtrace
 

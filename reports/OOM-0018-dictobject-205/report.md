@@ -12,8 +12,34 @@ Two routes reach this unguarded `set_keys`, both observed: the **cyclic GC clear
 
 ## Reproducer
 
-Minimal, stdlib-only (shrinkray-reduced from the `wsgiref.util` vehicle). **Deterministic**
-— aborts on every run (30/30); requires a free-threaded debug build (`PYTHON_GIL=0`):
+**Minimal reproducer** (`repro_minimal.py`, stdlib-only, no `unittest.mock`; deterministic,
+10/10 on `ft_debug_asan` @`1b9fe5c`; requires a free-threaded debug build, `PYTHON_GIL=0`):
+
+```python
+from _testcapi import set_nomemory
+class C: pass
+o = C()
+o.self = o          # inline value + self-cycle: survives to the shutdown cyclic GC
+o.__dict__          # MATERIALIZE the managed dict (ma_values -> inline values)
+set_nomemory(1)     # armed at shutdown: detach_dict_from_object fails -> set_keys recovery -> assert
+```
+
+A trivial heap-type instance has a managed `__dict__`; putting it in a self-cycle
+(`o.self = o`) keeps it alive into interpreter shutdown, and accessing `o.__dict__`
+**materializes** that dict so its `ma_values` still points at the inline values — the
+precondition for the buggy branch. A bare, unmaterialized instance has
+`_PyObject_GetManagedDict() == NULL` and takes the harmless early return: removing the
+`o.__dict__` line makes the crash disappear (verified 0/8). With allocation failure armed,
+the shutdown cyclic GC clears it via `delete_garbage -> subtype_clear ->
+PyObject_ClearManagedDict`, whose OOM-recovery branch trips the assert. Because the crash is
+in the **shutdown GC it cannot be swept**; a fixed `set_nomemory(1)` is used (the failing
+`detach_dict_from_object` allocation is ~the second allocation during shutdown for this
+minimal object — much earlier than the `MagicMock` vehicle's `N≈200` window, which did far
+more setup).
+
+**Published path** (`repro.py`, shrinkray-reduced from the `wsgiref.util` vehicle; 30/30; the
+form in the gist) — same shutdown-GC route via a `MagicMock` (managed `__dict__`) abandoned
+into a traceback cycle:
 
 ```python
 from unittest.mock import MagicMock
@@ -24,14 +50,7 @@ set_nomemory(200)              # fail allocations from the 200th onward (lands i
                                # it into a traceback cycle -> survives to shutdown GC
 ```
 
-A `MagicMock` (which has a managed `__dict__`) is abandoned into the traceback reference
-cycle created by the `NameError`, so it survives to interpreter shutdown. With allocation
-failure still armed, the shutdown cyclic GC clears it via
-`delete_garbage -> subtype_clear -> PyObject_ClearManagedDict`, whose OOM-recovery branch
-trips the assert. This is exactly the path the full vehicles take on a normal run (8/8 under
-gdb, see Notes), so it is a *faithful* reduction, not a drift.
-
-The `set_nomemory(N)` argument must land the failing allocation inside the shutdown GC:
+Here the `set_nomemory(N)` argument must land the failing allocation inside the shutdown GC:
 the working window is roughly `N` in `[113, 900]` on this build (`N=200` is comfortably
 central) — too small fails during setup, too large (e.g. `999`) overshoots shutdown. The
 window is an allocation-count effect, **not** tied to the small-int cache (tested `N=254..258`
