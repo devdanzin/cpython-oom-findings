@@ -1,6 +1,6 @@
 # Fusil OOM-injection findings on CPython — summary
 
-Snapshot: 2026-06-24 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0042) · **41 distinct bugs** (OOM-0001…0042; OOM-0041 folded into OOM-0036).
+Snapshot: 2026-06-25 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0042) · **40 distinct bugs** (OOM-0001…0042; OOM-0005 and OOM-0041 folded into OOM-0036).
 
 **Method.** [Fusil](https://github.com/devdanzin/fusil) fuzzes CPython with `_testcapi.set_nomemory`
 to fail allocations and drive the rarely-tested allocation-failure error paths. Crashes are triaged
@@ -25,7 +25,6 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0002 | `contextvars.ContextVar.set` over-decref under OOM | segv | release | yes | `context.c:PyContextVar_Set` |
 | OOM-0003 | `code_dealloc` asserts `co != NULL` (codeobject) | abort | debug | yes | `codeobject.c:code_dealloc` |
 | OOM-0004 | list freelist clear / `PyList_New`→`free_list_items` dealloc | abort | debug | yes | `object.c:clear_freelist` |
-| OOM-0005 | eval stackref `PyStackRef_XCLOSE` over-decref (latent UAF on release) | abort | debug | yes | `pycore_stackref.h:PyStackRef_XCLOSE` |
 | OOM-0006 | `dictiter_dealloc` dict-iterator dealloc under OOM | abort | release | yes | `dictobject.c:dictiter_dealloc` |
 | OOM-0007 | `context_tp_dealloc` with a pending exception | fatal | ASan/jit | yes | `context.c:context_tp_dealloc` |
 | OOM-0008 | type lookup leaves stale/missing exception; NDEBUG→latent NULL | abort | ASan/jit | yes | `typeobject.c:_PyType_LookupStackRefAndVersion` |
@@ -65,24 +64,25 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 
 *(OOM-0041 was retired — folded into OOM-0036; see "Retired IDs" below.)*
 
-**Totals:** 41 bugs — 9 segv, 25 abort, 7 fatal · 13 reproduce on a **release** build · **39 of 41 have a
-minimal reproducer** (OOM-0040/0042 are vehicle-confirmed, minimization partial). One retired id: OOM-0041
-(folded into OOM-0036).
+**Totals:** 40 bugs — 9 segv, 24 abort, 7 fatal · 13 reproduce on a **release** build · **38 of 40 have a
+minimal reproducer** (OOM-0040/0042 are vehicle-confirmed, minimization partial). Two retired ids: OOM-0005
+and OOM-0041 (both folded into OOM-0036).
 
 **Upstream status** (refreshed 2026-06-24 from the umbrella [#151763](https://github.com/python/cpython/issues/151763) table + timeline; per-report truth is each `meta.json` `upstream_issue`/`status`). **14 findings filed upstream**, 4 already **fixed**:
 - **Fixed:** OOM-0002 (#151773), OOM-0003 (#152034 + 3.13/3.14/3.15 backports), OOM-0028 (#152058), OOM-0031 (#151842).
 - **Filed, open:** OOM-0001 (#151673), OOM-0006 (#152107, dict item-iter — our sub-issue, repro_direct.py contributed + acked), OOM-0007 (#152083), OOM-0013 (#151968 PR), OOM-0014 (#151902 PR), OOM-0016 (#152130), OOM-0019 (#151931 PR), OOM-0024 (#151815), OOM-0034 (#151798 PR), OOM-0036 (#151818).
 - **Filing-hold** (FT sub-interpreter category, [#143232](https://github.com/python/cpython/issues/143232)): OOM-0020, OOM-0038.
 - **New, drafted (not yet filed):** OOM-0037, OOM-0040, OOM-0042.
-- **Retired ids** (folded into another bug, not reused): OOM-0041 → OOM-0036 (rr-proven downstream face).
+- **Retired ids** (folded into another bug, not reused): OOM-0005 → OOM-0036 and OOM-0041 → OOM-0036 (both rr-proven downstream faces of the `_CALL_LIST_APPEND` list.append double-free).
 - The rest remain gisted/novel. Two upstream issues without a gist link — [#151905](https://github.com/python/cpython/issues/151905) (`_PyType_LookupStackRefAndVersion` assert, closed) and [#152125](https://github.com/python/cpython/issues/152125) (`clear_freelist` freelist corruption, open) — are unmapped to our catalog (may be others' or need triage).
 
 **Suggested starting points** — crashes a release build **and** has a minimal reproducer (highest
 confidence, lowest effort to verify): **OOM-0001, 0002, 0012, 0014, 0020, 0028, 0031, 0033, 0034, 0038**. Of these,
 **OOM-0034** and **OOM-0028** are the cleanest single-defect unchecked-allocation NULL derefs (≈one-line fixes);
 **OOM-0038** is similarly clean (drop a `PyErr_NoMemory()` call), but free-threaded-only.
-(**OOM-0005** is the most severe defect — an eval-loop stackref over-decref / memory-safety bug — but its
-minimal repro is confirmed only on the debug build, so it's listed under debug-only, not here.)
+(**OOM-0036** is the most severe memory-safety defect — a `list.append`-under-`MemoryError`
+double-free that crashes a release build; the eval-loop stackref over-decref formerly tracked as
+OOM-0005 turned out to be a downstream face of it, see Retired IDs.)
 
 **Sibling clusters (why some vehicles resist primitive reduction).** Several findings sit on
 tightly-coupled C error paths: reducing a vehicle to primitives often just re-routes the failure
@@ -99,13 +99,14 @@ fires. Three observed clusters:
   "succeeded-with-exception" checks that fire after a stale `MemoryError`; the OOM-0011 repro's
   run-to-run drift between its own site and OOM-0008's is the same effect *within* one repro.
 - **dealloc-clears / over-decref `MemoryError`** — OOM-0007 & OOM-0023 (a `tp_dealloc` clears an
-  in-flight `MemoryError`: dedicated `context_tp_dealloc` vs generic `subtype_dealloc`), OOM-0005 &
-  OOM-0029 (an over-decref leaves a refcount-0 `MemoryError`, caught at frame/tuple teardown), and
-  OOM-0036 (the `_CALL_LIST_APPEND` `list.append` double-free under `MemoryError`). The last is a
-  vivid example of "one producer, many detectors": `rr` reverse-execution pinned OOM-0041
-  (`traceback.c:313`) — and the `pycore_stackref.h:726` negref / `tuple_alloc` freelist SEGV faces of
-  the same vehicle — to OOM-0036's double-freed appended item, reused and then read by whichever
-  invariant gets there first.
+  in-flight `MemoryError`: dedicated `context_tp_dealloc` vs generic `subtype_dealloc`), OOM-0029
+  (an over-decref leaves a refcount-0 `MemoryError`, caught at tuple teardown), and
+  OOM-0036 (the `_CALL_LIST_APPEND` `list.append` double-free under `MemoryError`). OOM-0036 is a
+  vivid example of "one producer, many detectors": `rr` reverse-execution pinned the
+  formerly-separate **OOM-0041** (`traceback.c:313`) **and OOM-0005** (`frame.c:101` negref /
+  `pycore_stackref.h:726` / `PyOS_FSPath` SEGV) — plus the `tuple_alloc` freelist SEGV face — all to
+  OOM-0036's double-freed appended item, reused and then read by whichever invariant gets there
+  first. Both were folded into OOM-0036.
 
 A vehicle that looks "incidental" is often load-bearing precisely because its allocation count lands
 the failure on the intended sibling rather than a neighbour. **`rr` reverse-execution** (record the

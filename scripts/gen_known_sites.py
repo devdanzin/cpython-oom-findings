@@ -59,8 +59,21 @@ GENERIC_ASSERTS = {"!PyErr_Occurred()", "!_PyErr_Occurred(tstate)"}
 # defect: each bug keeps its real site (code_dealloc, templateiter_dealloc, context_tp_dealloc,
 # subtype_dealloc, ...) and the clears-exc family keeps its type-specific fatal msg. With the key
 # gone, oom_dedup/ingest no longer match a crash to a bug via this generic frame.
+# The eval-loop operand-stack teardown frames are detectors too. `PyStackRef_XCLOSE` (the
+# stack-slot close), `_PyFrame_ClearLocals` / `_PyFrame_ClearExceptCode` / `clear_thread_frame`
+# (frame unwind) *catch* an over-decref that some opcode's OOM error path left as a stale stackref
+# on the value stack -- the real defect is the PRODUCER opcode, not these frames. They appear in
+# every eval-loop over-decref crash (OOM-0036's negref/UAF face, OOM-0007/0023 fatals, and the
+# retired OOM-0005 all shared frame.c:101 / pycore_stackref.h:726), so keying them collides the
+# whole family and silently mislabels (this is exactly how OOM-0036's list.append double-free was
+# mis-filed as a separate "OOM-0005" -- rr later showed both were OOM-0036). Skip them: each bug
+# keeps its real site (DirEntry_dealloc/traceback.c:313 for OOM-0036, context_tp_dealloc for
+# OOM-0007, the clears-exc msgfam for OOM-0023). A bare frame.c:101 over-decref abort with no other
+# keyed frame now surfaces as oomNEW -> rr-triage (almost always OOM-0036; confirm the producer).
 GENERIC_DETECTOR_FUNCS = {"_Py_NegativeRefcount", "_PyObject_AssertFailed", "_Py_Dealloc",
-                          "_PyMem_DebugCheckAddress", "_PyMem_DebugRawFree", "_PyMem_DebugFree"}
+                          "_PyMem_DebugCheckAddress", "_PyMem_DebugRawFree", "_PyMem_DebugFree",
+                          "PyStackRef_XCLOSE", "_PyFrame_ClearLocals", "_PyFrame_ClearExceptCode",
+                          "clear_thread_frame"}
 
 # Inlined refcount/atomic helper headers: Py_DECREF / Py_XDECREF / _Py_atomic_* expand here,
 # so a frame in one of these files (e.g. refcount.h:520, the negrefcount-detecting Py_DECREF)

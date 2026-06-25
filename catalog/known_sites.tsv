@@ -24,14 +24,6 @@ OOM-0004	abort	line	Objects/listobject.c:569
 OOM-0004	abort	line	Objects/listobject.c:68
 OOM-0004	abort	line	Objects/object.c:909
 OOM-0004	abort	line	Objects/object.c:935
-OOM-0005	abort	func	Include/internal/pycore_stackref.h:PyStackRef_XCLOSE
-OOM-0005	abort	func	Python/ceval.c:clear_thread_frame
-OOM-0005	abort	func	Python/frame.c:_PyFrame_ClearExceptCode
-OOM-0005	abort	func	Python/frame.c:_PyFrame_ClearLocals
-OOM-0005	abort	line	Include/internal/pycore_stackref.h:726
-OOM-0005	abort	line	Python/ceval.c:1954
-OOM-0005	abort	line	Python/frame.c:101
-OOM-0005	abort	line	Python/frame.c:126
 OOM-0006	abort	func	Objects/abstract.c:PyObject_GetIter
 OOM-0006	abort	func	Objects/dictobject.c:dictiter_dealloc
 OOM-0006	abort	func	Objects/dictobject.c:dictiter_new
@@ -39,16 +31,12 @@ OOM-0006	abort	line	Objects/abstract.c:2825
 OOM-0006	abort	line	Objects/dictobject.c:5516
 OOM-0006	abort	line	Objects/dictobject.c:5532
 OOM-0007	fatal	func	Objects/cellobject.c:cell_dealloc
-OOM-0007	fatal	func	Python/ceval.c:clear_thread_frame
 OOM-0007	fatal	func	Python/context.c:context_tp_clear
 OOM-0007	fatal	func	Python/context.c:context_tp_dealloc
-OOM-0007	fatal	func	Python/frame.c:_PyFrame_ClearLocals
 OOM-0007	fatal	line	Objects/cellobject.c:81
-OOM-0007	fatal	line	Python/ceval.c:1954
 OOM-0007	fatal	line	Python/context.c:518
 OOM-0007	fatal	line	Python/context.c:535
 OOM-0007	fatal	line	Python/context.c:543
-OOM-0007	fatal	line	Python/frame.c:101
 OOM-0007	fatal	msg	_Py_Dealloc: Deallocator of type 'Context' cleared the curre
 OOM-0008	abort	func	Objects/frameobject.c:PyFrame_GetBack
 OOM-0008	abort	func	Objects/frameobject.c:frame_back_get_impl
@@ -220,16 +208,10 @@ OOM-0022	fatal	line	Python/import.c:2011
 OOM-0022	fatal	line	Python/import.c:2043
 OOM-0022	fatal	line	Python/import.c:5468
 OOM-0022	fatal	msg	_Py_CheckSlotResult: Slot __delitem__ of type dict succeeded
-OOM-0023	fatal	func	Include/internal/pycore_stackref.h:PyStackRef_XCLOSE
 OOM-0023	fatal	func	Objects/typeobject.c:clear_slots/ClearManagedDict/Py_DECREF(dict)
 OOM-0023	fatal	func	Objects/typeobject.c:subtype_dealloc
-OOM-0023	fatal	func	Python/ceval.c:clear_thread_frame
-OOM-0023	fatal	func	Python/frame.c:_PyFrame_ClearLocals
-OOM-0023	fatal	line	Include/internal/pycore_stackref.h:726
 OOM-0023	fatal	line	Objects/typeobject.c:2719
 OOM-0023	fatal	line	Objects/typeobject.c:2840
-OOM-0023	fatal	line	Python/ceval.c:1954
-OOM-0023	fatal	line	Python/frame.c:101
 OOM-0023	fatal	msg	_Py_Dealloc: Deallocator of type 'LogRecord' cleared the cur
 OOM-0023	fatal	msg	_Py_Dealloc: Deallocator of type 'ProxyHandler' cleared the 
 OOM-0023	fatal	msg	_Py_Dealloc: Deallocator of type 'UnknownHandler' cleared th
