@@ -66,7 +66,12 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 **Totals:** 41 bugs — 9 segv, 25 abort, 7 fatal · 13 reproduce on a **release** build · **39 of 41 have a
 minimal reproducer** (OOM-0040/0041 are vehicle-confirmed, minimization partial/open).
 
-**Upstream status** (issue-tracker check 2026-06-19, see `catalog/prior_art.md`): of OOM-0001…0035, only **OOM-0001** is already filed — [#151673](https://github.com/python/cpython/issues/151673) (open); the other 34 had no matching python/cpython issue (appear novel). Since then: **OOM-0036** is filed as [#151818](https://github.com/python/cpython/issues/151818); **OOM-0037** is drafted (not yet filed). **OOM-0020** (gisted) and **OOM-0038** are on **filing-hold** — both are free-threaded sub-interpreter fuzzing crashes, the category [#143232](https://github.com/python/cpython/issues/143232) de-prioritized ("not worth fuzzing [subinterpreters] for now until the known issues are addressed"; cf. [#129824](https://github.com/python/cpython/issues/129824)); cataloged but not to be filed for now (see each report's `filing_hold`). OOM-0037 stays fileable (it also crashes GIL builds and is not a race).
+**Upstream status** (refreshed 2026-06-24 from the umbrella [#151763](https://github.com/python/cpython/issues/151763) table + timeline; per-report truth is each `meta.json` `upstream_issue`/`status`). **14 findings filed upstream**, 4 already **fixed**:
+- **Fixed:** OOM-0002 (#151773), OOM-0003 (#152034 + 3.13/3.14/3.15 backports), OOM-0028 (#152058), OOM-0031 (#151842).
+- **Filed, open:** OOM-0001 (#151673), OOM-0006 (#152107, dict item-iter — our sub-issue, repro_direct.py contributed + acked), OOM-0007 (#152083), OOM-0013 (#151968 PR), OOM-0014 (#151902 PR), OOM-0016 (#152130), OOM-0019 (#151931 PR), OOM-0024 (#151815), OOM-0034 (#151798 PR), OOM-0036 (#151818).
+- **Filing-hold** (FT sub-interpreter category, [#143232](https://github.com/python/cpython/issues/143232)): OOM-0020, OOM-0038.
+- **New, drafted (not yet filed):** OOM-0037, OOM-0040, OOM-0041.
+- The rest remain gisted/novel. Two upstream issues without a gist link — [#151905](https://github.com/python/cpython/issues/151905) (`_PyType_LookupStackRefAndVersion` assert, closed) and [#152125](https://github.com/python/cpython/issues/152125) (`clear_freelist` freelist corruption, open) — are unmapped to our catalog (may be others' or need triage).
 
 **Suggested starting points** — crashes a release build **and** has a minimal reproducer (highest
 confidence, lowest effort to verify): **OOM-0001, 0002, 0012, 0014, 0020, 0028, 0031, 0033, 0034, 0038**. Of these,

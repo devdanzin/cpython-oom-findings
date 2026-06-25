@@ -20,10 +20,10 @@
   ],
   "matrix": {"ft_debug_asan": "fatal", "ft_release": "n/a", "jit": "fatal", "upstream": "n/a"},
   "repro_start": null,
-  "upstream_reported": false,
-  "upstream_issue": null,
+  "upstream_reported": true,
+  "upstream_issue": "152083",
   "gist_url": "https://gist.github.com/devdanzin/bf9fec4554c58c2a279b05b7ff8e6d9b",
-  "status": "gisted",
+  "status": "reported",
   "found_date": "2026-06-18",
   "confirmed_commit": "15d7406",
   "notes": "Fatal message: \"_Py_Dealloc: Deallocator of type 'Context' cleared the current exception\". Debug-only signature: the _Py_Dealloc invariant is #ifdef Py_DEBUG, so it fatals on ft_debug_asan and jit (both Py_DEBUG=1) with identical message; on release builds (ft_release, upstream, Py_DEBUG=0) the check is compiled out and the same vehicle surfaces an unrelated downstream OOM segfault (importlib/_itertools _get_values) -> matrix n/a for this signature. Both vehicles show the identical fatal; vehicle 1 stack = entry_points->distributions, vehicle 2 = diagnose.run->inspect. Distinct from OOM-0002 (PyContextVar_Set Py_DECREF(NULL) segfault in cv.set). Minimization: PARTIAL -- vehicle-confirmed, no minimal stdlib trigger isolated (needs exact OOM timing with a raw pending exception at the Context's last decref). Fix direction: bracket context_tp_dealloc body with PyErr_GetRaisedException/PyErr_SetRaisedException (no exception save/restore exists anywhere in context.c)."
