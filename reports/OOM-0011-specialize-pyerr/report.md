@@ -83,6 +83,18 @@ Found by OOM-injection fuzzing (`set_nomemory`). assert-based abort: fires on bu
 
 Ten fuzzer vehicles across `python-4/5/7` abort at the identical `specialize.c:364` assertion; the Python-level faulthandler stack points at `gettext._as_int2` (`n.__class__.__name__`) reached via `ngettext`/`npgettext`/`dngettext` with a non-int `n`, but the C-level crash is build-agnostic and not gettext-specific -- any `LOAD_ATTR` specialized while an error is pending triggers it. Minimization is **partial**: the crash needs a failing allocation to coincide with a not-yet-specialized hot `LOAD_ATTR`, so the reproducer drives the real `gettext` path under a `set_nomemory` sweep rather than a single deterministic `start`.
 
+**Build note (`1b9fe5c`, 2026-06-24).** On the current workhorse build the committed repro is
+**flaky between two sibling sites of the same `!PyErr_Occurred()` family**: a 10× run aborted
+5× at this bug's own `specialize.c:364` and 5× at `_PyType_LookupStackRefAndVersion`
+(`typeobject.c:6343`, the type-cache assert = OOM-0008's site). Both are the same defect class
+— a stale `MemoryError` left pending when a `!PyErr_Occurred()` assert is checked — and the
+allocation window has drifted across commits (`15d7406` → `1b9fe5c`) so the swept failure now
+lands on either assert roughly half the time. This is **window-drift flakiness, not a new bug
+or a deterministic mislabel** (the root-cause section already notes that `specialize()` and the
+type cache share the assumption). The repro still exercises this bug's site on ~half the runs;
+to pin it deterministically to `specialize.c:364` again, tighten the sweep/window so the
+failure precedes the type-cache lookup (verify the crashing opcode is `LOAD_ATTR_MODULE`).
+
 ## Versions
 
 - main (3.16.0a0, commit 15d7406); aborts on the free-threaded debug+ASan build and the JIT build. FT release / upstream builds: assertion compiled out (`n/a`, clean exit).
