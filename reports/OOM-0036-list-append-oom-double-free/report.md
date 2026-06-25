@@ -200,5 +200,13 @@ almost always OOM-0036, but confirm the producer is `_CALL_LIST_APPEND` before l
 producer at this detector). The `pkgutil` UAF reproducer is preserved in the folded OOM-0005
 tombstone directory.
 
+**OOM-0033 folded in (2026-06-25).** A third reproducer-path: `sys.path[:] = S; __import__("H")`
+under OOM. `rr` showed the over-decref'd `sys.path` entry (a 1-char `str`) is `list.append`-ed by
+the import machinery and double-freed on the failed grow — the same `_CALL_LIST_APPEND` bug, with
+the same ledger as OOM-0005's `pkgutil` trace. Its detectors were `list_ass_slice` (the next
+slice-assign cleanup → negref) and `PyType_IsSubtype` (import reading a freed entry → **release
+segv**). The `sys.path` snippet is a clean pure-stdlib **release** reproducer of this bug,
+preserved in the OOM-0033 tombstone directory.
+
 Strong, self-contained upstream candidate (tiny pure-Python repro, release-crashing,
 one-spot fix in `_CALL_LIST_APPEND`).
