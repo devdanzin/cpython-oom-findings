@@ -13,10 +13,17 @@ avoids false "new" labels when the resolved frame is a secondary/cascade site bu
 earlier assertion or a deeper frame is a known bug. (Mirrors fusil's in-loop oom_dedup.)
 
 Usage:
-  ingest.py [globs...] [--snapshot F] [--sites-cache F] [--gdb] [--keep N] [--json F]
+  ingest.py [globs...] [--snapshot F] [--sites-cache F] [--gdb] [--keep N] [--json F] [--jobs N]
   default globs: ~/crashers/python-*/*  and ~/crashers/*/   (dirs containing stdout)
+
+Per-dir classification is CPU-bound (regex over each crash's stdout) and fully independent,
+so it runs across processes by default (`--jobs`, default min(16, cpus-2)). `--jobs 1` is the
+serial path; output is identical either way (results are reduced in input order). `--gdb`
+forces serial -- gdb re-runs are heavyweight and OOM-timing-sensitive, not safe to fan out.
 """
 import sys, os, re, json, glob, subprocess, collections, pathlib
+import concurrent.futures as cf
+import multiprocessing as mp
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 HERE = ROOT / "scripts"
@@ -35,6 +42,7 @@ CACHE = opt("--sites-cache", (None, None))[1]
 USE_GDB = opt("--gdb", flag=True)
 KEEP = int(opt("--keep", (None, "0"))[1])
 JSON_OUT = opt("--json", (None, None))[1]
+JOBS = int(opt("--jobs", (None, "0"))[1])  # 0 = auto (min(16, cpus-2)); 1 = serial
 globs = [a for a in args if not a.startswith("--")] or [
     os.path.expanduser("~/crashers/python-*/*"), os.path.expanduser("~/crashers/*/")]
 
@@ -284,6 +292,89 @@ def read_stdout(path):
 
 
 # ---- main ----
+# ---- per-dir classification (pure; runs in a worker process) ----
+# The snapshot/cache are loaded once per worker via the pool initializer (cheap, and
+# avoids re-parsing argv in workers). Each call reads one crash's stdout, classifies it,
+# and returns a (category, key, label) triple that main() reduces into the report dicts.
+# category: "skip" | "other" | "known" | "ambiguous" | "needs_gdb" | "new".
+_W_SNAP = None
+_W_CACHE = None
+
+
+def _worker_init(snap, cache):
+    global _W_SNAP, _W_CACHE
+    _W_SNAP, _W_CACHE = snap, cache
+
+
+def classify_dir(d):
+    """Classify a single run-dir against the worker's snapshot. Pure + independent."""
+    snap, cache = _W_SNAP, _W_CACHE
+    label = f"{os.path.basename(os.path.dirname(d))}/{os.path.basename(d)}"
+    try:
+        text = read_stdout(os.path.join(d, "stdout"))
+    except OSError:
+        return ("skip", None, label)
+    asserts = all_asserts(text)
+    fa = FATAL.search(text)
+    fmsg = fa.group(1).strip() if fa else None
+    has_segv = bool(SEGV.search(text))
+    generic = bool(fmsg) and fmsg.startswith(GENERIC_FATAL)
+
+    if not asserts and not has_segv and not fmsg:
+        return ("other", "import" if IMPORTERR.search(text) else "clean", label)
+
+    candidates = [dict(file=f, line=ln, func=fn, assert_expr=expr, fatal_msg=None)
+                  for (f, ln, fn, expr) in asserts]
+    if fmsg and not generic and not fmsg.lower().startswith(("segmentation", "aborted")):
+        candidates.append(dict(file=None, line=None, func=None, assert_expr=None, fatal_msg=fmsg))
+
+    chain = []
+    if has_segv or generic or not asserts:
+        # Prefer the native backtrace already in stdout (ASan/debug build) -- the actual
+        # fault, deterministic, no re-run. Fall back to the cache / gdb re-run only when
+        # stdout carries no parseable native frames.
+        chain = extract_native_sites(text) or resolve_chain(d, label, cache)
+        # Match only the resolved SITE (chain[0], innermost real frame). Deeper frames
+        # are shared deallocator/eval plumbing that would over-match many bugs.
+        if chain:
+            cand = frame_to_cand(chain[0])
+            if cand:
+                candidates.append(cand)
+
+    matched = set()
+    for c in candidates:
+        matched |= match(c, snap)[0]
+
+    # Faulthandler-only fallback: a SEGV/generic-fatal with no ASan file:line frames and no
+    # gdb resolution still carries func names in the faulthandler C stack -- match the
+    # innermost catalog-keyed func by name (e.g. PyList_New -> OOM-0004) instead of giving up.
+    if not matched and not chain and (has_segv or generic):
+        matched |= fh_match(text, snap)[0]
+
+    if matched:
+        if len(matched) == 1:
+            return ("known", next(iter(matched)), label)
+        return ("ambiguous", "|".join(sorted(matched)), label)
+    if (has_segv or generic) and not chain:
+        coarse = (" <- ".join([s for s in SYM.findall(text) if not SKIP.match(s)][:3])
+                  or (fmsg[:50] if fmsg else "(no-sym)"))
+        return ("needs_gdb", coarse, label)
+    prim = candidates[0] if candidates else {}
+    key = (prim.get("assert_expr") and f"{prim['file']}:{prim['assert_expr']}") or \
+          (prim.get("func") and f"{prim['file']}:{prim['func']}") or \
+          prim.get("fatal_msg") or (chain[0] if chain else "?")
+    kind = "abort" if asserts else ("segv" if has_segv else "fatal")
+    return ("new", (kind, key), label)
+
+
+def _resolve_jobs(n_dirs):
+    """Pick worker count: explicit --jobs, else auto; serial for tiny batches or --gdb."""
+    jobs = JOBS or min(16, max(1, (os.cpu_count() or 2) - 2))
+    if USE_GDB or n_dirs < 256:
+        return 1
+    return jobs
+
+
 def main():
     snap = load_snapshot(SNAP)
     cache = load_cache(CACHE)
@@ -300,67 +391,40 @@ def main():
     needs_gdb = collections.defaultdict(list)
     other = collections.Counter()
 
-    for d in dirs:
-        label = f"{os.path.basename(os.path.dirname(d))}/{os.path.basename(d)}"
-        try:
-            text = read_stdout(os.path.join(d, "stdout"))
-        except OSError:
+    jobs = _resolve_jobs(len(dirs))
+    if jobs == 1:
+        _worker_init(snap, cache)  # set worker globals for the in-process path
+        results = [classify_dir(d) for d in dirs]
+    else:
+        # CPU-bound + independent -> fan out over processes. fork (not spawn/forkserver) so
+        # workers don't re-run this module's top-level argv parsing; the snapshot/cache go in
+        # via the initializer. map() preserves input order, so the reduce below -- and the
+        # whole report -- is byte-identical to the --jobs 1 path.
+        ctx = mp.get_context("fork")
+        with cf.ProcessPoolExecutor(
+            max_workers=jobs, mp_context=ctx,
+            initializer=_worker_init, initargs=(snap, cache),
+        ) as pool:
+            results = list(pool.map(classify_dir, dirs, chunksize=64))
+
+    # ---- reduce (single-threaded; identical regardless of --jobs) ----
+    for category, key, label in results:
+        if category == "skip":
             continue
-        asserts = all_asserts(text)
-        fa = FATAL.search(text)
-        fmsg = fa.group(1).strip() if fa else None
-        has_segv = bool(SEGV.search(text))
-        generic = bool(fmsg) and fmsg.startswith(GENERIC_FATAL)
-
-        if not asserts and not has_segv and not fmsg:
-            other["import" if IMPORTERR.search(text) else "clean"] += 1
-            continue
-
-        candidates = [dict(file=f, line=ln, func=fn, assert_expr=expr, fatal_msg=None)
-                      for (f, ln, fn, expr) in asserts]
-        if fmsg and not generic and not fmsg.lower().startswith(("segmentation", "aborted")):
-            candidates.append(dict(file=None, line=None, func=None, assert_expr=None, fatal_msg=fmsg))
-
-        chain = []
-        if has_segv or generic or not asserts:
-            # Prefer the native backtrace already in stdout (ASan/debug build) -- the actual
-            # fault, deterministic, no re-run. Fall back to the cache / gdb re-run only when
-            # stdout carries no parseable native frames.
-            chain = extract_native_sites(text) or resolve_chain(d, label, cache)
-            # Match only the resolved SITE (chain[0], innermost real frame). Deeper frames
-            # are shared deallocator/eval plumbing that would over-match many bugs.
-            if chain:
-                cand = frame_to_cand(chain[0])
-                if cand:
-                    candidates.append(cand)
-
-        matched = set()
-        for c in candidates:
-            matched |= match(c, snap)[0]
-
-        # Faulthandler-only fallback: a SEGV/generic-fatal with no ASan file:line frames and no
-        # gdb resolution still carries func names in the faulthandler C stack -- match the
-        # innermost catalog-keyed func by name (e.g. PyList_New -> OOM-0004) instead of giving up.
-        if not matched and not chain and (has_segv or generic):
-            matched |= fh_match(text, snap)[0]
-
-        if matched:
-            (known if len(matched) == 1 else ambiguous)[
-                next(iter(matched)) if len(matched) == 1 else "|".join(sorted(matched))].append(label)
-        elif (has_segv or generic) and not chain:
-            coarse = (" <- ".join([s for s in SYM.findall(text) if not SKIP.match(s)][:3])
-                      or (fmsg[:50] if fmsg else "(no-sym)"))
-            needs_gdb[coarse].append(label)
-        else:
-            prim = candidates[0] if candidates else {}
-            key = (prim.get("assert_expr") and f"{prim['file']}:{prim['assert_expr']}") or \
-                  (prim.get("func") and f"{prim['file']}:{prim['func']}") or \
-                  prim.get("fatal_msg") or (chain[0] if chain else "?")
-            kind = "abort" if asserts else ("segv" if has_segv else "fatal")
-            new_sites[(kind, key)].append(label)
+        elif category == "other":
+            other[key] += 1
+        elif category == "known":
+            known[key].append(label)
+        elif category == "ambiguous":
+            ambiguous[key].append(label)
+        elif category == "needs_gdb":
+            needs_gdb[key].append(label)
+        else:  # "new"
+            new_sites[key].append(label)
 
     # ---- report ----
-    print(f"# ingested {len(dirs)} run-dirs | snapshot={SNAP.name} cache={'yes' if cache else 'no'} gdb={USE_GDB}\n")
+    print(f"# ingested {len(dirs)} run-dirs | snapshot={SNAP.name} cache={'yes' if cache else 'no'} "
+          f"gdb={USE_GDB} jobs={jobs}\n")
     print("## NEW crash sites (need a report) " + "-" * 30)
     if not new_sites:
         print("  (none -- every resolved crash matched the catalog)")

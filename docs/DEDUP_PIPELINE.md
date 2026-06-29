@@ -53,8 +53,15 @@ the bug's own site (the dealloc cascade, the parser frame, the specific assert).
 
 ### `ingest.py` — dedupe a pile of run-dirs, surface only new sites
 ```
-python3 scripts/ingest.py [globs...] [--sites-cache F] [--gdb] [--keep N] [--json F]
+python3 scripts/ingest.py [globs...] [--sites-cache F] [--gdb] [--keep N] [--json F] [--jobs N]
 ```
+Per-dir classification is CPU-bound (regex over each crash's stdout) and fully independent, so
+it runs across processes by default — `--jobs N` (default `min(16, cpus-2)`; `--jobs 1` = serial).
+Output is identical regardless of `--jobs` (results are reduced in input order); `--jobs 1` is the
+reproducible/debuggable path. `--gdb` forces serial — gdb re-runs are heavyweight and
+OOM-timing-sensitive, so fanning them out is unsafe. Tiny batches (<256 dirs) also stay serial
+(fork overhead isn't worth it). Measured: ~32 dirs/s/core, 99% CPU-bound → near-linear speedup
+(a 30k-dir fleet batch drops from ~16 min to ~1.5 min on 14 workers).
 Tiered resolution (cheap → expensive):
 1. **stdout, no execution** — aborts carry `file:line: func(): Assertion ...`; fatals
    carry `Fatal Python error: <msg>`. Both dedupe build-stably and for free.
