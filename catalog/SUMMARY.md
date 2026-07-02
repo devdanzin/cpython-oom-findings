@@ -68,9 +68,9 @@ OOM-0029, OOM-0033, OOM-0041 → OOM-0036 (rr-proven faces of the `_CALL_LIST_AP
 OOM-0008 (rr-proven `f_back`-swallow detector face), and OOM-0042 → OOM-0040 (rr-proven GET-path face of the
 extensions-cache key-alloc failure).
 
-**Upstream status** (refreshed 2026-06-24 from the umbrella [#151763](https://github.com/python/cpython/issues/151763) table + timeline; per-report truth is each `meta.json` `upstream_issue`/`status`). **14 findings filed upstream**, 4 already **fixed**:
+**Upstream status** (refreshed 2026-07-02 from the umbrella [#151763](https://github.com/python/cpython/issues/151763) table + timeline; per-report truth is each `meta.json` `upstream_issue`/`status`). **15 findings filed upstream**, 4 already **fixed**:
 - **Fixed:** OOM-0002 (#151773), OOM-0003 (#152034 + 3.13/3.14/3.15 backports), OOM-0028 (#152058), OOM-0031 (#151842).
-- **Filed, open:** OOM-0001 (#151673), OOM-0006 (#152107, dict item-iter — our sub-issue, repro_direct.py contributed + acked), OOM-0007 (#152083), OOM-0013 (#151968 PR), OOM-0014 (#151902 PR), OOM-0016 (#152130), OOM-0019 (#151931 PR), OOM-0024 (#151815), OOM-0034 (#151798 PR), OOM-0036 (#151818).
+- **Filed, open:** OOM-0001 (#151673), OOM-0006 (#152107, dict item-iter — our sub-issue, repro_direct.py contributed + acked), OOM-0007 (#152083), OOM-0013 (#151968 PR), OOM-0014 (#151902 PR), OOM-0016 (#152130), OOM-0019 (#151931 PR), OOM-0024 (#151815), OOM-0034 (#151798 PR), OOM-0036 (#151818), OOM-0043 (#152851, `_blake2` copy-under-OOM — first `--oom-foreign` find).
 - **Filing-hold** (FT sub-interpreter category, [#143232](https://github.com/python/cpython/issues/143232)): OOM-0020, OOM-0038.
 - **New, drafted (not yet filed):** OOM-0037, OOM-0040 (now also covers the former OOM-0042 abort face).
 - **Retired ids** (folded into another bug, not reused): OOM-0005, OOM-0029, OOM-0033, OOM-0041 → OOM-0036 (rr-proven faces of the `_CALL_LIST_APPEND` list.append double-free, via different stdlib paths); OOM-0011 → OOM-0008 (rr-proven: same `PyFrame_GetBack` f_back-swallow `MemoryError`, caught at the LOAD_ATTR-specialize assert instead of the type-cache assert); OOM-0042 → OOM-0040 (rr-proven: same extensions-cache key-alloc failure in `_extensions_cache_find_unlocked`, caught at the GET-path post-init `import_run_extension:2301` assert instead of the SET-path NULL-key segv).

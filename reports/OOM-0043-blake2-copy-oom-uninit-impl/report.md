@@ -179,4 +179,4 @@ required.
 
 ---
 
-*Filing candidate (drafted, not yet gisted). Related umbrella: [python/cpython#151763](https://github.com/python/cpython/issues/151763).*
+*Filed upstream as [python/cpython#152851](https://github.com/python/cpython/issues/152851).*
