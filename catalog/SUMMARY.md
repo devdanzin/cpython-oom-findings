@@ -1,6 +1,6 @@
 # Fusil OOM-injection findings on CPython — summary
 
-Snapshot: 2026-06-25 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0042) · **36 distinct bugs** (OOM-0001…0042; OOM-0005, OOM-0029, OOM-0033, OOM-0041 folded into OOM-0036; OOM-0011 folded into OOM-0008; OOM-0042 folded into OOM-0040).
+Snapshot: 2026-07-02 · CPython `main` 3.16.0a0 (commit `15d7406` for OOM-0001…0035, `1b9fe5c` for OOM-0036…0043) · **37 distinct bugs** (OOM-0001…0043; OOM-0005, OOM-0029, OOM-0033, OOM-0041 folded into OOM-0036; OOM-0011 folded into OOM-0008; OOM-0042 folded into OOM-0040).
 
 **Method.** [Fusil](https://github.com/devdanzin/fusil) fuzzes CPython with `_testcapi.set_nomemory`
 to fail allocations and drive the rarely-tested allocation-failure error paths. Crashes are triaged
@@ -57,11 +57,13 @@ JIT, and upstream release. One report per unique bug under `reports/OOM-####-*/`
 | OOM-0038 | sub-interpreter TLBC-index reserve calls `PyErr_NoMemory()` with no active thread state (FT-only) | fatal | release | yes | `index_pool.c:_PyIndexPool_AllocIndex` |
 | OOM-0039 | `deque_clear`'s `newblock`-failure `PyErr_Clear()` clobbers an in-flight exception when run from `deque_dealloc` under OOM | fatal | ASan/jit | yes | `_collectionsmodule.c:deque_clear` / `deque_dealloc` |
 | OOM-0040 | extensions-cache key-alloc failure under OOM mishandled — NULL cache key → `strlen(NULL)` segv (SET path), and a stale `MemoryError` → post-init `assert(!PyErr_Occurred())` abort (GET path, was OOM-0042) | segv | release | no | `import.c:hashtable_hash_str` / `_extensions_cache_set` / `import_run_extension` |
+| OOM-0043 | `_blake2` `.copy()` under OOM decrefs a half-built object whose `impl` was never set → `py_blake2_clear` switches on garbage → `Py_UNREACHABLE` (raw-`malloc` failure; found by fusil `--oom-foreign`) | fatal | release | yes | `blake2module.c:py_blake2_clear` / `_blake2_blake2b_copy_impl` |
 
 *(OOM-0041 was retired — folded into OOM-0036; OOM-0042 was retired — folded into OOM-0040; see "Retired IDs" below.)*
 
-**Totals:** 36 bugs — 8 segv, 21 abort, 7 fatal · 12 reproduce on a **release** build · **35 of 36 have a
-minimal reproducer** (OOM-0040 is vehicle-confirmed, minimization partial). Six retired ids: OOM-0005,
+**Totals:** 37 bugs — 8 segv, 21 abort, 8 fatal · 13 reproduce on a **release** build · **36 of 37 have a
+minimal reproducer** (OOM-0040 is vehicle-confirmed, minimization partial; OOM-0043's repro needs a
+raw-`malloc` fault injector — an `LD_PRELOAD` shim, not `_testcapi` — see its report). Six retired ids: OOM-0005,
 OOM-0029, OOM-0033, OOM-0041 → OOM-0036 (rr-proven faces of the `_CALL_LIST_APPEND` double-free), OOM-0011 →
 OOM-0008 (rr-proven `f_back`-swallow detector face), and OOM-0042 → OOM-0040 (rr-proven GET-path face of the
 extensions-cache key-alloc failure).
