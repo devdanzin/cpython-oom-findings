@@ -51,3 +51,31 @@ exact failing `start` doesn't line up. Re-check if we get matching builds:
   a CPython bug. Confirm by catching it under gdb on `ft_release` — if the innermost frame is
   `hook_f*@Modules/_testcapi/mem.c`, it is the harness. (Potential fusil follow-up: classify a
   resolved `_testcapi/mem.c` hook site as `oomHARNESS` so the dedup engine auto-files these.)
+
+## Known-intentional `Py_FatalError` (by design — WONTFIX-class)
+
+### tracemalloc — `tracemalloc_realloc() failed to allocate a trace` (`Python/tracemalloc.c:615`)
+**Was a fusil-fleet5 `oomNEW` candidate** (`inst-03 python tracemalloc-fatal_python_error-oomNEW`,
+2026-07-02). No matching tracker issue, but the fatal is **deliberate and documented at the call
+site** — not an unguarded/mishandled error path:
+
+```c
+if (ADD_TRACE(ptr2, new_size) < 0) {
+    // Memory allocation failed. The error cannot be reported to the caller,
+    // because realloc() already [has] shrunk the memory block and so removed bytes.
+    // This case is very unlikely: a hash entry has just been released, so the hash
+    // table should have at least one free entry.
+    Py_FatalError("tracemalloc_realloc() failed to allocate a trace");
+}
+```
+
+On the resize path `realloc` has already shrunk the block (bytes gone), so the failure genuinely
+can't be propagated to the caller — the devs chose to fatal as the lesser evil. Their "very
+unlikely" assumption (a hash slot was just freed, so ADD_TRACE should find room) only holds under
+normal conditions; `--oom-fuzz`/`set_nomemory` fails **every** allocation, including the freed-slot
+re-use, so we walk straight into the documented dead-end. Predates the 2023 GH-101520 core-move.
+
+**Disposition: intended behavior, not actionable** — upstream would close as such. This is the
+"tracemalloc can't trace its own allocation failure under total-OOM injection" class (the error
+path is *handled*, deliberately, unlike the real finds where code assumed success and hit
+UB/an assert). Skip; don't re-flag.

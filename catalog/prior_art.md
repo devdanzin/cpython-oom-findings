@@ -82,3 +82,26 @@ caret in-process + 1000-subprocess sweeps) only ever hit the OOM-0013 NULL-witho
 (`_Py_NegativeRefcount` @ `pycore_stackref.h:726`/`PyStackRef_XCLOSE`, 7/7), which fires earlier and masks the
 validate point — so the validate assert was a one-off. Per the campaign bar (reproduce → minimize → catalog),
 this is note-and-held; revisit and catalog if it ever recurs/reproduces. The vehicle dir is an OOM-0005 dup.
+
+## Addendum 2026-07-02 — fleet5 triage dedup: `OrderedDict.setdefault` (ALREADY FILED, one of ours)
+
+A `fusil-fleet5` crash (`inst-03 python-2 _collections-assertion-oomNEW`, reproduced 3×) flagged
+`oomNEW` — but it's an **already-filed, non-OOM fusil find** that predates this catalog, so
+`known_sites.tsv` (OOM-only) didn't dedup it.
+
+- **Assertion:** `_odict_find_node(self, key) == NULL` in `OrderedDict_setdefault_impl`
+  (`Objects/odictobject.c:1052` on 3.16; `:1036` on the 3.14 report).
+- **Issue: [#132461](https://github.com/python/cpython/issues/132461)** — "Abort from calling
+  `OrderedDict.setdefault` with an invalid value" (open, 2025-04-13, `type-crash`; **found by fusil
+  / @vstinner**). Fix PR **gh-132462** open (replaces the assert with a runtime `TypeError`).
+- **Root cause is the key's unstable hash, NOT the OOM window.** The vehicle passes
+  `weird_classes['weird_complex']` as the `setdefault` key — a class whose metaclass
+  `WeirdBase(ABCMeta)` has `__hash__` → `randint(0, 2**64)`, byte-for-byte #132461's reproducer.
+  The changing hash desyncs the dict vs the odict node list; the `--oom-seq` window is incidental
+  (the issue's own repro has no OOM). Not an allocation-failure defect.
+- **Distinct FT bug, cited only to rule it out:**
+  [#152537](https://github.com/python/cpython/issues/152537) (closed 2026-06-29) — `odictiter_new`
+  iterator UAF under free-threading. Different function/defect.
+
+**Disposition: duplicate of #132461, skip.** Fusil re-finds this whenever a weird/unstable-hash
+class lands in a dict-key position; expected, not a new finding.
