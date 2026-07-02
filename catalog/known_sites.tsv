@@ -338,3 +338,10 @@ OOM-0040	segv	line	Python/import.c:1389
 OOM-0040	segv	line	Python/import.c:1496
 OOM-0040	segv	line	Python/import.c:1497
 OOM-0040	segv	line	Python/import.c:2301
+OOM-0043	fatal	func	Modules/blake2module.c:_blake2_blake2b_copy_impl
+OOM-0043	fatal	func	Modules/blake2module.c:py_blake2_clear
+OOM-0043	fatal	func	Modules/blake2module.c:py_blake2_dealloc
+OOM-0043	fatal	line	Modules/blake2module.c:1008
+OOM-0043	fatal	line	Modules/blake2module.c:812
+OOM-0043	fatal	line	Modules/blake2module.c:997
+OOM-0043	fatal	msg	py_blake2_clear: We've reached an unreachable state. Anythin

@@ -1,0 +1,33 @@
+{
+  "id": "OOM-0043",
+  "slug": "blake2-copy-oom-uninit-impl",
+  "title": "Fatal error / latent UB: `_blake2` `.copy()` under OOM decrefs a half-built object with uninitialized `impl` (`blake2module.c:997`)",
+  "description": "_blake2.blake2s()/.blake2b().copy() allocates a new Blake2Object via new_Blake2Object (PyObject_GC_New -> memory not zeroed -> PyObject_GC_Track), leaving self->impl (and the HACL* state pointers) uninitialised. blake2_blake2b_copy_unlocked (blake2module.c:749) then does the fallible HACL state malloc FIRST and only sets cpy->impl = self->impl on success (line 781); when the copy malloc fails under OOM it goes to `error` and returns -1 without ever setting impl. _blake2_blake2b_copy_impl (blake2module.c:798) then Py_DECREF(cpy) at line 812 -> py_blake2_dealloc -> py_blake2_clear, whose switch(self->impl) reads the garbage value and hits default: Py_UNREACHABLE() (blake2module.c:997). Debug builds abort (Fatal Python error: py_blake2_clear); on release Py_UNREACHABLE is __builtin_unreachable so garbage impl is UB (observed SIGSEGV on release-ft-nojit; if the garbage happens to match a valid enum case, py_blake2_clear frees a wild uninitialised state pointer). The `new` path (py_blake2_new, blake2module.c:556-578) is safe because it sets impl + NULL-inits states immediately after new_Blake2Object, before any fallible alloc; the copy path fails to mirror that.",
+  "crash_kind": "fatal",
+  "sites": [
+    "Modules/blake2module.c py_blake2_clear:997",
+    "Modules/blake2module.c py_blake2_dealloc:1008",
+    "Modules/blake2module.c _blake2_blake2b_copy_impl:812"
+  ],
+  "signature": {
+    "site_frame": "py_blake2_clear@Modules/blake2module.c:997",
+    "top_frames": [
+      "py_blake2_clear@Modules/blake2module.c:997",
+      "py_blake2_dealloc@Modules/blake2module.c:1008",
+      "_blake2_blake2b_copy_impl@Modules/blake2module.c:812"
+    ],
+    "fatal_msg": "py_blake2_clear"
+  },
+  "vehicles": [
+    "fleet fusil-fleet3 inst-01 session-134 _blake2-fatal_python_error-oomNEW (--oom-seq --oom-foreign oc2:_blake2.blake2s[copy>__reduce__>__init__>__getstate__>__init_subclass__])"
+  ],
+  "matrix": {"debug-ft-nojit": "fatal", "debug-gil-nojit": "fatal", "debug-gil-jit": "fatal", "release-ft-nojit": "latent-UB (SIGSEGV observed)", "release-gil-nojit": "latent-UB (no-crash)", "asan": "n/a (LD_PRELOAD shim bypassed by ASan malloc)"},
+  "repro_start": 0,
+  "upstream_reported": false,
+  "upstream_issue": null,
+  "gist_url": null,
+  "status": "drafted",
+  "found_date": "2026-07-02",
+  "confirmed_commit": "1b9fe5c",
+  "notes": "FIRST catalog entry found by fusil's new --oom-foreign mode (technique F): the failing allocation is HACL*'s raw malloc() for the copy's BLAKE2 hash state, which _testcapi.set_nomemory (a PyMem hook) structurally cannot fail -- so this bug is unreachable by the set_nomemory harness and has NO stdlib-only repro. Reduced trigger is a single .copy() under a 1-allocation malloc failure window (fusil_malloc_arm(0,1) via the LD_PRELOAD shim, fusil_malloc_shim.c, preserved in this dir). Deterministic on debug builds (100%); the first malloc copy() makes is the HACL state alloc. Root cause FULLY pinned via gdb on debug-ft-nojit: py_blake2_clear:997 (reads uninitialised impl) <- py_blake2_dealloc:1008 <- _Py_Dealloc (generic dispatch, NOT keyed) <- Py_DECREF@refcount.h (generic macro, NOT keyed) <- _blake2_blake2b_copy_impl:812 (the SITE: Py_DECREF of the half-built object). Keys: py_blake2_clear:997 is the discriminating frame AND the Fatal-Python-error msg prefix (in-loop stdout match); _blake2_blake2b_copy_impl:812 is the real producer. NEEDS A NON-ASAN BUILD: under ASan the LD_PRELOAD shim is bypassed (ASan owns malloc; allocs seen = 0). blake2b shares _blake2_blake2b_copy_impl and fails identically. Distinct from OOM-0035 (StringIO Py_UCS4 tail uninitialised-read) -- different mechanism (missing discriminant init read by a tp_clear switch vs missing buffer zero-fill read by _PyUnicode_FromUCS4). Suggested fix: set cpy->impl + NULL-init state pointer(s) before the fallible HACL copy (mirror py_blake2_new), or have new_Blake2Object zero-init the struct."
+}

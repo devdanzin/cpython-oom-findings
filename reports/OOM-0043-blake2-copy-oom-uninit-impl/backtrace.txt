@@ -1,0 +1,44 @@
+OOM-0043 -- _blake2.blake2s().copy() under OOM decrefs a half-built object whose
+`impl` discriminant was never set; py_blake2_clear switches on it -> Py_UNREACHABLE
+==============================================================================
+
+debug-ft-nojit (also debug-gil-nojit / debug-gil-jit), SIGABRT (rc 134). The copy
+allocates a new Blake2Object (GC-tracked, fields uninitialised), then its HACL state
+malloc fails under injected OOM; the error path returns WITHOUT setting cpy->impl, so
+Py_DECREF(cpy) -> py_blake2_dealloc -> py_blake2_clear reads a garbage `impl` and hits
+the switch's default: Py_UNREACHABLE().
+
+Fatal Python error: py_blake2_clear: We've reached an unreachable state. Anything is possible.
+The limits were in our heads all along. Follow your dreams.
+https://xkcd.com/2200
+
+--- Python stack (faulthandler; already enabled by the fuzz harness) ---
+  File "repro.py", line 31 in <module>          # h.copy()
+
+--- C stack (gdb, debug-ft-nojit; SIGABRT from Py_FatalError) ---
+#6  fatal_error                     Python/pylifecycle.c:3742   # prefix="py_blake2_clear"
+#7  _Py_FatalErrorFunc             Python/pylifecycle.c:3765
+#8  py_blake2_clear (op=...)        Modules/blake2module.c:997  # default: Py_UNREACHABLE() -- reads uninitialised self->impl
+#9  py_blake2_dealloc              Modules/blake2module.c:1008  # (void)py_blake2_clear(self)
+#10 _Py_Dealloc                    Objects/object.c:3319        # generic dealloc dispatch (detector, not the bug)
+#11 Py_DECREF (lineno=812)         Include/refcount.h:359       # inlined macro (detector)
+#12 _blake2_blake2b_copy_impl      Modules/blake2module.c:812   # Py_DECREF(cpy) after copy_unlocked returned -1  <-- SITE
+#13 _blake2_blake2b_copy           Modules/clinic/blake2module.c.h:449
+#14 method_vectorcall_FASTCALL_KEYWORDS_METHOD  Objects/descrobject.c:381
+
+The real SITE is _blake2_blake2b_copy_impl (blake2module.c:812) decref-ing a
+half-constructed Blake2Object; py_blake2_clear:997 is where the uninitialised `impl`
+is read (the discriminating frame + the fatal-message prefix). _Py_Dealloc and the
+refcount.h Py_DECREF are the generic dealloc/refcount plumbing, not keyed.
+
+Matrix (needs a NON-ASan build; ASan owns malloc so the LD_PRELOAD shim is bypassed):
+  debug-ft-nojit   = fatal (Py_UNREACHABLE abort, deterministic)
+  debug-gil-nojit  = fatal
+  debug-gil-jit    = fatal
+  release-ft-nojit = latent UB (one SIGSEGV observed; otherwise clean MemoryError -- nondeterministic)
+  release-gil-nojit/jit = latent UB (clean MemoryError this run)
+  *-asan           = n/a (shim bypassed: allocs seen = 0)
+
+On a release build Py_UNREACHABLE() is __builtin_unreachable(): the compiler assumes
+`impl` is valid, so a garbage `impl` is undefined behaviour -- observed as a SIGSEGV on
+release-ft-nojit, but not reliably. The clean, deterministic signal is the debug abort.
