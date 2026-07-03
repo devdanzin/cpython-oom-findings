@@ -110,8 +110,19 @@ corruptor (verified: toggling `PYTHONMALLOC=malloc` off on the identical vehicle
 corruption and gives a clean `_Py_CheckFunctionResult` OOM crash; fleet5's plain `--oom-foreign` had
 **0** such corruptions).
 
-**Disposition: `--oom-foreign-pythonmalloc` yields NO new findings** — its entire `oomNEW` output is
-the pre-existing over-decref/UAF family via a noisier glibc-heap lens. Prefer plain `--oom-foreign`
-(0 corruption, found OOM-0043). For a real UAF lens use the catalog's method — a GIL+ASan build with
-`PYTHONMALLOC=malloc` (clean freed-by/allocated-by stacks) — not the LD_PRELOAD shim. Don't re-flag
-`--oom-foreign-pythonmalloc` glibc-corruption/negref oomNEW as new.
+**The 98 `oomSEGV` (fleet6 first run) are the same family too.** `ingest.py` over
+`inst-*/python/*oomSEGV*` resolved every one from the faulthandler C stack and found **0 new sites**;
+the top frames are all stackref-steal / dealloc detectors — 66 `_PyTuple_FromStackRefStealOnSuccess`,
+16 `_Py_VectorCallInstrumentation_StackRefSteal`, plus `_PyTuple_Concat`,
+`PyObject_CallFinalizerFromDealloc`/`_Py_Dealloc`, `PyErr_ResourceWarning`/`WarnEx`. An object on the
+operand stack is over-decref'd/freed under OOM; the segv is where a stolen stackref is dereferenced —
+the same over-decref bug as the tcache aborts and negref aborts, just a third detector face. (ingest
+flags them "needs-gdb", but that won't help: they're generic stackref detectors needing rr to fold,
+and the `--oom-foreign-pythonmalloc` vehicles need the shim/`PYTHONMALLOC` env that ingest's gdb
+re-run doesn't set up.)
+
+**Disposition: `--oom-foreign-pythonmalloc` yields NO new findings** — its entire `oomNEW`/`oomSEGV`
+output is the pre-existing over-decref/UAF family via a noisier glibc-heap lens. Prefer plain
+`--oom-foreign` (0 corruption, found OOM-0043). For a real UAF lens use the catalog's method — a
+GIL+ASan build with `PYTHONMALLOC=malloc` (clean freed-by/allocated-by stacks) — not the LD_PRELOAD
+shim. Don't re-flag `--oom-foreign-pythonmalloc` glibc-corruption/negref/stackref-segv candidates as new.
