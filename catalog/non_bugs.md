@@ -79,3 +79,39 @@ re-use, so we walk straight into the documented dead-end. Predates the 2023 GH-1
 "tracemalloc can't trace its own allocation failure under total-OOM injection" class (the error
 path is *handled*, deliberately, unlike the real finds where code assumed success and hit
 UB/an assert). Skip; don't re-flag.
+
+## `--oom-foreign-pythonmalloc`: glibc heap-corruption oomNEW = the over-decref family (NOT new; rr-confirmed)
+
+**fusil-fleet6 (2026-07-02) ran `--oom-foreign` PLUS `--oom-foreign-pythonmalloc`** (routes CPython's
+own PyMem allocations through the LD_PRELOAD malloc shim, i.e. `PYTHONMALLOC=malloc`). Of its 57
+`oomNEW` candidates: ~40 (70%) are glibc heap-corruption aborts (`malloc(): unaligned tcache chunk
+detected` ×33, `smallbin double linked list corrupted` ×4, `corrupted double` ×1) across 15 unrelated
+modules; ~19 (33%) are the `_Py_NegativeRefcount` / `PyStackRef_CheckValid` stackref-teardown aborts.
+**None are new.**
+
+**rr-confirmed (2026-07-02), not a shim artifact.** Vehicle
+`inst-01/python/importlib_resources__functional-fatal_python_error-oomNEW` (deterministic 3/3 under
+`LD_PRELOAD=<shim> PYTHONMALLOC=malloc <debug-gil-nojit> source.py`). Three levels of `rr`
+reverse-execution from the abort: detecting `malloc` (CPython building a traceback) pops a misaligned
+chunk from tcache bin 2 → that chunk's `fd` was clobbered → the clobbering write is
+`Py_DECREF_MORTAL(op)` ← **`PyStackRef_XCLOSE` @ `pycore_stackref.h:726`** ← `_PyFrame_ClearLocals`
+(`frame.c:101`) ← `_PyFrame_ClearExceptCode` ← `clear_thread_frame` — the eval-loop operand-stack
+**frame teardown** decref'ing an object under the propagating `MemoryError`. So the "heap corruption"
+is a genuine CPython **over-decref / use-after-free**: an object is freed too early during frame
+teardown, and because `PYTHONMALLOC=malloc` makes its memory a glibc chunk, the stale refcount write
+lands in the tcache fd → glibc aborts.
+
+**Key point:** `pycore_stackref.h:726` / `PyStackRef_XCLOSE` is *exactly* the known over-decref family
+(OOM-0005 / OOM-0036) — the **same site** that surfaces as `_Py_NegativeRefcount: object has negative
+ref count` in the non-pythonmalloc runs. The tcache-corruption aborts and the negref aborts are the
+**same bug at the same site**, detected at two layers (glibc heap vs CPython negref assert). The
+`PYTHONMALLOC=malloc` shim only routes the free to glibc; it is a tail-call passthrough, not the
+corruptor (verified: toggling `PYTHONMALLOC=malloc` off on the identical vehicle removes the
+corruption and gives a clean `_Py_CheckFunctionResult` OOM crash; fleet5's plain `--oom-foreign` had
+**0** such corruptions).
+
+**Disposition: `--oom-foreign-pythonmalloc` yields NO new findings** — its entire `oomNEW` output is
+the pre-existing over-decref/UAF family via a noisier glibc-heap lens. Prefer plain `--oom-foreign`
+(0 corruption, found OOM-0043). For a real UAF lens use the catalog's method — a GIL+ASan build with
+`PYTHONMALLOC=malloc` (clean freed-by/allocated-by stacks) — not the LD_PRELOAD shim. Don't re-flag
+`--oom-foreign-pythonmalloc` glibc-corruption/negref oomNEW as new.
